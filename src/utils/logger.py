@@ -18,15 +18,20 @@ class LogManager:
     日志管理器（单例模式）
     
     提供统一的日志记录接口，支持控制台和文件输出。
+    使用线程锁确保多线程安全。
     """
     
     _instance = None
     _initialized = False
+    _lock = __import__('threading').Lock()
     
     def __new__(cls, *args, **kwargs):
-        """实现单例模式"""
+        """实现线程安全的单例模式"""
         if cls._instance is None:
-            cls._instance = super(LogManager, cls).__new__(cls)
+            with cls._lock:
+                # 双重检查锁定
+                if cls._instance is None:
+                    cls._instance = super(LogManager, cls).__new__(cls)
         return cls._instance
     
     def __init__(
@@ -244,13 +249,14 @@ class TrainingLogger:
         if loss_name not in self.history['losses']:
             self.history['losses'][loss_name] = []
     
-    def log_metric(self, metric_name: str, metric_value: float):
+    def log_metric(self, metric_name: str, metric_value: float, higher_is_better: bool = True):
         """
         记录评估指标
         
         Args:
             metric_name: 指标名称
             metric_value: 指标值
+            higher_is_better: 指标是否越大越好（如loss应设为False）
         """
         self.epoch_metrics[metric_name] = metric_value
         
@@ -261,14 +267,24 @@ class TrainingLogger:
         if metric_name not in self.best_metrics:
             self.best_metrics[metric_name] = {
                 'value': metric_value,
-                'epoch': self.current_epoch
+                'epoch': self.current_epoch,
+                'higher_is_better': higher_is_better
             }
         else:
-            # 假设指标越大越好（可根据需要修改）
-            if metric_value > self.best_metrics[metric_name]['value']:
+            # 根据指标类型判断是否更新最佳值
+            is_better = higher_is_better == self.best_metrics[metric_name].get('higher_is_better', True)
+            current_best = self.best_metrics[metric_name]['value']
+            
+            if higher_is_better:
+                should_update = metric_value > current_best
+            else:
+                should_update = metric_value < current_best
+            
+            if should_update:
                 self.best_metrics[metric_name] = {
                     'value': metric_value,
-                    'epoch': self.current_epoch
+                    'epoch': self.current_epoch,
+                    'higher_is_better': higher_is_better
                 }
     
     def end_epoch(self):

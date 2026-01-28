@@ -60,7 +60,7 @@ def get_id_color(track_id: int, num_colors: int = 256) -> Tuple[int, int, int]:
     """
     根据跟踪ID获取对应的颜色
     
-    使用哈希方式确保相同ID始终映射到相同颜色
+    使用哈希方式确保相同ID始终映射到相同颜色，不影响全局随机状态
     
     Args:
         track_id: 跟踪目标的ID
@@ -69,11 +69,11 @@ def get_id_color(track_id: int, num_colors: int = 256) -> Tuple[int, int, int]:
     Returns:
         颜色元组 (B, G, R)
     """
-    # 使用简单的哈希函数生成稳定的颜色
-    np.random.seed(int(track_id) % (2**31))
-    hue = np.random.randint(0, 180)
-    saturation = np.random.randint(150, 256)
-    value = np.random.randint(150, 256)
+    # 使用独立的随机数生成器，避免影响全局随机状态
+    rng = np.random.RandomState(int(track_id) % (2**31))
+    hue = rng.randint(0, 180)
+    saturation = rng.randint(150, 256)
+    value = rng.randint(150, 256)
     
     # 转换HSV到BGR
     hsv_color = np.uint8([[[hue, saturation, value]]])
@@ -457,7 +457,8 @@ def save_visualization_video(
         是否保存成功
     """
     if len(frames) == 0:
-        print("警告: 帧列表为空，无法保存视频")
+        import logging
+        logging.warning("帧列表为空，无法保存视频")
         return False
     
     # 获取帧大小
@@ -468,7 +469,8 @@ def save_visualization_video(
     writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
     if not writer.isOpened():
-        print(f"错误: 无法创建视频写入器，路径: {output_path}")
+        import logging
+        logging.error(f"无法创建视频写入器，路径: {output_path}")
         return False
     
     try:
@@ -484,11 +486,13 @@ def save_visualization_video(
             writer.write(frame)
         
         writer.release()
-        print(f"视频已保存: {output_path} ({len(frames)} 帧, {fps} FPS)")
+        import logging
+        logging.info(f"视频已保存: {output_path} ({len(frames)} 帧, {fps} FPS)")
         return True
     
     except Exception as e:
-        print(f"保存视频时出错: {e}")
+        import logging
+        logging.error(f"保存视频时出错: {e}")
         writer.release()
         return False
 
