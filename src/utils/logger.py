@@ -1,362 +1,583 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 日志工具模块
-提供统一的日志记录功能
+
+提供统一的日志管理功能，包括日志管理器、训练日志记录器和进度条等工具。
 """
 
-import logging
-import sys
-from pathlib import Path
-from datetime import datetime
-from typing import Optional
 import json
+import logging
+import os
+import sys
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
 
-class 日志管理器:
+class LogManager:
     """
-    统一的日志管理器类
+    日志管理器（单例模式）
+    
+    提供统一的日志记录接口，支持控制台和文件输出。
     """
     
-    _实例 = None
-    _已初始化 = False
+    _instance = None
+    _initialized = False
     
     def __new__(cls, *args, **kwargs):
-        """单例模式"""
-        if cls._实例 is None:
-            cls._实例 = super().__new__(cls)
-        return cls._实例
+        """实现单例模式"""
+        if cls._instance is None:
+            cls._instance = super(LogManager, cls).__new__(cls)
+        return cls._instance
     
     def __init__(
         self,
-        名称: str = "红外检测跟踪",
-        日志级别: str = "INFO",
-        日志目录: str = "outputs/logs",
-        控制台输出: bool = True,
-        文件输出: bool = True
+        name: str = 'main',
+        log_dir: Optional[str] = None,
+        level: int = logging.INFO,
+        console_output: bool = True,
+        file_output: bool = True
     ):
         """
         初始化日志管理器
         
-        参数:
-            名称: 日志器名称
-            日志级别: 日志级别 (DEBUG/INFO/WARNING/ERROR/CRITICAL)
-            日志目录: 日志文件保存目录
-            控制台输出: 是否输出到控制台
-            文件输出: 是否输出到文件
+        Args:
+            name: 日志器名称
+            log_dir: 日志文件保存目录
+            level: 日志级别
+            console_output: 是否输出到控制台
+            file_output: 是否输出到文件
         """
-        if self._已初始化:
+        # 避免重复初始化
+        if LogManager._initialized:
             return
         
-        self.名称 = 名称
-        self.日志目录 = Path(日志目录)
+        self.name = name
+        self.log_dir = log_dir
+        self.level = level
         
-        # 创建日志目录
-        self.日志目录.mkdir(parents=True, exist_ok=True)
+        # 创建logger
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(level)
+        self.logger.handlers = []  # 清除已有handler
         
-        # 创建日志器
-        self.日志器 = logging.getLogger(名称)
-        self.日志器.setLevel(getattr(logging, 日志级别.upper()))
-        
-        # 清除已有的处理器
-        self.日志器.handlers.clear()
-        
-        # 设置日志格式
-        格式化器 = logging.Formatter(
-            '[%(asctime)s] [%(levelname)s] %(message)s',
+        # 日志格式
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         
-        # 控制台处理器
-        if 控制台输出:
-            控制台处理器 = logging.StreamHandler(sys.stdout)
-            控制台处理器.setFormatter(格式化器)
-            self.日志器.addHandler(控制台处理器)
+        # 控制台输出
+        if console_output:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(level)
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
         
-        # 文件处理器
-        if 文件输出:
-            时间戳 = datetime.now().strftime("%Y%m%d_%H%M%S")
-            日志文件 = self.日志目录 / f"{名称}_{时间戳}.log"
-            文件处理器 = logging.FileHandler(日志文件, encoding='utf-8')
-            文件处理器.setFormatter(格式化器)
-            self.日志器.addHandler(文件处理器)
-            self.当前日志文件 = 日志文件
+        # 文件输出
+        if file_output and log_dir is not None:
+            os.makedirs(log_dir, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            log_file = os.path.join(log_dir, f'{name}_{timestamp}.log')
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setLevel(level)
+            file_handler.setFormatter(formatter)
+            self.logger.addHandler(file_handler)
+            self.log_file = log_file
         else:
-            self.当前日志文件 = None
+            self.log_file = None
         
-        self._已初始化 = True
+        LogManager._initialized = True
     
-    def debug(self, 消息: str):
-        """记录调试信息"""
-        self.日志器.debug(消息)
-    
-    def info(self, 消息: str):
-        """记录一般信息"""
-        self.日志器.info(消息)
-    
-    def warning(self, 消息: str):
-        """记录警告信息"""
-        self.日志器.warning(消息)
-    
-    def error(self, 消息: str):
-        """记录错误信息"""
-        self.日志器.error(消息)
-    
-    def critical(self, 消息: str):
-        """记录严重错误"""
-        self.日志器.critical(消息)
-    
-    def 记录异常(self, 异常: Exception, 额外信息: str = ""):
+    def debug(self, message: str):
         """
-        记录异常信息
+        记录调试级别日志
         
-        参数:
-            异常: 异常对象
-            额外信息: 额外的描述信息
+        Args:
+            message: 日志消息
         """
-        if 额外信息:
-            self.error(f"{额外信息}: {type(异常).__name__}: {str(异常)}")
-        else:
-            self.error(f"{type(异常).__name__}: {str(异常)}")
+        self.logger.debug(message)
+    
+    def info(self, message: str):
+        """
+        记录信息级别日志
+        
+        Args:
+            message: 日志消息
+        """
+        self.logger.info(message)
+    
+    def warning(self, message: str):
+        """
+        记录警告级别日志
+        
+        Args:
+            message: 日志消息
+        """
+        self.logger.warning(message)
+    
+    def error(self, message: str):
+        """
+        记录错误级别日志
+        
+        Args:
+            message: 日志消息
+        """
+        self.logger.error(message)
+    
+    def critical(self, message: str):
+        """
+        记录严重错误级别日志
+        
+        Args:
+            message: 日志消息
+        """
+        self.logger.critical(message)
+    
+    def log_exception(self, message: str = "发生异常"):
+        """
+        记录异常信息，包含完整的堆栈跟踪
+        
+        Args:
+            message: 异常描述信息
+        """
+        self.logger.exception(message)
+    
+    def set_level(self, level: int):
+        """
+        设置日志级别
+        
+        Args:
+            level: 日志级别
+        """
+        self.logger.setLevel(level)
+        for handler in self.logger.handlers:
+            handler.setLevel(level)
+    
+    @classmethod
+    def reset(cls):
+        """
+        重置单例实例，用于重新初始化
+        """
+        cls._instance = None
+        cls._initialized = False
 
 
-class 训练日志记录器:
+class TrainingLogger:
     """
-    训练过程日志记录器
-    记录训练指标、损失值等
+    训练日志记录器
+    
+    专门用于记录模型训练过程中的损失、指标等信息。
     """
     
-    def __init__(self, 保存目录: str, 实验名称: str):
+    def __init__(
+        self,
+        log_dir: str,
+        experiment_name: str = 'experiment'
+    ):
         """
         初始化训练日志记录器
         
-        参数:
-            保存目录: 日志保存目录
-            实验名称: 实验名称
+        Args:
+            log_dir: 日志保存目录
+            experiment_name: 实验名称
         """
-        self.保存目录 = Path(保存目录)
-        self.实验名称 = 实验名称
+        self.log_dir = log_dir
+        self.experiment_name = experiment_name
         
-        # 创建目录
-        self.保存目录.mkdir(parents=True, exist_ok=True)
+        # 创建日志目录
+        os.makedirs(log_dir, exist_ok=True)
         
         # 初始化记录
-        self.训练记录 = {
-            '实验名称': 实验名称,
-            '开始时间': datetime.now().isoformat(),
-            '轮次': [],
-            '训练损失': [],
-            '验证损失': [],
-            '指标': {},
+        self.history = {
+            'epochs': [],
+            'losses': {},
+            'metrics': {},
+            'learning_rates': [],
+            'timestamps': []
         }
         
-        self.当前轮次 = 0
-    
-    def 开始轮次(self, 轮次: int):
-        """
-        开始新的训练轮次
+        # 当前epoch状态
+        self.current_epoch = 0
+        self.epoch_start_time = None
+        self.epoch_losses = {}
+        self.epoch_metrics = {}
         
-        参数:
-            轮次: 轮次编号
-        """
-        self.当前轮次 = 轮次
-        self.训练记录['轮次'].append(轮次)
+        # 最佳指标跟踪
+        self.best_metrics = {}
     
-    def 记录损失(self, 训练损失: float, 验证损失: float = None):
+    def start_epoch(self, epoch: int, learning_rate: Optional[float] = None):
+        """
+        开始新的epoch
+        
+        Args:
+            epoch: 当前epoch编号
+            learning_rate: 当前学习率
+        """
+        self.current_epoch = epoch
+        self.epoch_start_time = time.time()
+        self.epoch_losses = {}
+        self.epoch_metrics = {}
+        
+        if learning_rate is not None:
+            self.history['learning_rates'].append(learning_rate)
+        
+        print(f"\n{'='*50}")
+        print(f"Epoch {epoch} 开始")
+        if learning_rate is not None:
+            print(f"学习率: {learning_rate:.6f}")
+        print('='*50)
+    
+    def log_loss(self, loss_name: str, loss_value: float, step: Optional[int] = None):
         """
         记录损失值
         
-        参数:
-            训练损失: 训练损失
-            验证损失: 验证损失
+        Args:
+            loss_name: 损失名称
+            loss_value: 损失值
+            step: 当前步数，可选
         """
-        self.训练记录['训练损失'].append(训练损失)
-        if 验证损失 is not None:
-            self.训练记录['验证损失'].append(验证损失)
+        if loss_name not in self.epoch_losses:
+            self.epoch_losses[loss_name] = []
+        
+        self.epoch_losses[loss_name].append(loss_value)
+        
+        if loss_name not in self.history['losses']:
+            self.history['losses'][loss_name] = []
     
-    def 记录指标(self, 指标名: str, 值: float):
+    def log_metric(self, metric_name: str, metric_value: float):
         """
         记录评估指标
         
-        参数:
-            指标名: 指标名称
-            值: 指标值
+        Args:
+            metric_name: 指标名称
+            metric_value: 指标值
         """
-        if 指标名 not in self.训练记录['指标']:
-            self.训练记录['指标'][指标名] = []
-        self.训练记录['指标'][指标名].append(值)
-    
-    def 记录批量指标(self, 指标字典: dict):
-        """
-        批量记录评估指标
+        self.epoch_metrics[metric_name] = metric_value
         
-        参数:
-            指标字典: {指标名: 值} 字典
-        """
-        for 指标名, 值 in 指标字典.items():
-            self.记录指标(指标名, 值)
-    
-    def 保存(self):
-        """保存训练记录到文件"""
-        self.训练记录['结束时间'] = datetime.now().isoformat()
+        if metric_name not in self.history['metrics']:
+            self.history['metrics'][metric_name] = []
         
-        # 保存JSON
-        json路径 = self.保存目录 / f"{self.实验名称}_log.json"
-        with open(json路径, 'w', encoding='utf-8') as f:
-            json.dump(self.训练记录, f, indent=2, ensure_ascii=False)
-        
-        # 保存CSV格式的损失记录
-        csv路径 = self.保存目录 / f"{self.实验名称}_loss.csv"
-        with open(csv路径, 'w', encoding='utf-8') as f:
-            f.write("轮次,训练损失,验证损失\n")
-            for i, 轮次 in enumerate(self.训练记录['轮次']):
-                训练损失 = self.训练记录['训练损失'][i] if i < len(self.训练记录['训练损失']) else ""
-                验证损失 = self.训练记录['验证损失'][i] if i < len(self.训练记录['验证损失']) else ""
-                f.write(f"{轮次},{训练损失},{验证损失}\n")
-    
-    def 获取最佳指标(self, 指标名: str, 越大越好: bool = True) -> tuple:
-        """
-        获取某个指标的最佳值及对应轮次
-        
-        参数:
-            指标名: 指标名称
-            越大越好: 是否越大越好
-        
-        返回:
-            (最佳值, 对应轮次)
-        """
-        if 指标名 not in self.训练记录['指标']:
-            return None, None
-        
-        值列表 = self.训练记录['指标'][指标名]
-        if not 值列表:
-            return None, None
-        
-        if 越大越好:
-            最佳索引 = max(range(len(值列表)), key=lambda i: 值列表[i])
+        # 更新最佳指标
+        if metric_name not in self.best_metrics:
+            self.best_metrics[metric_name] = {
+                'value': metric_value,
+                'epoch': self.current_epoch
+            }
         else:
-            最佳索引 = min(range(len(值列表)), key=lambda i: 值列表[i])
+            # 假设指标越大越好（可根据需要修改）
+            if metric_value > self.best_metrics[metric_name]['value']:
+                self.best_metrics[metric_name] = {
+                    'value': metric_value,
+                    'epoch': self.current_epoch
+                }
+    
+    def end_epoch(self):
+        """
+        结束当前epoch，汇总并保存统计信息
+        """
+        # 计算epoch用时
+        epoch_time = time.time() - self.epoch_start_time if self.epoch_start_time else 0
         
-        最佳值 = 值列表[最佳索引]
-        对应轮次 = self.训练记录['轮次'][最佳索引] if 最佳索引 < len(self.训练记录['轮次']) else 最佳索引
+        # 记录epoch编号和时间戳
+        self.history['epochs'].append(self.current_epoch)
+        self.history['timestamps'].append(datetime.now().isoformat())
         
-        return 最佳值, 对应轮次
+        # 汇总损失（取平均值）
+        print(f"\nEpoch {self.current_epoch} 结束 (用时: {epoch_time:.2f}s)")
+        print("-" * 40)
+        print("损失:")
+        for loss_name, loss_values in self.epoch_losses.items():
+            avg_loss = sum(loss_values) / len(loss_values) if loss_values else 0
+            self.history['losses'][loss_name].append(avg_loss)
+            print(f"  {loss_name}: {avg_loss:.6f}")
+        
+        # 记录指标
+        print("指标:")
+        for metric_name, metric_value in self.epoch_metrics.items():
+            self.history['metrics'][metric_name].append(metric_value)
+            is_best = ""
+            if metric_name in self.best_metrics:
+                if self.best_metrics[metric_name]['epoch'] == self.current_epoch:
+                    is_best = " (最佳)"
+            print(f"  {metric_name}: {metric_value:.6f}{is_best}")
+        
+        print("-" * 40)
+    
+    def save(self, filepath: Optional[str] = None):
+        """
+        保存训练历史到JSON文件
+        
+        Args:
+            filepath: 保存路径，如果为None则使用默认路径
+        """
+        if filepath is None:
+            filepath = os.path.join(
+                self.log_dir,
+                f'{self.experiment_name}_history.json'
+            )
+        
+        save_data = {
+            'experiment_name': self.experiment_name,
+            'history': self.history,
+            'best_metrics': self.best_metrics,
+            'save_time': datetime.now().isoformat()
+        }
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"训练历史已保存: {filepath}")
+    
+    def load(self, filepath: str):
+        """
+        从JSON文件加载训练历史
+        
+        Args:
+            filepath: 文件路径
+        """
+        with open(filepath, 'r', encoding='utf-8') as f:
+            save_data = json.load(f)
+        
+        self.experiment_name = save_data.get('experiment_name', self.experiment_name)
+        self.history = save_data.get('history', self.history)
+        self.best_metrics = save_data.get('best_metrics', {})
+        
+        print(f"训练历史已加载: {filepath}")
+    
+    def get_best_metric(self, metric_name: str) -> Optional[Dict[str, Any]]:
+        """
+        获取指定指标的最佳值
+        
+        Args:
+            metric_name: 指标名称
+        
+        Returns:
+            包含最佳值和对应epoch的字典，如果不存在则返回None
+        """
+        return self.best_metrics.get(metric_name)
+    
+    def get_last_loss(self, loss_name: str) -> Optional[float]:
+        """
+        获取指定损失的最新值
+        
+        Args:
+            loss_name: 损失名称
+        
+        Returns:
+            最新的损失值，如果不存在则返回None
+        """
+        if loss_name in self.history['losses'] and self.history['losses'][loss_name]:
+            return self.history['losses'][loss_name][-1]
+        return None
 
 
-class 进度条:
+class ProgressBar:
     """
-    简单的进度条显示
+    进度条
+    
+    提供命令行进度显示功能。
     """
     
-    def __init__(self, 总数: int, 描述: str = "", 长度: int = 50):
+    def __init__(
+        self,
+        total: int,
+        prefix: str = '',
+        suffix: str = '',
+        decimals: int = 1,
+        length: int = 50,
+        fill: str = '█',
+        empty: str = '-'
+    ):
         """
         初始化进度条
         
-        参数:
-            总数: 总迭代次数
-            描述: 进度条描述
-            长度: 进度条显示长度
+        Args:
+            total: 总步数
+            prefix: 前缀文本
+            suffix: 后缀文本
+            decimals: 百分比小数位数
+            length: 进度条字符长度
+            fill: 已完成部分的填充字符
+            empty: 未完成部分的填充字符
         """
-        self.总数 = 总数
-        self.描述 = 描述
-        self.长度 = 长度
-        self.当前 = 0
-        self.开始时间 = datetime.now()
-    
-    def 更新(self, 步数: int = 1):
-        """
-        更新进度
+        self.total = max(total, 1)
+        self.prefix = prefix
+        self.suffix = suffix
+        self.decimals = decimals
+        self.length = length
+        self.fill = fill
+        self.empty = empty
         
-        参数:
-            步数: 前进步数
-        """
-        self.当前 += 步数
-        self._显示()
+        self.current = 0
+        self.start_time = time.time()
     
-    def _显示(self):
-        """显示进度条"""
-        比例 = self.当前 / self.总数
-        已完成 = int(self.长度 * 比例)
+    def update(self, current: Optional[int] = None, suffix: Optional[str] = None):
+        """
+        更新进度条
         
-        # 计算剩余时间
-        已用时间 = (datetime.now() - self.开始时间).total_seconds()
-        if self.当前 > 0:
-            预计总时间 = 已用时间 / self.当前 * self.总数
-            剩余时间 = 预计总时间 - 已用时间
-            时间信息 = f" ETA: {剩余时间:.0f}s"
+        Args:
+            current: 当前步数，如果为None则自动加1
+            suffix: 后缀文本更新
+        """
+        if current is not None:
+            self.current = current
         else:
-            时间信息 = ""
+            self.current += 1
         
-        # 构建进度条
-        进度条 = '█' * 已完成 + '░' * (self.长度 - 已完成)
+        if suffix is not None:
+            self.suffix = suffix
         
-        # 显示
-        输出 = f"\r{self.描述} |{进度条}| {self.当前}/{self.总数} ({比例*100:.1f}%){时间信息}"
-        sys.stdout.write(输出)
+        # 计算进度
+        percent = min(100.0, 100.0 * self.current / self.total)
+        filled_length = int(self.length * self.current / self.total)
+        bar = self.fill * filled_length + self.empty * (self.length - filled_length)
+        
+        # 计算预计剩余时间
+        elapsed = time.time() - self.start_time
+        if self.current > 0:
+            eta = elapsed * (self.total - self.current) / self.current
+            eta_str = self._format_time(eta)
+        else:
+            eta_str = '--:--'
+        
+        # 打印进度条
+        sys.stdout.write(f'\r{self.prefix} |{bar}| {percent:.{self.decimals}f}% ETA: {eta_str} {self.suffix}')
         sys.stdout.flush()
+    
+    def finish(self, message: Optional[str] = None):
+        """
+        完成进度条
         
-        if self.当前 >= self.总数:
-            print()  # 换行
+        Args:
+            message: 完成消息
+        """
+        elapsed = time.time() - self.start_time
+        elapsed_str = self._format_time(elapsed)
+        
+        # 确保显示100%
+        bar = self.fill * self.length
+        
+        if message:
+            sys.stdout.write(f'\r{self.prefix} |{bar}| 100.0% 完成: {elapsed_str} {message}\n')
+        else:
+            sys.stdout.write(f'\r{self.prefix} |{bar}| 100.0% 完成: {elapsed_str} {self.suffix}\n')
+        sys.stdout.flush()
     
-    def 完成(self):
-        """标记完成"""
-        self.当前 = self.总数
-        self._显示()
+    def _format_time(self, seconds: float) -> str:
+        """
+        格式化时间
+        
+        Args:
+            seconds: 秒数
+        
+        Returns:
+            格式化的时间字符串
+        """
+        if seconds < 60:
+            return f'{seconds:.0f}s'
+        elif seconds < 3600:
+            minutes = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f'{minutes}m{secs}s'
+        else:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            return f'{hours}h{minutes}m'
 
 
-# 创建全局日志实例
-def 获取日志器(
-    名称: str = "红外检测跟踪",
-    日志级别: str = "INFO",
-    日志目录: str = "outputs/logs"
-) -> 日志管理器:
+# 全局日志管理器实例
+_global_logger: Optional[LogManager] = None
+
+
+def init_logger(
+    name: str = 'main',
+    log_dir: Optional[str] = None,
+    level: int = logging.INFO,
+    console_output: bool = True,
+    file_output: bool = True
+) -> LogManager:
     """
-    获取日志器实例
+    初始化全局日志管理器
     
-    参数:
-        名称: 日志器名称
-        日志级别: 日志级别
-        日志目录: 日志目录
+    Args:
+        name: 日志器名称
+        log_dir: 日志文件保存目录
+        level: 日志级别
+        console_output: 是否输出到控制台
+        file_output: 是否输出到文件
     
-    返回:
+    Returns:
         日志管理器实例
     """
-    return 日志管理器(名称, 日志级别, 日志目录)
+    global _global_logger
+    
+    # 如果已存在，先重置
+    if _global_logger is not None:
+        LogManager.reset()
+    
+    _global_logger = LogManager(
+        name=name,
+        log_dir=log_dir,
+        level=level,
+        console_output=console_output,
+        file_output=file_output
+    )
+    
+    return _global_logger
 
 
-# 便捷函数
-_默认日志器 = None
+def get_logger() -> LogManager:
+    """
+    获取全局日志管理器实例
+    
+    如果尚未初始化，则使用默认配置初始化
+    
+    Returns:
+        日志管理器实例
+    """
+    global _global_logger
+    
+    if _global_logger is None:
+        _global_logger = LogManager()
+    
+    return _global_logger
 
 
-def 初始化日志(
-    名称: str = "红外检测跟踪",
-    日志级别: str = "INFO",
-    日志目录: str = "outputs/logs"
-):
-    """初始化默认日志器"""
-    global _默认日志器
-    _默认日志器 = 日志管理器(名称, 日志级别, 日志目录)
+def log_debug(message: str):
+    """
+    记录调试级别日志（便捷函数）
+    
+    Args:
+        message: 日志消息
+    """
+    get_logger().debug(message)
 
 
-def log_debug(消息: str):
-    """记录调试信息"""
-    if _默认日志器:
-        _默认日志器.debug(消息)
+def log_info(message: str):
+    """
+    记录信息级别日志（便捷函数）
+    
+    Args:
+        message: 日志消息
+    """
+    get_logger().info(message)
 
 
-def log_info(消息: str):
-    """记录一般信息"""
-    if _默认日志器:
-        _默认日志器.info(消息)
+def log_warning(message: str):
+    """
+    记录警告级别日志（便捷函数）
+    
+    Args:
+        message: 日志消息
+    """
+    get_logger().warning(message)
 
 
-def log_warning(消息: str):
-    """记录警告信息"""
-    if _默认日志器:
-        _默认日志器.warning(消息)
-
-
-def log_error(消息: str):
-    """记录错误信息"""
-    if _默认日志器:
-        _默认日志器.error(消息)
+def log_error(message: str):
+    """
+    记录错误级别日志（便捷函数）
+    
+    Args:
+        message: 日志消息
+    """
+    get_logger().error(message)

@@ -1,0 +1,45 @@
+# 嵌入式配置文件
+# RV1126 红外检测跟踪系统
+
+# 模型配置
+model:
+  path: "models/yolov5s_infrared.rknn"
+  input_width: 640
+  input_height: 640
+  
+# 检测配置
+detection:
+  conf_threshold: 0.5
+  nms_threshold: 0.45
+  class_names:
+    - "person"
+    - "car"
+    - "bicycle"
+
+# 跟踪配置
+tracking:
+  track_thresh: 0.5
+  low_thresh: 0.1
+  match_thresh: 0.8
+  max_time_lost: 30
+
+# 视频输入配置
+video:
+  source: "/dev/video0"  # 红外相机设备
+  width: 640
+  height: 512
+  fps: 25
+
+# 输出配置
+output:
+  display: true
+  save_video: false
+  video_path: "output.mp4"
+  draw_trajectory: true
+  trajectory_length: 30
+
+# 性能配置
+performance:
+  use_npu: true           # 使用NPU加速
+  num_threads: 2          # CPU线程数
+  async_inference: false  # 异步推理

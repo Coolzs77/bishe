@@ -1,439 +1,555 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 评估指标计算模块
-包含目标检测和多目标跟踪的评估指标
+
+提供目标检测和多目标跟踪的各种评估指标计算功能，包括IoU、精确率、召回率、AP、mAP等。
 """
 
-import numpy as np
-from typing import List, Dict, Tuple, Optional
 import json
+import numpy as np
+from typing import Dict, List, Optional, Tuple, Union
+from collections import defaultdict
 
 
-def 计算IoU(框1: np.ndarray, 框2: np.ndarray) -> float:
+def compute_iou(box1: np.ndarray, box2: np.ndarray) -> float:
     """
-    计算两个边界框的IoU (Intersection over Union)
+    计算两个边界框的IoU（交并比）
     
-    参数:
-        框1: [x1, y1, x2, y2] 格式的边界框
-        框2: [x1, y1, x2, y2] 格式的边界框
+    Args:
+        box1: 第一个边界框，格式为 [x1, y1, x2, y2]
+        box2: 第二个边界框，格式为 [x1, y1, x2, y2]
     
-    返回:
-        IoU值 (0-1之间)
+    Returns:
+        IoU值，范围为 [0, 1]
     """
-    # 计算交集区域
-    x1 = max(框1[0], 框2[0])
-    y1 = max(框1[1], 框2[1])
-    x2 = min(框1[2], 框2[2])
-    y2 = min(框1[3], 框2[3])
+    # 确保输入为numpy数组
+    box1 = np.asarray(box1)
+    box2 = np.asarray(box2)
+    
+    # 计算交集区域的坐标
+    x1_inter = max(box1[0], box2[0])
+    y1_inter = max(box1[1], box2[1])
+    x2_inter = min(box1[2], box2[2])
+    y2_inter = min(box1[3], box2[3])
     
     # 计算交集面积
-    交集宽 = max(0, x2 - x1)
-    交集高 = max(0, y2 - y1)
-    交集面积 = 交集宽 * 交集高
+    inter_width = max(0, x2_inter - x1_inter)
+    inter_height = max(0, y2_inter - y1_inter)
+    inter_area = inter_width * inter_height
+    
+    # 计算各自的面积
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
     
     # 计算并集面积
-    框1面积 = (框1[2] - 框1[0]) * (框1[3] - 框1[1])
-    框2面积 = (框2[2] - 框2[0]) * (框2[3] - 框2[1])
-    并集面积 = 框1面积 + 框2面积 - 交集面积
+    union_area = area1 + area2 - inter_area
     
-    # 计算IoU
-    if 并集面积 == 0:
+    # 计算IoU，避免除零
+    if union_area <= 0:
         return 0.0
     
-    return 交集面积 / 并集面积
+    iou = inter_area / union_area
+    return float(iou)
 
 
-def 计算批量IoU(框组1: np.ndarray, 框组2: np.ndarray) -> np.ndarray:
+def compute_batch_iou(boxes1: np.ndarray, boxes2: np.ndarray) -> np.ndarray:
     """
-    批量计算两组边界框的IoU矩阵
+    批量计算两组边界框之间的IoU矩阵
     
-    参数:
-        框组1: [N, 4] 形状的边界框数组
-        框组2: [M, 4] 形状的边界框数组
+    Args:
+        boxes1: 第一组边界框，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
+        boxes2: 第二组边界框，形状为 (M, 4)，格式为 [x1, y1, x2, y2]
     
-    返回:
-        [N, M] 形状的IoU矩阵
+    Returns:
+        IoU矩阵，形状为 (N, M)，其中元素 [i, j] 表示 boxes1[i] 和 boxes2[j] 的IoU
     """
-    N = 框组1.shape[0]
-    M = 框组2.shape[0]
+    boxes1 = np.asarray(boxes1)
+    boxes2 = np.asarray(boxes2)
     
-    if N == 0 or M == 0:
-        return np.zeros((N, M))
+    # 处理空输入
+    if len(boxes1) == 0 or len(boxes2) == 0:
+        return np.zeros((len(boxes1), len(boxes2)))
     
-    # 扩展维度以便广播
-    框组1 = 框组1[:, np.newaxis, :]  # [N, 1, 4]
-    框组2 = 框组2[np.newaxis, :, :]  # [1, M, 4]
+    # 确保是二维数组
+    if boxes1.ndim == 1:
+        boxes1 = boxes1.reshape(1, -1)
+    if boxes2.ndim == 1:
+        boxes2 = boxes2.reshape(1, -1)
     
-    # 计算交集
-    左上 = np.maximum(框组1[:, :, :2], 框组2[:, :, :2])
-    右下 = np.minimum(框组1[:, :, 2:], 框组2[:, :, 2:])
+    n = boxes1.shape[0]
+    m = boxes2.shape[0]
     
-    交集尺寸 = np.maximum(右下 - 左上, 0)
-    交集面积 = 交集尺寸[:, :, 0] * 交集尺寸[:, :, 1]
+    # 扩展维度以便广播计算
+    # boxes1: (N, 1, 4), boxes2: (1, M, 4)
+    boxes1_exp = boxes1[:, np.newaxis, :]
+    boxes2_exp = boxes2[np.newaxis, :, :]
+    
+    # 计算交集区域
+    x1_inter = np.maximum(boxes1_exp[..., 0], boxes2_exp[..., 0])
+    y1_inter = np.maximum(boxes1_exp[..., 1], boxes2_exp[..., 1])
+    x2_inter = np.minimum(boxes1_exp[..., 2], boxes2_exp[..., 2])
+    y2_inter = np.minimum(boxes1_exp[..., 3], boxes2_exp[..., 3])
+    
+    # 计算交集面积
+    inter_width = np.maximum(0, x2_inter - x1_inter)
+    inter_height = np.maximum(0, y2_inter - y1_inter)
+    inter_area = inter_width * inter_height
     
     # 计算各自面积
-    面积1 = (框组1[:, :, 2] - 框组1[:, :, 0]) * (框组1[:, :, 3] - 框组1[:, :, 1])
-    面积2 = (框组2[:, :, 2] - 框组2[:, :, 0]) * (框组2[:, :, 3] - 框组2[:, :, 1])
+    area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
+    area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
     
-    # 计算并集
-    并集面积 = 面积1 + 面积2 - 交集面积
+    # 计算并集面积
+    union_area = area1[:, np.newaxis] + area2[np.newaxis, :] - inter_area
     
-    # 避免除零
-    并集面积 = np.maximum(并集面积, 1e-10)
+    # 计算IoU，避免除零
+    iou_matrix = np.where(union_area > 0, inter_area / union_area, 0)
     
-    return 交集面积 / 并集面积
+    return iou_matrix
 
 
-def 计算精确率召回率(
-    真实框列表: List[np.ndarray],
-    预测框列表: List[np.ndarray],
-    预测分数列表: List[np.ndarray],
-    IoU阈值: float = 0.5
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def compute_precision_recall(
+    true_positives: np.ndarray,
+    false_positives: np.ndarray,
+    num_gt: int
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    计算精确率-召回率曲线
+    计算精确率和召回率曲线
     
-    参数:
-        真实框列表: 每张图像的真实框列表
-        预测框列表: 每张图像的预测框列表
-        预测分数列表: 每张图像的预测分数列表
-        IoU阈值: IoU匹配阈值
+    Args:
+        true_positives: 真正例数组，按置信度降序排列
+        false_positives: 假正例数组，按置信度降序排列
+        num_gt: 真实目标总数
     
-    返回:
-        精确率数组, 召回率数组, 分数阈值数组
+    Returns:
+        precision: 精确率数组
+        recall: 召回率数组
     """
-    # 收集所有预测
-    所有预测 = []
-    总真实数 = 0
+    # 累积求和
+    tp_cumsum = np.cumsum(true_positives)
+    fp_cumsum = np.cumsum(false_positives)
     
-    for 图像索引, (真实框, 预测框, 预测分数) in enumerate(zip(真实框列表, 预测框列表, 预测分数列表)):
-        总真实数 += len(真实框)
-        
-        if len(预测框) == 0:
-            continue
-        
-        # 计算IoU矩阵
-        if len(真实框) > 0:
-            IoU矩阵 = 计算批量IoU(预测框, 真实框)
-        else:
-            IoU矩阵 = np.zeros((len(预测框), 0))
-        
-        # 标记每个预测是TP还是FP
-        已匹配真实 = set()
-        for 预测索引 in range(len(预测框)):
-            分数 = 预测分数[预测索引]
-            
-            if len(真实框) > 0:
-                最大IoU索引 = IoU矩阵[预测索引].argmax()
-                最大IoU = IoU矩阵[预测索引, 最大IoU索引]
-                
-                if 最大IoU >= IoU阈值 and 最大IoU索引 not in 已匹配真实:
-                    是TP = True
-                    已匹配真实.add(最大IoU索引)
-                else:
-                    是TP = False
-            else:
-                是TP = False
-            
-            所有预测.append((分数, 是TP))
+    # 计算召回率
+    recall = tp_cumsum / max(num_gt, 1)
     
-    if len(所有预测) == 0:
-        return np.array([1.0]), np.array([0.0]), np.array([1.0])
+    # 计算精确率
+    precision = tp_cumsum / np.maximum(tp_cumsum + fp_cumsum, 1)
     
-    # 按分数降序排序
-    所有预测.sort(key=lambda x: -x[0])
-    
-    # 计算累积TP和FP
-    累积TP = 0
-    累积FP = 0
-    精确率列表 = []
-    召回率列表 = []
-    分数阈值列表 = []
-    
-    for 分数, 是TP in 所有预测:
-        if 是TP:
-            累积TP += 1
-        else:
-            累积FP += 1
-        
-        精确率 = 累积TP / (累积TP + 累积FP)
-        召回率 = 累积TP / 总真实数 if 总真实数 > 0 else 0
-        
-        精确率列表.append(精确率)
-        召回率列表.append(召回率)
-        分数阈值列表.append(分数)
-    
-    return np.array(精确率列表), np.array(召回率列表), np.array(分数阈值列表)
+    return precision, recall
 
 
-def 计算AP(精确率: np.ndarray, 召回率: np.ndarray) -> float:
+def compute_ap(precision: np.ndarray, recall: np.ndarray, use_07_metric: bool = False) -> float:
     """
-    计算平均精度 (Average Precision)
+    计算单个类别的平均精度(AP)
     
-    使用11点插值法
+    Args:
+        precision: 精确率数组
+        recall: 召回率数组
+        use_07_metric: 是否使用VOC2007的11点插值方法
     
-    参数:
-        精确率: 精确率数组
-        召回率: 召回率数组
-    
-    返回:
+    Returns:
         AP值
     """
-    # 添加起始点和结束点
-    召回率 = np.concatenate([[0], 召回率, [1]])
-    精确率 = np.concatenate([[1], 精确率, [0]])
+    if len(precision) == 0 or len(recall) == 0:
+        return 0.0
     
-    # 确保精确率单调递减
-    for i in range(len(精确率) - 2, -1, -1):
-        精确率[i] = max(精确率[i], 精确率[i + 1])
-    
-    # 找到召回率变化的点
-    变化点 = np.where(召回率[1:] != 召回率[:-1])[0] + 1
-    
-    # 计算面积
-    AP = np.sum((召回率[变化点] - 召回率[变化点 - 1]) * 精确率[变化点])
-    
-    return float(AP)
-
-
-def 计算mAP(
-    真实框字典: Dict[str, List[np.ndarray]],
-    预测框字典: Dict[str, List[np.ndarray]],
-    预测分数字典: Dict[str, List[np.ndarray]],
-    类别列表: List[str],
-    IoU阈值: float = 0.5
-) -> Dict[str, float]:
-    """
-    计算所有类别的mAP
-    
-    参数:
-        真实框字典: {类别: [每张图像的真实框列表]}
-        预测框字典: {类别: [每张图像的预测框列表]}
-        预测分数字典: {类别: [每张图像的预测分数列表]}
-        类别列表: 类别名称列表
-        IoU阈值: IoU匹配阈值
-    
-    返回:
-        {类别: AP值} 和 {'mAP': 平均AP}
-    """
-    结果 = {}
-    AP列表 = []
-    
-    for 类别 in 类别列表:
-        if 类别 in 真实框字典 and 类别 in 预测框字典:
-            精确率, 召回率, _ = 计算精确率召回率(
-                真实框字典[类别],
-                预测框字典[类别],
-                预测分数字典[类别],
-                IoU阈值
-            )
-            AP = 计算AP(精确率, 召回率)
-        else:
-            AP = 0.0
+    if use_07_metric:
+        # VOC2007 11点插值法
+        ap = 0.0
+        for t in np.arange(0., 1.1, 0.1):
+            if np.sum(recall >= t) == 0:
+                p = 0
+            else:
+                p = np.max(precision[recall >= t])
+            ap += p / 11.0
+    else:
+        # VOC2010+ 所有点插值法
+        # 在召回率序列前后添加哨兵值
+        mrec = np.concatenate(([0.], recall, [1.]))
+        mpre = np.concatenate(([0.], precision, [0.]))
         
-        结果[类别] = AP
-        AP列表.append(AP)
+        # 使精确率单调递减
+        for i in range(mpre.size - 1, 0, -1):
+            mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
+        
+        # 找到召回率变化的点
+        i = np.where(mrec[1:] != mrec[:-1])[0]
+        
+        # 计算AP（曲线下面积）
+        ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     
-    结果['mAP'] = float(np.mean(AP列表)) if AP列表 else 0.0
-    
-    return 结果
+    return float(ap)
 
 
-class MOT指标计算器:
+def compute_map(
+    all_detections: Dict[int, List[Dict]],
+    all_ground_truths: Dict[int, List[Dict]],
+    iou_threshold: float = 0.5,
+    num_classes: Optional[int] = None
+) -> Tuple[float, Dict[int, float]]:
     """
-    多目标跟踪指标计算器
+    计算所有类别的平均精度均值(mAP)
     
-    计算MOTA、IDF1、IDSW等跟踪指标
+    Args:
+        all_detections: 所有检测结果，格式为 {image_id: [{'bbox': [x1,y1,x2,y2], 'class_id': int, 'confidence': float}, ...]}
+        all_ground_truths: 所有真实标注，格式为 {image_id: [{'bbox': [x1,y1,x2,y2], 'class_id': int}, ...]}
+        iou_threshold: IoU阈值，用于判断检测是否正确
+        num_classes: 类别数量，如果为None则自动推断
+    
+    Returns:
+        mAP: 所有类别的平均精度均值
+        ap_per_class: 每个类别的AP字典
+    """
+    # 收集所有类别ID
+    class_ids = set()
+    for dets in all_detections.values():
+        for det in dets:
+            class_ids.add(det['class_id'])
+    for gts in all_ground_truths.values():
+        for gt in gts:
+            class_ids.add(gt['class_id'])
+    
+    if num_classes is not None:
+        class_ids = set(range(num_classes))
+    
+    ap_per_class = {}
+    
+    for class_id in class_ids:
+        # 收集该类别的所有检测和真实标注
+        detections = []
+        ground_truths = defaultdict(list)
+        
+        for img_id, dets in all_detections.items():
+            for det in dets:
+                if det['class_id'] == class_id:
+                    detections.append({
+                        'image_id': img_id,
+                        'bbox': det['bbox'],
+                        'confidence': det['confidence']
+                    })
+        
+        for img_id, gts in all_ground_truths.items():
+            for gt in gts:
+                if gt['class_id'] == class_id:
+                    ground_truths[img_id].append({
+                        'bbox': gt['bbox'],
+                        'used': False
+                    })
+        
+        # 按置信度降序排列
+        detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
+        
+        # 统计真实目标总数
+        num_gt = sum(len(gts) for gts in ground_truths.values())
+        
+        if num_gt == 0:
+            ap_per_class[class_id] = 0.0
+            continue
+        
+        # 计算TP和FP
+        tp = np.zeros(len(detections))
+        fp = np.zeros(len(detections))
+        
+        for i, det in enumerate(detections):
+            img_id = det['image_id']
+            det_bbox = det['bbox']
+            
+            if img_id not in ground_truths:
+                fp[i] = 1
+                continue
+            
+            gts = ground_truths[img_id]
+            
+            # 找到IoU最大的真实框
+            max_iou = 0
+            max_gt_idx = -1
+            
+            for gt_idx, gt in enumerate(gts):
+                iou = compute_iou(det_bbox, gt['bbox'])
+                if iou > max_iou:
+                    max_iou = iou
+                    max_gt_idx = gt_idx
+            
+            # 判断是否为TP
+            if max_iou >= iou_threshold and max_gt_idx >= 0 and not gts[max_gt_idx]['used']:
+                tp[i] = 1
+                gts[max_gt_idx]['used'] = True
+            else:
+                fp[i] = 1
+        
+        # 计算精确率和召回率
+        precision, recall = compute_precision_recall(tp, fp, num_gt)
+        
+        # 计算AP
+        ap = compute_ap(precision, recall)
+        ap_per_class[class_id] = ap
+    
+    # 计算mAP
+    if len(ap_per_class) > 0:
+        mAP = sum(ap_per_class.values()) / len(ap_per_class)
+    else:
+        mAP = 0.0
+    
+    return mAP, ap_per_class
+
+
+class MOTMetricsCalculator:
+    """
+    多目标跟踪(MOT)指标计算器
+    
+    支持计算MOTA、MOTP、IDF1等标准MOT评估指标
     """
     
-    def __init__(self, IoU阈值: float = 0.5):
+    def __init__(self, iou_threshold: float = 0.5):
         """
-        初始化计算器
+        初始化MOT指标计算器
         
-        参数:
-            IoU阈值: IoU匹配阈值
+        Args:
+            iou_threshold: IoU阈值，用于匹配预测和真实目标
         """
-        self.IoU阈值 = IoU阈值
-        self.重置()
+        self.iou_threshold = iou_threshold
+        self.reset()
     
-    def 重置(self):
-        """重置统计量"""
-        self.总TP = 0
-        self.总FP = 0
-        self.总FN = 0
-        self.总IDSW = 0
-        self.总真实数 = 0
-        self.总距离 = 0.0
-        self.匹配数 = 0
+    def reset(self):
+        """
+        重置所有累积的统计量
+        """
+        # 基础统计量
+        self.num_gt = 0  # 真实目标总数
+        self.num_pred = 0  # 预测目标总数
+        self.num_matches = 0  # 匹配成功数
+        self.num_false_positives = 0  # 假正例数
+        self.num_misses = 0  # 漏检数
+        self.num_switches = 0  # ID切换数
+        self.num_fragmentations = 0  # 轨迹碎片数
         
-        # 用于IDF1计算
-        self.IDTP = 0
-        self.IDFP = 0
-        self.IDFN = 0
+        # 用于计算MOTP的IoU累积
+        self.total_iou = 0.0
         
-        # 跟踪状态
-        self.上一帧匹配 = {}  # {真实ID: 预测ID}
+        # 用于计算IDF1的统计量
+        self.idtp = 0  # ID真正例
+        self.idfp = 0  # ID假正例
+        self.idfn = 0  # ID假负例
+        
+        # 轨迹状态跟踪
+        self.gt_id_to_pred_id = {}  # 真实ID到预测ID的映射
+        self.prev_gt_ids = set()  # 上一帧的真实ID集合
+        
+        # 帧级统计
+        self.frame_count = 0
     
-    def 更新(
+    def update(
         self,
-        真实框: np.ndarray,
-        真实ID: np.ndarray,
-        预测框: np.ndarray,
-        预测ID: np.ndarray
+        gt_boxes: np.ndarray,
+        gt_ids: np.ndarray,
+        pred_boxes: np.ndarray,
+        pred_ids: np.ndarray
     ):
         """
-        更新一帧的统计量
+        更新单帧的统计量
         
-        参数:
-            真实框: [N, 4] 真实边界框
-            真实ID: [N] 真实目标ID
-            预测框: [M, 4] 预测边界框
-            预测ID: [M] 预测目标ID
+        Args:
+            gt_boxes: 真实边界框，形状为 (N, 4)
+            gt_ids: 真实目标ID，形状为 (N,)
+            pred_boxes: 预测边界框，形状为 (M, 4)
+            pred_ids: 预测目标ID，形状为 (M,)
         """
-        N = len(真实框)
-        M = len(预测框)
+        gt_boxes = np.asarray(gt_boxes)
+        gt_ids = np.asarray(gt_ids)
+        pred_boxes = np.asarray(pred_boxes)
+        pred_ids = np.asarray(pred_ids)
         
-        self.总真实数 += N
+        self.frame_count += 1
         
-        if N == 0 and M == 0:
+        num_gt = len(gt_boxes)
+        num_pred = len(pred_boxes)
+        
+        self.num_gt += num_gt
+        self.num_pred += num_pred
+        
+        if num_gt == 0 and num_pred == 0:
             return
         
-        if N == 0:
-            self.总FP += M
-            self.IDFP += M
+        if num_gt == 0:
+            self.num_false_positives += num_pred
+            self.idfp += num_pred
             return
         
-        if M == 0:
-            self.总FN += N
-            self.IDFN += N
+        if num_pred == 0:
+            self.num_misses += num_gt
+            self.idfn += num_gt
             return
         
         # 计算IoU矩阵
-        IoU矩阵 = 计算批量IoU(预测框, 真实框)
+        iou_matrix = compute_batch_iou(gt_boxes, pred_boxes)
         
-        # 贪婪匹配
-        匹配对 = []
-        已匹配预测 = set()
-        已匹配真实 = set()
+        # 贪婪匹配（也可以使用匈牙利算法）
+        matched_gt = set()
+        matched_pred = set()
+        matches = []
         
-        # 按IoU降序排序所有可能的匹配
-        候选匹配 = []
-        for i in range(M):
-            for j in range(N):
-                if IoU矩阵[i, j] >= self.IoU阈值:
-                    候选匹配.append((IoU矩阵[i, j], i, j))
-        
-        候选匹配.sort(reverse=True)
-        
-        for IoU值, 预测索引, 真实索引 in 候选匹配:
-            if 预测索引 not in 已匹配预测 and 真实索引 not in 已匹配真实:
-                匹配对.append((预测索引, 真实索引))
-                已匹配预测.add(预测索引)
-                已匹配真实.add(真实索引)
-                self.总距离 += 1 - IoU值
-                self.匹配数 += 1
-        
-        # 计算TP, FP, FN
-        TP = len(匹配对)
-        FP = M - TP
-        FN = N - TP
-        
-        self.总TP += TP
-        self.总FP += FP
-        self.总FN += FN
-        
-        # 计算IDSW
-        当前帧匹配 = {}
-        for 预测索引, 真实索引 in 匹配对:
-            真实id = 真实ID[真实索引]
-            预测id = 预测ID[预测索引]
-            当前帧匹配[真实id] = 预测id
+        # 按IoU降序处理
+        while True:
+            max_iou = self.iou_threshold
+            max_gt_idx = -1
+            max_pred_idx = -1
             
-            # 检查ID切换
-            if 真实id in self.上一帧匹配:
-                if self.上一帧匹配[真实id] != 预测id:
-                    self.总IDSW += 1
+            for i in range(num_gt):
+                if i in matched_gt:
+                    continue
+                for j in range(num_pred):
+                    if j in matched_pred:
+                        continue
+                    if iou_matrix[i, j] > max_iou:
+                        max_iou = iou_matrix[i, j]
+                        max_gt_idx = i
+                        max_pred_idx = j
+            
+            if max_gt_idx < 0:
+                break
+            
+            matches.append((max_gt_idx, max_pred_idx, max_iou))
+            matched_gt.add(max_gt_idx)
+            matched_pred.add(max_pred_idx)
         
-        self.上一帧匹配 = 当前帧匹配
+        # 更新统计量
+        self.num_matches += len(matches)
+        self.num_false_positives += num_pred - len(matches)
+        self.num_misses += num_gt - len(matches)
         
-        # 更新IDF1相关统计
-        self.IDTP += TP
-        self.IDFP += FP
-        self.IDFN += FN
+        # 更新MOTP
+        for gt_idx, pred_idx, iou in matches:
+            self.total_iou += iou
+        
+        # 检查ID切换
+        current_gt_ids = set(gt_ids)
+        for gt_idx, pred_idx, _ in matches:
+            gt_id = gt_ids[gt_idx]
+            pred_id = pred_ids[pred_idx]
+            
+            if gt_id in self.gt_id_to_pred_id:
+                if self.gt_id_to_pred_id[gt_id] != pred_id:
+                    self.num_switches += 1
+            
+            self.gt_id_to_pred_id[gt_id] = pred_id
+        
+        # 检查轨迹碎片化（目标消失后重新出现）
+        for gt_id in current_gt_ids:
+            if gt_id not in self.prev_gt_ids and gt_id in self.gt_id_to_pred_id:
+                self.num_fragmentations += 1
+        
+        self.prev_gt_ids = current_gt_ids
+        
+        # 更新IDF1统计量
+        self.idtp += len(matches)
+        self.idfp += num_pred - len(matches)
+        self.idfn += num_gt - len(matches)
     
-    def 计算指标(self) -> Dict[str, float]:
+    def compute_metrics(self) -> Dict[str, float]:
         """
-        计算最终指标
+        计算所有MOT指标
         
-        返回:
+        Returns:
             包含各项指标的字典
         """
+        metrics = {}
+        
+        # MOTA (Multiple Object Tracking Accuracy)
         # MOTA = 1 - (FN + FP + IDSW) / GT
-        if self.总真实数 > 0:
-            MOTA = 1 - (self.总FN + self.总FP + self.总IDSW) / self.总真实数
+        if self.num_gt > 0:
+            mota = 1 - (self.num_misses + self.num_false_positives + self.num_switches) / self.num_gt
         else:
-            MOTA = 0.0
+            mota = 0.0
+        metrics['MOTA'] = mota
         
-        # MOTP = 平均IoU
-        if self.匹配数 > 0:
-            MOTP = 1 - self.总距离 / self.匹配数
+        # MOTP (Multiple Object Tracking Precision)
+        # MOTP = sum(IoU) / num_matches
+        if self.num_matches > 0:
+            motp = self.total_iou / self.num_matches
         else:
-            MOTP = 0.0
+            motp = 0.0
+        metrics['MOTP'] = motp
         
+        # IDF1 (ID F1 Score)
         # IDF1 = 2 * IDTP / (2 * IDTP + IDFP + IDFN)
-        分母 = 2 * self.IDTP + self.IDFP + self.IDFN
-        if 分母 > 0:
-            IDF1 = 2 * self.IDTP / 分母
+        if (2 * self.idtp + self.idfp + self.idfn) > 0:
+            idf1 = 2 * self.idtp / (2 * self.idtp + self.idfp + self.idfn)
         else:
-            IDF1 = 0.0
+            idf1 = 0.0
+        metrics['IDF1'] = idf1
         
-        # 精确率和召回率
-        if self.总TP + self.总FP > 0:
-            精确率 = self.总TP / (self.总TP + self.总FP)
+        # 精确率
+        if self.num_pred > 0:
+            precision = self.num_matches / self.num_pred
         else:
-            精确率 = 0.0
+            precision = 0.0
+        metrics['Precision'] = precision
         
-        if self.总TP + self.总FN > 0:
-            召回率 = self.总TP / (self.总TP + self.总FN)
+        # 召回率
+        if self.num_gt > 0:
+            recall = self.num_matches / self.num_gt
         else:
-            召回率 = 0.0
+            recall = 0.0
+        metrics['Recall'] = recall
         
-        return {
-            'MOTA': MOTA,
-            'MOTP': MOTP,
-            'IDF1': IDF1,
-            'IDSW': self.总IDSW,
-            'TP': self.总TP,
-            'FP': self.总FP,
-            'FN': self.总FN,
-            'Precision': 精确率,
-            'Recall': 召回率,
-            'GT': self.总真实数,
-        }
+        # F1分数
+        if (precision + recall) > 0:
+            f1 = 2 * precision * recall / (precision + recall)
+        else:
+            f1 = 0.0
+        metrics['F1'] = f1
+        
+        # 其他统计量
+        metrics['num_gt'] = self.num_gt
+        metrics['num_pred'] = self.num_pred
+        metrics['num_matches'] = self.num_matches
+        metrics['num_false_positives'] = self.num_false_positives
+        metrics['num_misses'] = self.num_misses
+        metrics['num_switches'] = self.num_switches
+        metrics['num_fragmentations'] = self.num_fragmentations
+        metrics['num_frames'] = self.frame_count
+        
+        return metrics
 
 
-def 保存指标到JSON(指标: Dict, 保存路径: str):
+def save_metrics_to_json(metrics: Dict, filepath: str, indent: int = 2):
     """
-    保存评估指标到JSON文件
+    将指标保存到JSON文件
     
-    参数:
-        指标: 指标字典
-        保存路径: JSON文件保存路径
+    Args:
+        metrics: 指标字典
+        filepath: 保存路径
+        indent: JSON缩进空格数
     """
-    with open(保存路径, 'w', encoding='utf-8') as f:
-        json.dump(指标, f, indent=2, ensure_ascii=False)
+    # 将numpy类型转换为Python原生类型
+    def convert_to_serializable(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.integer, np.int64, np.int32)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64, np.float32)):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: convert_to_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_serializable(item) for item in obj]
+        return obj
+    
+    serializable_metrics = convert_to_serializable(metrics)
+    
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(serializable_metrics, f, indent=indent, ensure_ascii=False)
 
 
-def 从JSON加载指标(加载路径: str) -> Dict:
+def load_metrics_from_json(filepath: str) -> Dict:
     """
-    从JSON文件加载评估指标
+    从JSON文件加载指标
     
-    参数:
-        加载路径: JSON文件路径
+    Args:
+        filepath: JSON文件路径
     
-    返回:
+    Returns:
         指标字典
     """
-    with open(加载路径, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    with open(filepath, 'r', encoding='utf-8') as f:
+        metrics = json.load(f)
+    return metrics

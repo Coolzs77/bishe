@@ -1,419 +1,512 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 可视化工具模块
-用于目标检测和跟踪结果的可视化
+
+提供目标检测和多目标跟踪结果的可视化功能，包括绘制边界框、轨迹、信息面板等。
 """
 
 import cv2
 import numpy as np
-from typing import List, Tuple, Optional, Dict
-import colorsys
+from typing import Dict, List, Optional, Tuple, Union
+from collections import defaultdict
 
 
-def 生成颜色列表(数量: int) -> List[Tuple[int, int, int]]:
+def generate_color_list(num: int) -> List[Tuple[int, int, int]]:
     """
-    生成指定数量的不同颜色
+    生成一组区分度高的颜色列表
     
-    参数:
-        数量: 需要的颜色数量
+    Args:
+        num: 需要生成的颜色数量
     
-    返回:
-        BGR颜色元组列表
+    Returns:
+        颜色列表，每个颜色为 (B, G, R) 格式的元组
     """
-    颜色列表 = []
-    for i in range(数量):
-        # 使用HSV色彩空间生成均匀分布的颜色
-        色相 = i / 数量
-        饱和度 = 0.9
-        明度 = 0.9
-        
-        r, g, b = colorsys.hsv_to_rgb(色相, 饱和度, 明度)
-        颜色列表.append((int(b * 255), int(g * 255), int(r * 255)))
+    colors = []
     
-    return 颜色列表
+    # 预定义一些高对比度的颜色
+    predefined_colors = [
+        (255, 0, 0),      # 蓝色
+        (0, 255, 0),      # 绿色
+        (0, 0, 255),      # 红色
+        (255, 255, 0),    # 青色
+        (255, 0, 255),    # 洋红
+        (0, 255, 255),    # 黄色
+        (128, 0, 255),    # 橙色
+        (255, 128, 0),    # 天蓝色
+        (0, 128, 255),    # 橙红色
+        (128, 255, 0),    # 草绿色
+        (255, 0, 128),    # 紫色
+        (0, 255, 128),    # 青绿色
+    ]
+    
+    # 首先使用预定义颜色
+    for i in range(min(num, len(predefined_colors))):
+        colors.append(predefined_colors[i])
+    
+    # 如果需要更多颜色，使用HSV空间生成
+    if num > len(predefined_colors):
+        for i in range(len(predefined_colors), num):
+            # 在HSV空间均匀采样色相
+            hue = int(180 * (i - len(predefined_colors)) / (num - len(predefined_colors)))
+            # 创建HSV颜色
+            hsv_color = np.uint8([[[hue, 255, 255]]])
+            # 转换为BGR
+            bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0][0]
+            colors.append(tuple(int(c) for c in bgr_color))
+    
+    return colors
 
 
-def 获取ID颜色(目标ID: int, 颜色数: int = 100) -> Tuple[int, int, int]:
+def get_id_color(track_id: int, num_colors: int = 256) -> Tuple[int, int, int]:
     """
-    根据目标ID获取对应的颜色
+    根据跟踪ID获取对应的颜色
     
-    参数:
-        目标ID: 目标的唯一标识
-        颜色数: 颜色池大小
+    使用哈希方式确保相同ID始终映射到相同颜色
     
-    返回:
-        BGR颜色元组
+    Args:
+        track_id: 跟踪目标的ID
+        num_colors: 颜色空间大小
+    
+    Returns:
+        颜色元组 (B, G, R)
     """
-    颜色池 = 生成颜色列表(颜色数)
-    return 颜色池[目标ID % 颜色数]
+    # 使用简单的哈希函数生成稳定的颜色
+    np.random.seed(int(track_id) % (2**31))
+    hue = np.random.randint(0, 180)
+    saturation = np.random.randint(150, 256)
+    value = np.random.randint(150, 256)
+    
+    # 转换HSV到BGR
+    hsv_color = np.uint8([[[hue, saturation, value]]])
+    bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0][0]
+    
+    return tuple(int(c) for c in bgr_color)
 
 
-def 绘制边界框(
-    图像: np.ndarray,
-    边界框: np.ndarray,
-    类别名: str = "",
-    置信度: float = None,
-    颜色: Tuple[int, int, int] = (0, 255, 0),
-    线宽: int = 2,
-    字体大小: float = 0.6
+def draw_bounding_box(
+    image: np.ndarray,
+    bbox: Union[List, Tuple, np.ndarray],
+    class_name: Optional[str] = None,
+    confidence: Optional[float] = None,
+    color: Tuple[int, int, int] = (0, 255, 0),
+    thickness: int = 2
 ) -> np.ndarray:
     """
     在图像上绘制单个边界框
     
-    参数:
-        图像: BGR格式的图像
-        边界框: [x1, y1, x2, y2] 格式的边界框
-        类别名: 类别名称
-        置信度: 置信度分数
-        颜色: BGR颜色
-        线宽: 线条宽度
-        字体大小: 字体大小
+    Args:
+        image: 输入图像 (BGR格式)
+        bbox: 边界框坐标 [x1, y1, x2, y2]
+        class_name: 类别名称，可选
+        confidence: 置信度，可选
+        color: 边界框颜色 (B, G, R)
+        thickness: 线条粗细
     
-    返回:
+    Returns:
         绘制后的图像
     """
-    图像 = 图像.copy()
+    # 复制图像以避免修改原图
+    img = image.copy()
     
-    x1, y1, x2, y2 = map(int, 边界框)
+    # 获取边界框坐标
+    x1, y1, x2, y2 = [int(v) for v in bbox]
     
     # 绘制边界框
-    cv2.rectangle(图像, (x1, y1), (x2, y2), 颜色, 线宽)
+    cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
     
     # 准备标签文本
-    标签部分 = []
-    if 类别名:
-        标签部分.append(类别名)
-    if 置信度 is not None:
-        标签部分.append(f"{置信度:.2f}")
-    
-    if 标签部分:
-        标签 = " ".join(标签部分)
+    if class_name is not None or confidence is not None:
+        label_parts = []
+        if class_name is not None:
+            label_parts.append(class_name)
+        if confidence is not None:
+            label_parts.append(f'{confidence:.2f}')
+        label = ' '.join(label_parts)
         
         # 计算文本大小
-        (文本宽, 文本高), 基线 = cv2.getTextSize(
-            标签, cv2.FONT_HERSHEY_SIMPLEX, 字体大小, 1
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        font_thickness = 1
+        (text_width, text_height), baseline = cv2.getTextSize(
+            label, font, font_scale, font_thickness
         )
         
         # 绘制标签背景
-        cv2.rectangle(
-            图像,
-            (x1, y1 - 文本高 - 10),
-            (x1 + 文本宽 + 10, y1),
-            颜色,
-            -1
-        )
+        label_y1 = max(y1 - text_height - 10, 0)
+        label_y2 = y1
+        cv2.rectangle(img, (x1, label_y1), (x1 + text_width + 4, label_y2), color, -1)
         
-        # 绘制标签文本
+        # 绘制标签文本（白色）
         cv2.putText(
-            图像,
-            标签,
-            (x1 + 5, y1 - 5),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            字体大小,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA
+            img, label, (x1 + 2, label_y2 - 4),
+            font, font_scale, (255, 255, 255), font_thickness
         )
     
-    return 图像
+    return img
 
 
-def 绘制检测结果(
-    图像: np.ndarray,
-    检测框列表: List[np.ndarray],
-    类别列表: List[str] = None,
-    置信度列表: List[float] = None,
-    类别名映射: Dict[int, str] = None,
-    线宽: int = 2
+def draw_detection_results(
+    image: np.ndarray,
+    boxes: np.ndarray,
+    classes: Optional[List[str]] = None,
+    confidences: Optional[np.ndarray] = None,
+    colors: Optional[List[Tuple[int, int, int]]] = None,
+    thickness: int = 2
 ) -> np.ndarray:
     """
-    在图像上绘制所有检测结果
+    在图像上绘制检测结果
     
-    参数:
-        图像: BGR格式的图像
-        检测框列表: 检测框列表，每个为[x1, y1, x2, y2]
-        类别列表: 类别ID或名称列表
-        置信度列表: 置信度列表
-        类别名映射: 类别ID到名称的映射
-        线宽: 线条宽度
+    Args:
+        image: 输入图像 (BGR格式)
+        boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
+        classes: 类别名称列表，长度为 N
+        confidences: 置信度数组，形状为 (N,)
+        colors: 颜色列表，如果为None则自动生成
+        thickness: 线条粗细
     
-    返回:
+    Returns:
         绘制后的图像
     """
-    结果图像 = 图像.copy()
+    img = image.copy()
     
-    # 生成类别颜色
-    颜色映射 = {}
+    if len(boxes) == 0:
+        return img
     
-    for i, 检测框 in enumerate(检测框列表):
-        # 获取类别信息
-        if 类别列表 is not None and i < len(类别列表):
-            类别 = 类别列表[i]
-            if isinstance(类别, int) and 类别名映射:
-                类别名 = 类别名映射.get(类别, str(类别))
-            else:
-                类别名 = str(类别)
-            
-            # 获取颜色
-            if 类别 not in 颜色映射:
-                颜色映射[类别] = 获取ID颜色(hash(str(类别)))
-            颜色 = 颜色映射[类别]
+    boxes = np.asarray(boxes)
+    num_boxes = len(boxes)
+    
+    # 生成颜色
+    if colors is None:
+        if classes is not None:
+            # 为每个类别分配固定颜色
+            unique_classes = list(set(classes))
+            class_colors = generate_color_list(len(unique_classes))
+            class_to_color = {cls: color for cls, color in zip(unique_classes, class_colors)}
+            colors = [class_to_color[cls] for cls in classes]
         else:
-            类别名 = ""
-            颜色 = (0, 255, 0)
-        
-        # 获取置信度
-        置信度 = None
-        if 置信度列表 is not None and i < len(置信度列表):
-            置信度 = 置信度列表[i]
-        
-        # 绘制边界框
-        结果图像 = 绘制边界框(
-            结果图像, 检测框, 类别名, 置信度, 颜色, 线宽
-        )
+            colors = [(0, 255, 0)] * num_boxes
     
-    return 结果图像
+    # 绘制每个边界框
+    for i in range(num_boxes):
+        class_name = classes[i] if classes is not None else None
+        conf = confidences[i] if confidences is not None else None
+        color = colors[i] if i < len(colors) else (0, 255, 0)
+        
+        img = draw_bounding_box(img, boxes[i], class_name, conf, color, thickness)
+    
+    return img
 
 
-def 绘制跟踪结果(
-    图像: np.ndarray,
-    跟踪框列表: List[np.ndarray],
-    跟踪ID列表: List[int],
-    类别列表: List[str] = None,
-    绘制轨迹: bool = True,
-    轨迹历史: Dict[int, List[Tuple[int, int]]] = None,
-    轨迹长度: int = 30,
-    线宽: int = 2
+# 用于存储轨迹历史的全局字典
+_trajectory_history = defaultdict(list)
+
+
+def draw_tracking_results(
+    image: np.ndarray,
+    boxes: np.ndarray,
+    track_ids: np.ndarray,
+    classes: Optional[List[str]] = None,
+    draw_trajectory: bool = True,
+    trajectory_history: Optional[Dict[int, List[Tuple[int, int]]]] = None,
+    max_trajectory_length: int = 30,
+    thickness: int = 2
 ) -> np.ndarray:
     """
     在图像上绘制跟踪结果
     
-    参数:
-        图像: BGR格式的图像
-        跟踪框列表: 跟踪框列表
-        跟踪ID列表: 目标ID列表
-        类别列表: 类别列表
-        绘制轨迹: 是否绘制轨迹
-        轨迹历史: {ID: [(x, y), ...]} 轨迹历史字典
-        轨迹长度: 显示的轨迹长度
-        线宽: 线条宽度
+    Args:
+        image: 输入图像 (BGR格式)
+        boxes: 边界框数组，形状为 (N, 4)
+        track_ids: 跟踪ID数组，形状为 (N,)
+        classes: 类别名称列表，长度为 N
+        draw_trajectory: 是否绘制运动轨迹
+        trajectory_history: 轨迹历史字典，格式为 {track_id: [(x, y), ...]}
+                          如果为None则使用全局历史
+        max_trajectory_length: 轨迹最大长度
+        thickness: 线条粗细
     
-    返回:
+    Returns:
         绘制后的图像
     """
-    结果图像 = 图像.copy()
+    global _trajectory_history
     
-    for i, (跟踪框, 目标ID) in enumerate(zip(跟踪框列表, 跟踪ID列表)):
-        # 获取颜色
-        颜色 = 获取ID颜色(目标ID)
-        
-        x1, y1, x2, y2 = map(int, 跟踪框)
+    img = image.copy()
+    
+    if len(boxes) == 0:
+        return img
+    
+    boxes = np.asarray(boxes)
+    track_ids = np.asarray(track_ids)
+    
+    # 使用外部轨迹历史或全局历史
+    if trajectory_history is None:
+        trajectory_history = _trajectory_history
+    
+    # 绘制每个跟踪目标
+    for i, (box, track_id) in enumerate(zip(boxes, track_ids)):
+        track_id = int(track_id)
+        color = get_id_color(track_id)
         
         # 绘制边界框
-        cv2.rectangle(结果图像, (x1, y1), (x2, y2), 颜色, 线宽)
+        x1, y1, x2, y2 = [int(v) for v in box]
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
         
         # 准备标签
-        标签部分 = [f"ID:{目标ID}"]
-        if 类别列表 is not None and i < len(类别列表):
-            标签部分.append(str(类别列表[i]))
-        标签 = " ".join(标签部分)
+        label_parts = [f'ID:{track_id}']
+        if classes is not None and i < len(classes):
+            label_parts.insert(0, classes[i])
+        label = ' '.join(label_parts)
         
-        # 绘制ID标签
-        (文本宽, 文本高), _ = cv2.getTextSize(
-            标签, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1
+        # 绘制标签背景和文本
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        font_thickness = 1
+        (text_width, text_height), _ = cv2.getTextSize(
+            label, font, font_scale, font_thickness
         )
-        cv2.rectangle(
-            结果图像,
-            (x1, y1 - 文本高 - 10),
-            (x1 + 文本宽 + 10, y1),
-            颜色,
-            -1
-        )
+        
+        label_y1 = max(y1 - text_height - 10, 0)
+        cv2.rectangle(img, (x1, label_y1), (x1 + text_width + 4, y1), color, -1)
         cv2.putText(
-            结果图像,
-            标签,
-            (x1 + 5, y1 - 5),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA
+            img, label, (x1 + 2, y1 - 4),
+            font, font_scale, (255, 255, 255), font_thickness
         )
         
-        # 绘制轨迹
-        if 绘制轨迹 and 轨迹历史 is not None and 目标ID in 轨迹历史:
-            轨迹点 = 轨迹历史[目标ID][-轨迹长度:]
+        # 更新和绘制轨迹
+        if draw_trajectory:
+            # 计算边界框中心点
+            center_x = int((x1 + x2) / 2)
+            center_y = int((y1 + y2) / 2)
             
-            for j in range(1, len(轨迹点)):
-                # 轨迹颜色渐变
-                alpha = j / len(轨迹点)
-                轨迹颜色 = tuple(int(c * alpha) for c in 颜色)
-                
-                pt1 = tuple(map(int, 轨迹点[j - 1]))
-                pt2 = tuple(map(int, 轨迹点[j]))
-                
-                cv2.line(结果图像, pt1, pt2, 轨迹颜色, max(1, 线宽 - 1))
+            # 更新轨迹历史
+            trajectory_history[track_id].append((center_x, center_y))
+            
+            # 限制轨迹长度
+            if len(trajectory_history[track_id]) > max_trajectory_length:
+                trajectory_history[track_id] = trajectory_history[track_id][-max_trajectory_length:]
+            
+            # 绘制轨迹
+            points = trajectory_history[track_id]
+            for j in range(1, len(points)):
+                # 轨迹颜色渐变（越老越暗）
+                alpha = j / len(points)
+                line_color = tuple(int(c * alpha) for c in color)
+                cv2.line(img, points[j-1], points[j], line_color, max(1, thickness - 1))
     
-    return 结果图像
+    return img
 
 
-def 绘制信息面板(
-    图像: np.ndarray,
-    信息字典: Dict[str, any],
-    位置: str = "左上",
-    背景色: Tuple[int, int, int] = (0, 0, 0),
-    文字色: Tuple[int, int, int] = (255, 255, 255),
-    透明度: float = 0.7
+def draw_info_panel(
+    image: np.ndarray,
+    info_dict: Dict[str, Union[str, int, float]],
+    position: str = 'top-left',
+    bg_color: Tuple[int, int, int] = (0, 0, 0),
+    text_color: Tuple[int, int, int] = (255, 255, 255),
+    alpha: float = 0.7
 ) -> np.ndarray:
     """
     在图像上绘制信息面板
     
-    参数:
-        图像: BGR格式的图像
-        信息字典: 要显示的信息
-        位置: 面板位置 ("左上", "右上", "左下", "右下")
-        背景色: 背景颜色
-        文字色: 文字颜色
-        透明度: 背景透明度
+    Args:
+        image: 输入图像 (BGR格式)
+        info_dict: 要显示的信息字典
+        position: 面板位置，可选 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+        bg_color: 背景颜色 (B, G, R)
+        text_color: 文本颜色 (B, G, R)
+        alpha: 背景透明度
     
-    返回:
+    Returns:
         绘制后的图像
     """
-    结果图像 = 图像.copy()
-    高, 宽 = 图像.shape[:2]
+    img = image.copy()
+    h, w = img.shape[:2]
     
     # 准备文本行
-    文本行 = [f"{键}: {值}" for 键, 值 in 信息字典.items()]
+    lines = []
+    for key, value in info_dict.items():
+        if isinstance(value, float):
+            lines.append(f'{key}: {value:.4f}')
+        else:
+            lines.append(f'{key}: {value}')
+    
+    if not lines:
+        return img
     
     # 计算面板大小
-    字体 = cv2.FONT_HERSHEY_SIMPLEX
-    字体大小 = 0.5
-    行间距 = 25
-    边距 = 10
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    font_thickness = 1
+    line_height = 20
+    padding = 10
     
-    最大宽度 = 0
-    for 行 in 文本行:
-        (文本宽, _), _ = cv2.getTextSize(行, 字体, 字体大小, 1)
-        最大宽度 = max(最大宽度, 文本宽)
+    max_width = 0
+    for line in lines:
+        (text_width, _), _ = cv2.getTextSize(line, font, font_scale, font_thickness)
+        max_width = max(max_width, text_width)
     
-    面板宽 = 最大宽度 + 边距 * 2
-    面板高 = len(文本行) * 行间距 + 边距 * 2
+    panel_width = max_width + 2 * padding
+    panel_height = len(lines) * line_height + 2 * padding
     
     # 确定面板位置
-    if 位置 == "左上":
-        x, y = 10, 10
-    elif 位置 == "右上":
-        x, y = 宽 - 面板宽 - 10, 10
-    elif 位置 == "左下":
-        x, y = 10, 高 - 面板高 - 10
-    else:  # 右下
-        x, y = 宽 - 面板宽 - 10, 高 - 面板高 - 10
+    if 'left' in position:
+        x1 = padding
+    else:
+        x1 = w - panel_width - padding
+    
+    if 'top' in position:
+        y1 = padding
+    else:
+        y1 = h - panel_height - padding
+    
+    x2 = x1 + panel_width
+    y2 = y1 + panel_height
     
     # 绘制半透明背景
-    覆盖层 = 结果图像.copy()
-    cv2.rectangle(覆盖层, (x, y), (x + 面板宽, y + 面板高), 背景色, -1)
-    结果图像 = cv2.addWeighted(覆盖层, 透明度, 结果图像, 1 - 透明度, 0)
+    overlay = img.copy()
+    cv2.rectangle(overlay, (x1, y1), (x2, y2), bg_color, -1)
+    cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
     
     # 绘制文本
-    for i, 行 in enumerate(文本行):
-        文本y = y + 边距 + (i + 1) * 行间距 - 8
-        cv2.putText(
-            结果图像,
-            行,
-            (x + 边距, 文本y),
-            字体,
-            字体大小,
-            文字色,
-            1,
-            cv2.LINE_AA
-        )
+    for i, line in enumerate(lines):
+        text_y = y1 + padding + (i + 1) * line_height - 5
+        cv2.putText(img, line, (x1 + padding, text_y), font, font_scale, text_color, font_thickness)
     
-    return 结果图像
+    return img
 
 
-def 拼接图像网格(
-    图像列表: List[np.ndarray],
-    行数: int,
-    列数: int,
-    单元格大小: Tuple[int, int] = None,
-    边距: int = 5,
-    背景色: Tuple[int, int, int] = (128, 128, 128)
+def create_image_grid(
+    images: List[np.ndarray],
+    rows: int,
+    cols: int,
+    cell_size: Optional[Tuple[int, int]] = None,
+    padding: int = 2,
+    bg_color: Tuple[int, int, int] = (128, 128, 128)
 ) -> np.ndarray:
     """
-    将多张图像拼接成网格
+    创建图像网格
     
-    参数:
-        图像列表: 图像列表
-        行数: 网格行数
-        列数: 网格列数
-        单元格大小: (宽, 高) 每个单元格大小，None表示自动
-        边距: 单元格间距
-        背景色: 背景颜色
+    Args:
+        images: 图像列表
+        rows: 网格行数
+        cols: 网格列数
+        cell_size: 每个单元格的大小 (width, height)，如果为None则使用第一张图像的大小
+        padding: 单元格之间的间距
+        bg_color: 背景颜色 (B, G, R)
     
-    返回:
-        拼接后的图像
+    Returns:
+        拼接后的网格图像
     """
-    if not 图像列表:
+    if len(images) == 0:
         return np.zeros((100, 100, 3), dtype=np.uint8)
     
     # 确定单元格大小
-    if 单元格大小 is None:
-        # 使用第一张图像的大小
-        单元格高, 单元格宽 = 图像列表[0].shape[:2]
+    if cell_size is None:
+        cell_width = images[0].shape[1]
+        cell_height = images[0].shape[0]
     else:
-        单元格宽, 单元格高 = 单元格大小
+        cell_width, cell_height = cell_size
     
-    # 计算总大小
-    总宽 = 列数 * 单元格宽 + (列数 + 1) * 边距
-    总高 = 行数 * 单元格高 + (行数 + 1) * 边距
+    # 计算网格总大小
+    grid_width = cols * cell_width + (cols + 1) * padding
+    grid_height = rows * cell_height + (rows + 1) * padding
     
     # 创建背景
-    结果 = np.full((总高, 总宽, 3), 背景色, dtype=np.uint8)
+    grid = np.full((grid_height, grid_width, 3), bg_color, dtype=np.uint8)
     
-    # 放置图像
-    for i, 图像 in enumerate(图像列表):
-        if i >= 行数 * 列数:
+    # 填充图像
+    for idx, img in enumerate(images):
+        if idx >= rows * cols:
             break
         
-        行 = i // 列数
-        列 = i % 列数
-        
-        x = 边距 + 列 * (单元格宽 + 边距)
-        y = 边距 + 行 * (单元格高 + 边距)
+        row = idx // cols
+        col = idx % cols
         
         # 调整图像大小
-        调整后 = cv2.resize(图像, (单元格宽, 单元格高))
+        if img.shape[0] != cell_height or img.shape[1] != cell_width:
+            img = cv2.resize(img, (cell_width, cell_height))
+        
+        # 确保是3通道
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        
+        # 计算位置
+        x = padding + col * (cell_width + padding)
+        y = padding + row * (cell_height + padding)
         
         # 放置图像
-        结果[y:y + 单元格高, x:x + 单元格宽] = 调整后
+        grid[y:y+cell_height, x:x+cell_width] = img
     
-    return 结果
+    return grid
 
 
-def 保存可视化视频(
-    输出路径: str,
-    帧列表: List[np.ndarray],
-    帧率: float = 25.0
-):
+def save_visualization_video(
+    output_path: str,
+    frames: List[np.ndarray],
+    fps: float = 30.0,
+    codec: str = 'mp4v'
+) -> bool:
     """
-    将帧序列保存为视频
+    将帧序列保存为视频文件
     
-    参数:
-        输出路径: 输出视频路径
-        帧列表: 帧图像列表
-        帧率: 视频帧率
+    Args:
+        output_path: 输出视频文件路径
+        frames: 帧列表，每帧为BGR格式的numpy数组
+        fps: 帧率
+        codec: 视频编码器，默认为 'mp4v'
+    
+    Returns:
+        是否保存成功
     """
-    if not 帧列表:
-        return
+    if len(frames) == 0:
+        print("警告: 帧列表为空，无法保存视频")
+        return False
     
-    高, 宽 = 帧列表[0].shape[:2]
+    # 获取帧大小
+    height, width = frames[0].shape[:2]
     
     # 创建视频写入器
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    写入器 = cv2.VideoWriter(输出路径, fourcc, 帧率, (宽, 高))
+    fourcc = cv2.VideoWriter_fourcc(*codec)
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
-    for 帧 in 帧列表:
-        写入器.write(帧)
+    if not writer.isOpened():
+        print(f"错误: 无法创建视频写入器，路径: {output_path}")
+        return False
     
-    写入器.release()
+    try:
+        for frame in frames:
+            # 确保帧大小一致
+            if frame.shape[0] != height or frame.shape[1] != width:
+                frame = cv2.resize(frame, (width, height))
+            
+            # 确保是3通道
+            if len(frame.shape) == 2:
+                frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            
+            writer.write(frame)
+        
+        writer.release()
+        print(f"视频已保存: {output_path} ({len(frames)} 帧, {fps} FPS)")
+        return True
+    
+    except Exception as e:
+        print(f"保存视频时出错: {e}")
+        writer.release()
+        return False
+
+
+def clear_trajectory_history():
+    """
+    清除全局轨迹历史
+    """
+    global _trajectory_history
+    _trajectory_history.clear()
+
+
+def get_trajectory_history() -> Dict[int, List[Tuple[int, int]]]:
+    """
+    获取全局轨迹历史的副本
+    
+    Returns:
+        轨迹历史字典
+    """
+    global _trajectory_history
+    return dict(_trajectory_history)
