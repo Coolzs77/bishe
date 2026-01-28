@@ -606,8 +606,3 @@ def create_yolov5_detector(
         detector.warmup()
     
     return detector
-
-
-# 为了向后兼容，保留中文别名
-YOLOv5检测器 = YOLOv5Detector
-创建YOLOv5检测器 = create_yolov5_detector

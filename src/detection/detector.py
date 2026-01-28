@@ -363,8 +363,3 @@ class BaseDetector(ABC):
             order = order[inds + 1]
         
         return np.array(keep, dtype=np.int64)
-
-
-# 为了向后兼容，保留中文别名
-检测结果 = DetectionResult
-检测器基类 = BaseDetector

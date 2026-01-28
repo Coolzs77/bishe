@@ -5,26 +5,34 @@
 提供模型导出、转换和量化功能
 """
 
-from .export_onnx import 导出ONNX, 简化ONNX模型, 验证ONNX模型, 测试ONNX推理, ONNX导出器
-from .convert_rknn import 转换为RKNN, 测试RKNN模型, RKNN转换器
-from .quantize import 量化校准器, 计算量化参数, 量化张量, 反量化张量, 评估量化误差, 模型量化器
+from .export_onnx import ONNXExporter, export_to_onnx, simplify_onnx_model, verify_onnx_model, test_onnx_inference, get_onnx_info
+from .convert_rknn import RKNNConverter, convert_to_rknn, test_rknn_model, create_calibration_dataset, get_rknn_info
+from .quantize import (
+    QuantizationCalibrator, compute_quantization_params, 
+    quantize_tensor, dequantize_tensor, evaluate_quantization_error, 
+    ModelQuantizer, quantize_onnx_model
+)
 
 __all__ = [
     # ONNX导出
-    '导出ONNX',
-    '简化ONNX模型',
-    '验证ONNX模型',
-    '测试ONNX推理',
-    'ONNX导出器',
+    'ONNXExporter',
+    'export_to_onnx',
+    'simplify_onnx_model',
+    'verify_onnx_model',
+    'test_onnx_inference',
+    'get_onnx_info',
     # RKNN转换
-    '转换为RKNN',
-    '测试RKNN模型',
-    'RKNN转换器',
+    'RKNNConverter',
+    'convert_to_rknn',
+    'test_rknn_model',
+    'create_calibration_dataset',
+    'get_rknn_info',
     # 量化
-    '量化校准器',
-    '计算量化参数',
-    '量化张量',
-    '反量化张量',
-    '评估量化误差',
-    '模型量化器',
+    'QuantizationCalibrator',
+    'compute_quantization_params',
+    'quantize_tensor',
+    'dequantize_tensor',
+    'evaluate_quantization_error',
+    'ModelQuantizer',
+    'quantize_onnx_model',
 ]

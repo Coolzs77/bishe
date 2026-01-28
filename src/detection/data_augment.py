@@ -674,9 +674,3 @@ def create_val_augmentor() -> InfraredDataAugmentor:
         mosaic_prob=0.0,
         mixup_prob=0.0
     )
-
-
-# 为了向后兼容，保留中文别名
-红外数据增强器 = InfraredDataAugmentor
-创建训练增强器 = create_train_augmentor
-创建验证增强器 = create_val_augmentor
