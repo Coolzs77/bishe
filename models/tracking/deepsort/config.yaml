@@ -1,0 +1,22 @@
+# DeepSORT配置
+# 深度外观描述器 + Sort跟踪
+
+# Reid模型配置
+reid:
+  model_path: "models/tracking/deepsort/reid.onnx"
+  input_size: [128, 64]  # [height, width]
+  feature_dim: 512
+
+# 跟踪器参数
+tracker:
+  max_dist: 0.2          # 最大余弦距离阈值
+  min_confidence: 0.3    # 最小检测置信度
+  max_iou_distance: 0.7  # 最大IoU距离
+  max_age: 70            # 最大消失帧数
+  n_init: 3              # 确认轨迹所需帧数
+  nn_budget: 100         # 特征库最大容量
+
+# 卡尔曼滤波参数
+kalman:
+  std_weight_position: 1.0 / 20    # 位置标准差权重
+  std_weight_velocity: 1.0 / 160   # 速度标准差权重

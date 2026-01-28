@@ -1,0 +1,25 @@
+# CenterTrack配置
+# 基于中心点偏移的跟踪
+
+# 模型配置
+model:
+  backbone: "dla34"      # DLA-34骨干网络
+  heads:
+    hm: 3                # 热图通道数（类别数）
+    wh: 2                # 宽高预测
+    reg: 2               # 中心点偏移回归
+    tracking: 2          # 跟踪偏移
+    ltrb_amodal: 4       # LTRB回归（可选）
+  
+# 跟踪参数
+tracker:
+  pre_thresh: 0.4        # 前一帧检测阈值
+  new_thresh: 0.4        # 新目标阈值
+  max_age: 32            # 最大消失帧数
+  
+# 推理参数
+inference:
+  input_size: [544, 960]  # [height, width]
+  down_ratio: 4           # 下采样比例
+  out_thresh: 0.4         # 输出阈值
+  K: 100                  # 最大检测数
