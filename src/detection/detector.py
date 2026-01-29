@@ -92,12 +92,12 @@ class DetectionResult:
         mask = self.confidences >= min_confidence
         return self[mask]
     
-    def filter_by_class(self, class_indices: Union[int, List[int]]) -> 'DetectionResult':
+    def filter_by_class(self, class_ids: Union[int, List[int]]) -> 'DetectionResult':
         """
         按classes过滤检测results
         
         Args:
-            class_indices: 要保留的classes索引，可以是单个整数或整数列表
+            class_ids: 要保留的classes索引，可以是单个整数或整数列表
             
         Returns:
             过滤后的DetectionResult对象
@@ -105,10 +105,10 @@ class DetectionResult:
         if len(self) == 0:
             return self
         
-        if isinstance(class_indices, int):
-            class_indices = [class_indices]
+        if isinstance(class_ids, int):
+            class_ids = [class_ids]
         
-        mask = np.isin(self.classes, class_indices)
+        mask = np.isin(self.classes, class_ids)
         return self[mask]
     
     def to_list(self) -> List[Dict[str, Any]]:
@@ -122,18 +122,18 @@ class DetectionResult:
             - class_id: classes索引
             - class_name: classesname
         """
-        results = []
+        result_list = []
         for i in range(len(self)):
-            result = {
+            result_dict = {
                 'box': self.boxes[i].tolist(),
                 'confidence': float(self.confidences[i]),
                 'class_id': int(self.classes[i]),
             }
             # 添加classesname（如果可用）
             if self.class_names and int(self.classes[i]) < len(self.class_names):
-                result['class_name'] = self.class_names[int(self.classes[i])]
-            results.append(result)
-        return results
+                result_dict['class_name'] = self.class_names[int(self.classes[i])]
+            result_list.append(result_dict)
+        return result_list
 
 
 class BaseDetector(ABC):
@@ -246,7 +246,7 @@ class BaseDetector(ABC):
         if self.model is None:
             self.load_model()
         
-        orig_size = (image.shape[0], image.shape[1])
+        original_size = (image.shape[0], image.shape[1])
         
         # 预处理
         input_tensor, preprocess_info = self.preprocess(image)
@@ -255,9 +255,9 @@ class BaseDetector(ABC):
         output = self.inference(input_tensor)
         
         # postprocess
-        result = self.postprocess(output, orig_size, preprocess_info)
+        detection_result = self.postprocess(output, original_size, preprocess_info)
         
-        return result
+        return detection_result
     
     def batch_detect(self, images: List[np.ndarray]) -> List[DetectionResult]:
         """
@@ -269,11 +269,11 @@ class BaseDetector(ABC):
         Returns:
             检测results列表
         """
-        results = []
+        detection_results = []
         for image in images:
-            result = self.detect(image)
-            results.append(result)
-        return results
+            detection_result = self.detect(image)
+            detection_results.append(detection_result)
+        return detection_results
     
     def set_threshold(
         self, 
