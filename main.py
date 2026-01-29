@@ -270,16 +270,16 @@ class InfraredMOTSystem:
         self.logger.info("=" * 60)
         
         try:
-            # 步骤2.1: load_modelconfig
-            self.logger.info("步骤2.1: 加载YOLOv5modelconfig...")
+            # 步骤2.1: load_Model configuration
+            self.logger.info("步骤2.1: 加载YOLOv5Model configuration...")
             model_config = self._load_model_config()
             
             # 步骤2.2: 初始化model
             self.logger.info("步骤2.2: 初始化YOLOv5detector...")
             detector = self._init_detector(model_config)
             
-            # 步骤2.3: 设置训练参数
-            self.logger.info("步骤2.3: config训练参数...")
+            # 步骤2.3: 设置Training parameters
+            self.logger.info("步骤2.3: configTraining parameters...")
             train_config = self._get_train_config()
             self._log_train_config(train_config)
             
@@ -301,7 +301,7 @@ class InfraredMOTSystem:
             return False
     
     def _load_model_config(self) -> Dict:
-        """load_modelconfig"""
+        """load_Model configuration"""
         model_yaml = self.project_root / 'models/yolov5/yolov5s_infrared.yaml'
         if model_yaml.exists():
             with open(model_yaml, 'r', encoding='utf-8') as f:
@@ -341,7 +341,7 @@ class InfraredMOTSystem:
     
     def _log_train_config(self, config: Dict):
         """记录训练config"""
-        self.logger.info("  - 训练参数:")
+        self.logger.info("  - Training parameters:")
         for key, value in config.items():
             self.logger.info(f"    * {key}: {value}")
     
@@ -849,7 +849,7 @@ def main():
         description='红外行人多目标检测与跟踪系统',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
+使用Examples:
   python main.py --mode full        # run完整流程
   python main.py --mode prepare     # 仅data准备
   python main.py --mode train       # 仅model训练
