@@ -205,10 +205,27 @@ class 跟踪器对比器:
         
         # 找出最优
         print('\n最优跟踪器分析:')
-        # TODO: 根据实际指标找出最优
-        print('  - 综合性能最优: 待评估')
-        print('  - 身份保持最优: 待评估')
-        print('  - 速度最快: 待评估')
+        
+        try:
+            # 按MOTA排序找出最优
+            mota排名 = sorted(所有结果, key=lambda x: x.get('overall_metrics', {}).get('MOTA', 0) or 0, reverse=True)
+            if mota排名:
+                print(f'  - 综合性能最优 (MOTA): {mota排名[0]["tracker"]} ({mota排名[0].get("overall_metrics", {}).get("MOTA", "N/A")})')
+            
+            # 按IDF1排序找出身份保持最优
+            idf1排名 = sorted(所有结果, key=lambda x: x.get('overall_metrics', {}).get('IDF1', 0) or 0, reverse=True)
+            if idf1排名:
+                print(f'  - 身份保持最优 (IDF1): {idf1排名[0]["tracker"]} ({idf1排名[0].get("overall_metrics", {}).get("IDF1", "N/A")})')
+            
+            # 按速度排序找出最快
+            速度排名 = sorted(所有结果, key=lambda x: x.get('duration', float('inf')))
+            if 速度排名:
+                print(f'  - 速度最快: {速度排名[0]["tracker"]} ({速度排名[0].get("duration", "N/A"):.2f}s)')
+        except Exception as e:
+            print(f'  分析出错: {e}')
+            print('  - 综合性能最优: 待评估')
+            print('  - 身份保持最优: 待评估')
+            print('  - 速度最快: 待评估')
     
     def 运行(self):
         """运行对比流程"""

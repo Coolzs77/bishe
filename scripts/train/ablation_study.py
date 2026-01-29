@@ -203,13 +203,7 @@ class 消融实验管理器:
             'end_time': 结束时间.isoformat(),
             'output': 输出[-5000:] if 输出 else '',  # 只保留最后5000字符
             'error': 错误[-2000:] if 错误 else '',
-            # TODO: 从训练日志中提取指标
-            'metrics': {
-                'mAP_0.5': None,
-                'mAP_0.5_0.95': None,
-                'precision': None,
-                'recall': None,
-            }
+            'metrics': self._extract_metrics_from_log(输出)
         }
         
         # 保存单个实验结果
@@ -225,6 +219,53 @@ class 消融实验管理器:
                 print(f'错误信息: {错误[:500]}')
         
         return 实验结果
+    
+    def _extract_metrics_from_log(self, 日志内容):
+        """
+        从训练日志中提取指标
+        
+        参数:
+            日志内容: 训练输出日志
+        
+        返回:
+            指标字典
+        """
+        import re
+        
+        指标 = {
+            'mAP_0.5': None,
+            'mAP_0.5_0.95': None,
+            'precision': None,
+            'recall': None,
+        }
+        
+        if not 日志内容:
+            return 指标
+        
+        try:
+            # 使用正则表达式提取常见指标
+            # YOLOv5日志格式示例: "mAP@0.5: 0.856"
+            
+            mAP_05_match = re.search(r'mAP@?0\.5:?\s+([\d.]+)', 日志内容)
+            if mAP_05_match:
+                指标['mAP_0.5'] = float(mAP_05_match.group(1))
+            
+            mAP_05_095_match = re.search(r'mAP@?0\.5:0\.95:?\s+([\d.]+)', 日志内容)
+            if mAP_05_095_match:
+                指标['mAP_0.5_0.95'] = float(mAP_05_095_match.group(1))
+            
+            precision_match = re.search(r'[Pp]recision:?\s+([\d.]+)', 日志内容)
+            if precision_match:
+                指标['precision'] = float(precision_match.group(1))
+            
+            recall_match = re.search(r'[Rr]ecall:?\s+([\d.]+)', 日志内容)
+            if recall_match:
+                指标['recall'] = float(recall_match.group(1))
+            
+        except Exception as e:
+            print(f'  提取指标失败: {e}')
+        
+        return 指标
     
     def 生成对比报告(self):
         """生成消融实验对比报告"""

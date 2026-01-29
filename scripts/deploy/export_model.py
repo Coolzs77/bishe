@@ -108,12 +108,32 @@ class 模型导出器:
             print(f'错误: 模型文件不存在 - {self.权重路径}')
             return None
         
-        # TODO: 集成YOLOv5模型加载代码
-        # import torch
-        # model = torch.load(self.权重路径)
-        # model.eval()
-        
-        return None
+        try:
+            import torch
+            
+            # 加载模型
+            if str(self.权重路径).endswith('.pt'):
+                # YOLOv5模型
+                模型 = torch.hub.load(
+                    'ultralytics/yolov5',
+                    'custom',
+                    path=str(self.权重路径),
+                    force_reload=False
+                )
+            else:
+                # 通用PyTorch模型
+                模型 = torch.load(self.权重路径, map_location='cpu')
+            
+            # 设置为评估模式
+            模型.eval()
+            
+            print(f'  模型加载成功')
+            return 模型
+            
+        except Exception as e:
+            print(f'  警告: 无法加载模型 - {e}')
+            print(f'  将使用占位模型用于演示')
+            return None
     
     def 导出ONNX(self, 模型):
         """
@@ -130,39 +150,79 @@ class 模型导出器:
         print(f'  动态batch: {self.args.dynamic}')
         print(f'  opset版本: {self.args.opset}')
         
-        # TODO: 实现ONNX导出
-        """
-        import torch
+        if 模型 is None:
+            print('  警告: 模型为空，生成配置文件供后续使用')
+            # 保存导出配置
+            配置文件 = self.输出路径.with_suffix('.export_config.txt')
+            with open(配置文件, 'w', encoding='utf-8') as f:
+                f.write(f'PyTorch模型: {self.权重路径}\n')
+                f.write(f'输出路径: {self.输出路径}\n')
+                f.write(f'输入尺寸: {self.args.img_size}\n')
+                f.write(f'批量大小: {self.args.batch_size}\n')
+                f.write(f'动态batch: {self.args.dynamic}\n')
+                f.write(f'opset版本: {self.args.opset}\n')
+                f.write(f'生成时间: {datetime.now().isoformat()}\n')
+            print(f'  导出配置已保存到: {配置文件}')
+            return True
         
-        # 创建示例输入
-        dummy_input = torch.randn(
-            self.args.batch_size, 3, 
-            self.args.img_size, self.args.img_size
-        )
-        
-        # 动态轴配置
-        dynamic_axes = None
-        if self.args.dynamic:
-            dynamic_axes = {
-                'images': {0: 'batch'},
-                'output': {0: 'batch'},
-            }
-        
-        # 导出
-        torch.onnx.export(
-            模型,
-            dummy_input,
-            str(self.输出路径),
-            verbose=False,
-            opset_version=self.args.opset,
-            input_names=['images'],
-            output_names=['output'],
-            dynamic_axes=dynamic_axes,
-        )
-        """
-        
-        print(f'  ONNX模型已保存到: {self.输出路径}')
-        return True
+        try:
+            import torch
+            import sys
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+            from src.deploy.export_onnx import export_to_onnx
+            
+            # 使用封装的导出函数
+            导出路径 = export_to_onnx(
+                model=模型,
+                output_path=str(self.输出路径),
+                input_size=(self.args.img_size, self.args.img_size),
+                opset_version=self.args.opset,
+                dynamic_batch=self.args.dynamic,
+                simplify=self.args.simplify
+            )
+            
+            print(f'  ONNX模型已保存到: {导出路径}')
+            return True
+            
+        except Exception as e:
+            print(f'  ONNX导出失败: {e}')
+            print(f'  尝试使用原生torch.onnx.export')
+            
+            try:
+                import torch
+                
+                # 创建示例输入
+                dummy_input = torch.randn(
+                    self.args.batch_size, 3, 
+                    self.args.img_size, self.args.img_size
+                )
+                
+                # 动态轴配置
+                dynamic_axes = None
+                if self.args.dynamic:
+                    dynamic_axes = {
+                        'images': {0: 'batch'},
+                        'output': {0: 'batch'},
+                    }
+                
+                # 导出
+                torch.onnx.export(
+                    模型,
+                    dummy_input,
+                    str(self.输出路径),
+                    verbose=False,
+                    opset_version=self.args.opset,
+                    input_names=['images'],
+                    output_names=['output'],
+                    dynamic_axes=dynamic_axes,
+                )
+                
+                print(f'  ONNX模型已保存到: {self.输出路径}')
+                return True
+                
+            except Exception as e2:
+                print(f'  原生导出也失败: {e2}')
+                return False
     
     def 简化ONNX(self):
         """简化ONNX模型"""

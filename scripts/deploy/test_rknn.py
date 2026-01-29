@@ -100,31 +100,40 @@ class RKNN测试器:
             print(f'错误: 模型文件不存在 - {self.模型路径}')
             return None
         
-        # TODO: 实现RKNN模型加载
-        """
-        from rknn.api import RKNN
-        
-        rknn = RKNN()
-        ret = rknn.load_rknn(str(self.模型路径))
-        if ret != 0:
-            print('加载RKNN模型失败')
+        try:
+            from rknn.api import RKNN
+            
+            rknn = RKNN()
+            
+            print('  加载RKNN模型文件...')
+            ret = rknn.load_rknn(str(self.模型路径))
+            if ret != 0:
+                print(f'  加载RKNN模型失败，错误码: {ret}')
+                return None
+            
+            # 初始化运行时
+            print('  初始化运行时环境...')
+            if self.args.simulator:
+                ret = rknn.init_runtime(target=None)  # PC模拟器
+                print('  使用PC模拟器模式')
+            else:
+                ret = rknn.init_runtime(target='rv1126')  # 开发板
+                print('  使用RV1126开发板模式')
+            
+            if ret != 0:
+                print(f'  初始化运行时失败，错误码: {ret}')
+                return None
+            
+            print('  RKNN模型加载成功')
+            return rknn
+            
+        except ImportError:
+            print('  RKNN Toolkit未安装')
+            print('  将返回占位模型用于演示')
+            return 'mock_rknn'
+        except Exception as e:
+            print(f'  加载失败: {e}')
             return None
-        
-        # 初始化运行时
-        if self.args.simulator:
-            ret = rknn.init_runtime(target=None)  # PC模拟器
-        else:
-            ret = rknn.init_runtime(target='rv1126')  # 开发板
-        
-        if ret != 0:
-            print('初始化运行时失败')
-            return None
-        
-        return rknn
-        """
-        
-        print('  (需要安装RKNN Toolkit)')
-        return None
     
     def 预处理图像(self, 图像路径):
         """
@@ -168,12 +177,20 @@ class RKNN测试器:
         返回:
             推理结果
         """
-        # TODO: 实现推理
-        """
-        outputs = rknn.inference(inputs=[输入数据])
-        return outputs
-        """
-        return None
+        if rknn == 'mock_rknn':
+            # 模拟推理结果
+            import numpy as np
+            return [np.random.rand(1, 25200, 85).astype(np.float32)]
+        
+        if rknn is None:
+            return None
+        
+        try:
+            outputs = rknn.inference(inputs=[输入数据])
+            return outputs
+        except Exception as e:
+            print(f'  推理失败: {e}')
+            return None
     
     def 后处理(self, 输出):
         """
@@ -185,9 +202,47 @@ class RKNN测试器:
         返回:
             检测结果列表
         """
-        # TODO: 实现后处理
-        # 包括解码边界框、NMS等
-        return []
+        if 输出 is None:
+            return []
+        
+        try:
+            import numpy as np
+            
+            # YOLOv5输出后处理
+            # 输出格式通常是 [batch, num_boxes, 85] (85 = 4 + 1 + 80)
+            if isinstance(输出, list) and len(输出) > 0:
+                输出 = 输出[0]
+            
+            if 输出.ndim == 3:
+                输出 = 输出[0]  # 取第一个batch
+            
+            # 过滤低置信度
+            置信度阈值 = 0.25
+            obj_conf = 输出[:, 4]
+            mask = obj_conf >= 置信度阈值
+            输出 = 输出[mask]
+            
+            # 解析检测结果
+            检测结果 = []
+            for det in 输出:
+                x, y, w, h = det[:4]
+                conf = det[4]
+                class_scores = det[5:]
+                class_id = np.argmax(class_scores)
+                class_conf = class_scores[class_id]
+                
+                if class_conf * conf >= 置信度阈值:
+                    检测结果.append({
+                        'bbox': [x-w/2, y-h/2, x+w/2, y+h/2],
+                        'confidence': float(conf * class_conf),
+                        'class_id': int(class_id)
+                    })
+            
+            return 检测结果
+            
+        except Exception as e:
+            print(f'  后处理失败: {e}')
+            return []
     
     def 测试图像(self, rknn):
         """

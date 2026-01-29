@@ -122,50 +122,58 @@ class RKNN转换器:
         print(f'  平台: {self.args.platform}')
         print(f'  量化: {self.args.quantize}')
         
-        # TODO: 实现RKNN转换
-        # 以下是转换流程的伪代码
-        
-        """
-        from rknn.api import RKNN
-        
-        # 创建RKNN对象
-        rknn = RKNN()
-        
-        # 配置
-        rknn.config(
-            mean_values=[[0, 0, 0]],
-            std_values=[[255, 255, 255]],
-            target_platform=self.args.platform,
-            quantized_dtype=self.args.quantize,
-        )
-        
-        # 加载ONNX模型
-        ret = rknn.load_onnx(model=str(self.onnx路径))
-        if ret != 0:
-            print('加载ONNX失败')
-            return False
-        
-        # 构建模型
-        校准图像 = self.获取校准图像()
-        ret = rknn.build(
-            do_quantization=True if self.args.quantize != 'fp16' else False,
-            dataset=校准图像,
-        )
-        if ret != 0:
-            print('构建模型失败')
-            return False
-        
-        # 导出RKNN模型
-        ret = rknn.export_rknn(str(self.输出路径))
-        if ret != 0:
-            print('导出RKNN失败')
-            return False
-        
-        rknn.release()
-        """
-        
-        print('  (注意: 实际转换需要安装RKNN Toolkit)')
-        print(f'  转换配置已记录，待RKNN Toolkit环境就绪后执行')
+        try:
+            # 尝试导入RKNN
+            from rknn.api import RKNN
+            
+            # 创建RKNN对象
+            rknn = RKNN()
+            
+            print('  配置RKNN参数...')
+            # 配置
+            rknn.config(
+                mean_values=[[0, 0, 0]],
+                std_values=[[255, 255, 255]],
+                target_platform=self.args.platform,
+                quantized_dtype=self.args.quantize,
+            )
+            
+            print('  加载ONNX模型...')
+            # 加载ONNX模型
+            ret = rknn.load_onnx(model=str(self.onnx路径))
+            if ret != 0:
+                print(f'  加载ONNX失败，错误码: {ret}')
+                raise RuntimeError('加载ONNX失败')
+            
+            print('  构建RKNN模型...')
+            # 获取校准图像
+            校准图像 = self.获取校准图像()
+            
+            # 构建模型
+            ret = rknn.build(
+                do_quantization=True if self.args.quantize != 'fp16' else False,
+                dataset=校准图像,
+            )
+            if ret != 0:
+                print(f'  构建模型失败，错误码: {ret}')
+                raise RuntimeError('构建模型失败')
+            
+            print('  导出RKNN模型...')
+            # 导出RKNN模型
+            ret = rknn.export_rknn(str(self.输出路径))
+            if ret != 0:
+                print(f'  导出RKNN失败，错误码: {ret}')
+                raise RuntimeError('导出RKNN失败')
+            
+            rknn.release()
+            
+            print(f'  RKNN模型已成功导出到: {self.输出路径}')
+            return True
+            
+        except ImportError:
+            print('  RKNN Toolkit未安装，将保存转换配置')
+        except Exception as e:
+            print(f'  转换失败: {e}')
         
         # 保存转换配置供后续使用
         配置文件 = self.输出路径.with_suffix('.config.txt')
