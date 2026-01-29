@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 工具模块
-提供评估指标、可视化和日志功能
+提供evaluatemetrics、visualize和日志功能
 """
 
 from .metrics import (
@@ -40,7 +40,7 @@ from .logger import (
 )
 
 __all__ = [
-    # 指标
+    # metrics
     'compute_iou',
     'compute_batch_iou',
     'compute_precision_recall',
@@ -49,7 +49,7 @@ __all__ = [
     'MOTMetricsCalculator',
     'save_metrics_to_json',
     'load_metrics_from_json',
-    # 可视化
+    # visualize
     'generate_color_list',
     'get_id_color',
     'draw_bounding_box',

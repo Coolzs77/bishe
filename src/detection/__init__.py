@@ -3,7 +3,7 @@
 """
 目标检测模块
 
-提供目标检测的基础类、YOLOv5检测器和红外数据增强功能
+提供目标检测的基础类、YOLOv5detector和红外data增强功能
 """
 
 from .detector import BaseDetector, DetectionResult

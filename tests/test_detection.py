@@ -22,13 +22,13 @@ class TestDetectionResult(unittest.TestCase):
     """测试DetectionResult类"""
     
     def test_empty_result(self):
-        """测试空检测结果"""
+        """测试空检测results"""
         result = DetectionResult()
         self.assertEqual(len(result), 0)
         self.assertEqual(result.boxes.shape, (0, 4))
     
     def test_result_with_data(self):
-        """测试有数据的检测结果"""
+        """测试有data的检测results"""
         boxes = np.array([[10, 20, 100, 200], [50, 60, 150, 250]])
         confidences = np.array([0.9, 0.8])
         classes = np.array([0, 1])
@@ -46,7 +46,7 @@ class TestDetectionResult(unittest.TestCase):
         np.testing.assert_array_equal(result.classes, classes)
     
     def test_filter_by_confidence(self):
-        """测试按置信度过滤"""
+        """测试按confidence过滤"""
         boxes = np.array([[10, 20, 100, 200], [50, 60, 150, 250], [30, 40, 130, 230]])
         confidences = np.array([0.9, 0.5, 0.7])
         classes = np.array([0, 1, 0])
@@ -58,7 +58,7 @@ class TestDetectionResult(unittest.TestCase):
         np.testing.assert_array_equal(filtered.confidences, [0.9, 0.7])
     
     def test_filter_by_class(self):
-        """测试按类别过滤"""
+        """测试按classes过滤"""
         boxes = np.array([[10, 20, 100, 200], [50, 60, 150, 250], [30, 40, 130, 230]])
         confidences = np.array([0.9, 0.8, 0.7])
         classes = np.array([0, 1, 0])
@@ -70,7 +70,7 @@ class TestDetectionResult(unittest.TestCase):
         np.testing.assert_array_equal(filtered.classes, [0, 0])
     
     def test_to_list(self):
-        """测试转换为字典列表"""
+        """测试convert为字典列表"""
         boxes = np.array([[10, 20, 100, 200]])
         confidences = np.array([0.9])
         classes = np.array([0])
@@ -106,11 +106,11 @@ class TestBaseDetector(unittest.TestCase):
         
         # 应该保留第一个和第三个（因为它们不重叠）
         self.assertEqual(len(keep), 2)
-        self.assertIn(0, keep)  # 置信度最高的应该保留
+        self.assertIn(0, keep)  # confidence最高的应该保留
         self.assertIn(2, keep)  # 不重叠的也应该保留
     
     def test_nms_empty(self):
-        """测试空输入的NMS"""
+        """测试空input的NMS"""
         boxes = np.array([]).reshape(0, 4)
         scores = np.array([])
         
@@ -120,10 +120,10 @@ class TestBaseDetector(unittest.TestCase):
 
 
 class TestInfraredDataAugmentor(unittest.TestCase):
-    """测试红外数据增强器"""
+    """测试红外data增强器"""
     
     def setUp(self):
-        """设置测试数据"""
+        """设置测试data"""
         self.image = np.random.rand(480, 640, 3).astype(np.float32)
         self.labels = np.array([
             [0, 0.5, 0.5, 0.2, 0.3],  # class_id, x_center, y_center, w, h
@@ -143,9 +143,9 @@ class TestInfraredDataAugmentor(unittest.TestCase):
         augmentor = InfraredDataAugmentor(contrast_range=(1.5, 1.5))
         augmented = augmentor.random_contrast(self.image)
         
-        # 对比度增加应该增加标准差
-        # 注意：由于图像可能会被裁剪，这个测试可能不完全可靠
-        # 这里只检查函数能正常运行
+        # 对比度增加应该增加std_dev
+        # 注意：由于image可能会被裁剪，这个测试可能不完全可靠
+        # 这里只检查函数能正常run
         self.assertEqual(augmented.shape, self.image.shape)
     
     def test_horizontal_flip(self):
@@ -155,7 +155,7 @@ class TestInfraredDataAugmentor(unittest.TestCase):
             self.image.copy(), self.labels.copy()
         )
         
-        # 检查标签x坐标是否翻转
+        # 检查labelx坐标是否翻转
         expected_x = 1.0 - self.labels[:, 1]
         np.testing.assert_array_almost_equal(flipped_labels[:, 1], expected_x)
     
@@ -166,7 +166,7 @@ class TestInfraredDataAugmentor(unittest.TestCase):
             self.image.copy(), self.labels.copy()
         )
         
-        # 标签应该不变
+        # label应该不变
         np.testing.assert_array_almost_equal(flipped_labels, self.labels)
     
     def test_thermal_noise(self):
@@ -174,7 +174,7 @@ class TestInfraredDataAugmentor(unittest.TestCase):
         augmentor = InfraredDataAugmentor(noise_intensity=0.05)
         noisy = augmentor.add_thermal_noise(self.image.copy())
         
-        # 噪声应该导致图像变化
+        # 噪声应该导致image变化
         self.assertFalse(np.allclose(noisy, self.image))
     
     def test_create_train_augmentor(self):
@@ -196,7 +196,7 @@ class TestInfraredDataAugmentor(unittest.TestCase):
 
 
 class TestDataAugmentorIntegration(unittest.TestCase):
-    """数据增强器集成测试"""
+    """data增强器集成测试"""
     
     def test_full_augmentation_pipeline(self):
         """测试完整的增强流程"""
@@ -207,16 +207,16 @@ class TestDataAugmentorIntegration(unittest.TestCase):
         
         augmentor = create_train_augmentor()
         
-        # 多次运行以测试随机性
+        # 多次run以测试随机性
         for _ in range(5):
             aug_image, aug_labels = augmentor(image.copy(), labels.copy())
             
-            # 检查输出有效性
+            # 检查output有效性
             self.assertEqual(aug_image.shape, image.shape)
             self.assertTrue(aug_image.min() >= 0)
             self.assertTrue(aug_image.max() <= 1)
             
-            # 标签可能被过滤，检查格式
+            # label可能被过滤，检查格式
             if len(aug_labels) > 0:
                 self.assertEqual(aug_labels.shape[1], 5)
 

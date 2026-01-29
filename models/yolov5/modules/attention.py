@@ -22,7 +22,7 @@ class SE注意力(nn.Module):
         初始化SE模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             缩减比例: 中间层通道缩减比例
         """
         super().__init__()
@@ -61,7 +61,7 @@ class 通道注意力(nn.Module):
         初始化通道注意力模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             缩减比例: MLP缩减比例
         """
         super().__init__()
@@ -135,7 +135,7 @@ class CBAM注意力(nn.Module):
         初始化CBAM模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             缩减比例: 通道注意力缩减比例
             卷积核大小: 空间注意力卷积核大小
         """
@@ -158,28 +158,28 @@ class 坐标注意力(nn.Module):
     将位置信息编码到通道注意力中
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 缩减比例: int = 32):
+    def __init__(self, input通道: int, output通道: int, 缩减比例: int = 32):
         """
         初始化坐标注意力模块
         
         参数:
-            输入通道: 输入通道数
-            输出通道: 输出通道数
+            input通道: input通道数
+            output通道: output通道数
             缩减比例: 通道缩减比例
         """
         super().__init__()
         
-        中间通道 = max(8, 输入通道 // 缩减比例)
+        中间通道 = max(8, input通道 // 缩减比例)
         
         self.水平池化 = nn.AdaptiveAvgPool2d((None, 1))
         self.垂直池化 = nn.AdaptiveAvgPool2d((1, None))
         
-        self.卷积1 = nn.Conv2d(输入通道, 中间通道, 1, bias=False)
+        self.卷积1 = nn.Conv2d(input通道, 中间通道, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(中间通道)
         self.激活 = nn.ReLU(inplace=True)
         
-        self.卷积_h = nn.Conv2d(中间通道, 输出通道, 1, bias=False)
-        self.卷积_w = nn.Conv2d(中间通道, 输出通道, 1, bias=False)
+        self.卷积_h = nn.Conv2d(中间通道, output通道, 1, bias=False)
+        self.卷积_w = nn.Conv2d(中间通道, output通道, 1, bias=False)
         
         self.sigmoid = nn.Sigmoid()
     
@@ -219,7 +219,7 @@ class ECA注意力(nn.Module):
         初始化ECA模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             gamma: 卷积核大小计算参数
             b: 卷积核大小计算参数
         """
@@ -249,27 +249,27 @@ class ECA注意力(nn.Module):
         return x * y.expand_as(x)
 
 
-def 获取注意力模块(名称: str, 通道数: int, **kwargs) -> nn.Module:
+def 获取注意力模块(name: str, 通道数: int, **kwargs) -> nn.Module:
     """
-    根据名称获取注意力模块
+    根据name获取注意力模块
     
     参数:
-        名称: 注意力模块名称 (se/cbam/coordatt/eca)
-        通道数: 输入通道数
+        name: 注意力模块name (se/cbam/coordatt/eca)
+        通道数: input通道数
         **kwargs: 额外参数
     
     返回:
         注意力模块实例
     """
-    名称 = 名称.lower()
+    name = name.lower()
     
-    if 名称 == 'se':
+    if name == 'se':
         return SE注意力(通道数, **kwargs)
-    elif 名称 == 'cbam':
+    elif name == 'cbam':
         return CBAM注意力(通道数, **kwargs)
-    elif 名称 in ['coordatt', 'coord', 'ca']:
+    elif name in ['coordatt', 'coord', 'ca']:
         return 坐标注意力(通道数, 通道数, **kwargs)
-    elif 名称 == 'eca':
+    elif name == 'eca':
         return ECA注意力(通道数, **kwargs)
     else:
-        raise ValueError(f"不支持的注意力模块: {名称}")
+        raise ValueError(f"不支持的注意力模块: {name}")

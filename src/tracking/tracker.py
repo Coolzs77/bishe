@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-跟踪器基类模块
+tracker基类模块
 
-提供多目标跟踪的基础抽象类和跟踪目标数据类
+提供多目标跟踪的基础抽象类和跟踪目标data类
 """
 
 from abc import ABC, abstractmethod
@@ -15,15 +15,15 @@ import numpy as np
 @dataclass
 class TrackObject:
     """
-    跟踪目标数据类
+    跟踪目标data类
     
     存储单个跟踪目标的状态信息
     
     Attributes:
         track_id: 跟踪ID
         bbox: 边界框 [x1, y1, x2, y2]
-        confidence: 置信度
-        class_id: 类别ID
+        confidence: confidence
+        class_id: classesID
         state: 跟踪状态 ('tentative', 'confirmed', 'lost')
         age: 目标存在帧数
         hits: 连续命中次数
@@ -41,13 +41,13 @@ class TrackObject:
     features: Optional[np.ndarray] = None
     
     def __post_init__(self):
-        """初始化后处理"""
+        """初始化postprocess"""
         if not isinstance(self.bbox, np.ndarray):
             self.bbox = np.array(self.bbox)
     
     def to_dict(self) -> Dict[str, Any]:
         """
-        转换为字典格式
+        convert为字典格式
         
         Returns:
             包含目标信息的字典
@@ -67,9 +67,9 @@ class TrackObject:
 @dataclass
 class TrackingResult:
     """
-    跟踪结果数据类
+    跟踪resultsdata类
     
-    存储一帧的所有跟踪结果
+    存储一帧的所有跟踪results
     
     Attributes:
         tracks: 跟踪目标列表
@@ -79,7 +79,7 @@ class TrackingResult:
     frame_id: int = 0
     
     def __len__(self) -> int:
-        """返回跟踪目标数量"""
+        """返回跟踪目标count"""
         return len(self.tracks)
     
     def __getitem__(self, idx: int) -> TrackObject:
@@ -108,10 +108,10 @@ class TrackingResult:
     
     def get_confidences(self) -> np.ndarray:
         """
-        获取所有置信度
+        获取所有confidence
         
         Returns:
-            置信度数组
+            confidence数组
         """
         return np.array([t.confidence for t in self.tracks])
     
@@ -120,14 +120,14 @@ class TrackingResult:
         获取已确认的跟踪目标
         
         Returns:
-            只包含已确认目标的跟踪结果
+            只包含已确认目标的跟踪results
         """
         confirmed = [t for t in self.tracks if t.state == 'confirmed']
         return TrackingResult(tracks=confirmed, frame_id=self.frame_id)
     
     def to_list(self) -> List[Dict[str, Any]]:
         """
-        转换为字典列表格式
+        convert为字典列表格式
         
         Returns:
             包含所有跟踪目标信息的字典列表
@@ -137,9 +137,9 @@ class TrackingResult:
 
 class BaseTracker(ABC):
     """
-    跟踪器基类
+    tracker基类
     
-    提供多目标跟踪器的抽象接口
+    提供多目标tracker的抽象接口
     
     Attributes:
         max_age: 目标最大存活帧数
@@ -157,7 +157,7 @@ class BaseTracker(ABC):
         iou_threshold: float = 0.3
     ):
         """
-        初始化跟踪器
+        初始化tracker
         
         Args:
             max_age: 目标最大存活帧数，超过此帧数未更新的目标将被删除
@@ -181,21 +181,21 @@ class BaseTracker(ABC):
         features: Optional[np.ndarray] = None
     ) -> TrackingResult:
         """
-        更新跟踪器
+        更新tracker
         
         Args:
-            detections: 检测框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-            confidences: 置信度数组，形状为 (N,)
-            classes: 类别数组，形状为 (N,)
+            detections: det_boxes数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
+            confidences: confidence数组，形状为 (N,)
+            classes: classes数组，形状为 (N,)
             features: 特征数组，形状为 (N, D)
             
         Returns:
-            跟踪结果
+            跟踪results
         """
         pass
     
     def reset(self) -> None:
-        """重置跟踪器状态"""
+        """重置tracker状态"""
         self.frame_count = 0
         self.tracks = []
         self.next_id = 1
@@ -326,7 +326,7 @@ class BaseTracker(ABC):
             threshold: 匹配阈值
             
         Returns:
-            匹配结果
+            匹配results
         """
         matched_indices = []
         matched_rows = set()

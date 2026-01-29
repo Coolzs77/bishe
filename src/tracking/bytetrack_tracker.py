@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ByteTrack跟踪器模块
+ByteTracktracker模块
 
-实现ByteTrack多目标跟踪算法，利用低置信度检测进行跟踪
+实现ByteTrack多目标跟踪算法，利用低confidence检测进行跟踪
 """
 
 import numpy as np
@@ -15,13 +15,13 @@ from .kalman_filter import KalmanBoxTracker
 
 class ByteTrack(BaseTracker):
     """
-    ByteTrack多目标跟踪器
+    ByteTrack多目标tracker
     
-    利用低置信度检测框进行二次关联的跟踪算法
+    利用低confidencedet_boxes进行二次关联的跟踪算法
     
     Attributes:
-        high_threshold: 高置信度阈值
-        low_threshold: 低置信度阈值
+        high_threshold: 高confidence阈值
+        low_threshold: 低confidence阈值
         match_threshold: 匹配IoU阈值
         second_match_threshold: 二次匹配IoU阈值
         tracks: 活跃跟踪列表
@@ -39,14 +39,14 @@ class ByteTrack(BaseTracker):
         second_match_threshold: float = 0.5
     ):
         """
-        初始化ByteTrack跟踪器
+        初始化ByteTracktracker
         
         Args:
             max_age: 目标最大存活帧数
             min_hits: 确认目标所需的最小命中次数
             iou_threshold: IoU匹配阈值
-            high_threshold: 高置信度阈值
-            low_threshold: 低置信度阈值
+            high_threshold: 高confidence阈值
+            low_threshold: 低confidence阈值
             match_threshold: 第一次匹配的IoU阈值
             second_match_threshold: 第二次匹配的IoU阈值
         """
@@ -68,16 +68,16 @@ class ByteTrack(BaseTracker):
         features: Optional[np.ndarray] = None
     ) -> TrackingResult:
         """
-        更新跟踪器
+        更新tracker
         
         Args:
-            detections: 检测框数组，形状为 (N, 4)
-            confidences: 置信度数组
-            classes: 类别数组
+            detections: det_boxes数组，形状为 (N, 4)
+            confidences: confidence数组
+            classes: classes数组
             features: 特征数组（ByteTrack不使用）
             
         Returns:
-            跟踪结果
+            跟踪results
         """
         self.frame_count += 1
         
@@ -89,7 +89,7 @@ class ByteTrack(BaseTracker):
         if classes is None:
             classes = np.zeros(len(detections), dtype=int)
         
-        # 分离高低置信度检测
+        # 分离高低confidence检测
         high_mask = confidences >= self.high_threshold
         low_mask = (confidences >= self.low_threshold) & (confidences < self.high_threshold)
         
@@ -105,7 +105,7 @@ class ByteTrack(BaseTracker):
         for track in self.tracks:
             track.predict()
         
-        # 第一次关联：高置信度检测与活跃跟踪
+        # 第一次关联：高confidence检测与活跃跟踪
         matched1, unmatched_tracks1, unmatched_dets1 = self._match(
             self.tracks, high_dets, self.match_threshold
         )
@@ -119,7 +119,7 @@ class ByteTrack(BaseTracker):
         # 获取未匹配的跟踪目标
         remaining_tracks = [self.tracks[i] for i in unmatched_tracks1]
         
-        # 第二次关联：低置信度检测与剩余跟踪目标
+        # 第二次关联：低confidence检测与剩余跟踪目标
         if len(low_dets) > 0 and len(remaining_tracks) > 0:
             matched2, unmatched_tracks2, _ = self._match(
                 remaining_tracks, low_dets, self.second_match_threshold
@@ -143,7 +143,7 @@ class ByteTrack(BaseTracker):
             if track.time_since_update < self.max_age:
                 self.lost_tracks.append(track)
         
-        # 第三次关联：高置信度未匹配检测与丢失跟踪
+        # 第三次关联：高confidence未匹配检测与丢失跟踪
         unmatched_high_dets = [high_dets[i] for i in unmatched_dets1]
         unmatched_high_confs = [high_confs[i] for i in unmatched_dets1]
         unmatched_high_classes = [high_classes[i] for i in unmatched_dets1]
@@ -174,7 +174,7 @@ class ByteTrack(BaseTracker):
             unmatched_high_confs = [unmatched_high_confs[i] for i in final_unmatched]
             unmatched_high_classes = [unmatched_high_classes[i] for i in final_unmatched]
         
-        # 为未匹配的高置信度检测创建新跟踪
+        # 为未匹配的高confidence检测创建新跟踪
         for det, conf, cls in zip(unmatched_high_dets, unmatched_high_confs, unmatched_high_classes):
             new_track = KalmanBoxTracker(det, self.get_next_id())
             new_track.class_id = int(cls)
@@ -185,7 +185,7 @@ class ByteTrack(BaseTracker):
         self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
         self.lost_tracks = [t for t in self.lost_tracks if t.time_since_update <= self.max_age]
         
-        # 生成结果
+        # 生成results
         result_tracks = []
         for track in self.tracks:
             if track.hits >= self.min_hits or self.frame_count <= self.min_hits:
@@ -214,7 +214,7 @@ class ByteTrack(BaseTracker):
         
         Args:
             tracks: 跟踪目标列表
-            detections: 检测框数组
+            detections: det_boxes数组
             threshold: 匹配阈值
             
         Returns:
@@ -234,7 +234,7 @@ class ByteTrack(BaseTracker):
         # 计算IoU矩阵
         iou_matrix = self.compute_iou_matrix(track_boxes, detections)
         
-        # 转换为代价矩阵
+        # convert为代价矩阵
         cost_matrix = 1 - iou_matrix
         
         # 使用线性分配
@@ -245,7 +245,7 @@ class ByteTrack(BaseTracker):
         return matched, unmatched_tracks, unmatched_detections
     
     def reset(self) -> None:
-        """重置跟踪器"""
+        """重置tracker"""
         super().reset()
         self.tracks = []
         self.lost_tracks = []
@@ -260,17 +260,17 @@ def create_bytetrack_tracker(
     low_threshold: float = 0.1
 ) -> ByteTrack:
     """
-    创建ByteTrack跟踪器
+    创建ByteTracktracker
     
     Args:
         max_age: 目标最大存活帧数
         min_hits: 确认所需的最小命中次数
         iou_threshold: IoU匹配阈值
-        high_threshold: 高置信度阈值
-        low_threshold: 低置信度阈值
+        high_threshold: 高confidence阈值
+        low_threshold: 低confidence阈值
         
     Returns:
-        配置好的ByteTrack跟踪器
+        config好的ByteTracktracker
     """
     return ByteTrack(
         max_age=max_age,

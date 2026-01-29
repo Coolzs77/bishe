@@ -23,8 +23,8 @@ class 标准卷积(nn.Module):
     
     def __init__(
         self, 
-        输入通道: int, 
-        输出通道: int, 
+        input通道: int, 
+        output通道: int, 
         卷积核: int = 1, 
         步长: int = 1, 
         填充: int = None, 
@@ -35,11 +35,11 @@ class 标准卷积(nn.Module):
         super().__init__()
         
         self.卷积 = nn.Conv2d(
-            输入通道, 输出通道, 卷积核, 步长,
+            input通道, output通道, 卷积核, 步长,
             自动填充(卷积核) if 填充 is None else 填充,
             groups=分组, bias=False
         )
-        self.bn = nn.BatchNorm2d(输出通道)
+        self.bn = nn.BatchNorm2d(output通道)
         self.激活 = nn.SiLU(inplace=True) if 激活 else nn.Identity()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -55,20 +55,20 @@ class 深度可分离卷积(nn.Module):
     深度可分离卷积: Depthwise + Pointwise
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 卷积核: int = 3, 步长: int = 1):
+    def __init__(self, input通道: int, output通道: int, 卷积核: int = 3, 步长: int = 1):
         """初始化深度可分离卷积"""
         super().__init__()
         
         # 深度卷积
         self.深度卷积 = nn.Conv2d(
-            输入通道, 输入通道, 卷积核, 步长,
-            自动填充(卷积核), groups=输入通道, bias=False
+            input通道, input通道, 卷积核, 步长,
+            自动填充(卷积核), groups=input通道, bias=False
         )
-        self.bn1 = nn.BatchNorm2d(输入通道)
+        self.bn1 = nn.BatchNorm2d(input通道)
         
         # 逐点卷积
-        self.逐点卷积 = nn.Conv2d(输入通道, 输出通道, 1, 1, 0, bias=False)
-        self.bn2 = nn.BatchNorm2d(输出通道)
+        self.逐点卷积 = nn.Conv2d(input通道, output通道, 1, 1, 0, bias=False)
+        self.bn2 = nn.BatchNorm2d(output通道)
         
         self.激活 = nn.SiLU(inplace=True)
     
@@ -87,8 +87,8 @@ class Ghost模块(nn.Module):
     
     def __init__(
         self, 
-        输入通道: int, 
-        输出通道: int, 
+        input通道: int, 
+        output通道: int, 
         卷积核: int = 1, 
         比例: int = 2, 
         dw卷积核: int = 3,
@@ -99,8 +99,8 @@ class Ghost模块(nn.Module):
         初始化Ghost模块
         
         参数:
-            输入通道: 输入通道数
-            输出通道: 输出通道数
+            input通道: input通道数
+            output通道: output通道数
             卷积核: 主卷积核大小
             比例: Ghost比例
             dw卷积核: 深度卷积核大小
@@ -109,13 +109,13 @@ class Ghost模块(nn.Module):
         """
         super().__init__()
         
-        self.输出通道 = 输出通道
-        初始通道 = math.ceil(输出通道 / 比例)
+        self.output通道 = output通道
+        初始通道 = math.ceil(output通道 / 比例)
         新通道 = 初始通道 * (比例 - 1)
         
         # 主卷积
         self.主卷积 = nn.Sequential(
-            nn.Conv2d(输入通道, 初始通道, 卷积核, 步长, 自动填充(卷积核), bias=False),
+            nn.Conv2d(input通道, 初始通道, 卷积核, 步长, 自动填充(卷积核), bias=False),
             nn.BatchNorm2d(初始通道),
             nn.SiLU(inplace=True) if 激活 else nn.Identity(),
         )
@@ -130,8 +130,8 @@ class Ghost模块(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         主特征 = self.主卷积(x)
         廉价特征 = self.廉价操作(主特征)
-        输出 = torch.cat([主特征, 廉价特征], dim=1)
-        return 输出[:, :self.输出通道, :, :]
+        output = torch.cat([主特征, 廉价特征], dim=1)
+        return output[:, :self.output通道, :, :]
 
 
 class Ghost瓶颈(nn.Module):
@@ -141,8 +141,8 @@ class Ghost瓶颈(nn.Module):
     
     def __init__(
         self, 
-        输入通道: int, 
-        输出通道: int, 
+        input通道: int, 
+        output通道: int, 
         隐藏通道: int = None,
         卷积核: int = 3, 
         步长: int = 1,
@@ -152,13 +152,13 @@ class Ghost瓶颈(nn.Module):
         super().__init__()
         
         if 隐藏通道 is None:
-            隐藏通道 = 输出通道
+            隐藏通道 = output通道
         
         self.步长 = 步长
         self.使用SE = 使用SE
         
         # Ghost模块1
-        self.ghost1 = Ghost模块(输入通道, 隐藏通道, 卷积核=1)
+        self.ghost1 = Ghost模块(input通道, 隐藏通道, 卷积核=1)
         
         # 深度卷积 (仅当步长>1时)
         if 步长 > 1:
@@ -173,17 +173,17 @@ class Ghost瓶颈(nn.Module):
             self.se = SE注意力(隐藏通道)
         
         # Ghost模块2
-        self.ghost2 = Ghost模块(隐藏通道, 输出通道, 卷积核=1, 激活=False)
+        self.ghost2 = Ghost模块(隐藏通道, output通道, 卷积核=1, 激活=False)
         
         # 残差连接
-        if 步长 == 1 and 输入通道 == 输出通道:
+        if 步长 == 1 and input通道 == output通道:
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(输入通道, 输入通道, 卷积核, 步长, 自动填充(卷积核), groups=输入通道, bias=False),
-                nn.BatchNorm2d(输入通道),
-                nn.Conv2d(输入通道, 输出通道, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道),
+                nn.Conv2d(input通道, input通道, 卷积核, 步长, 自动填充(卷积核), groups=input通道, bias=False),
+                nn.BatchNorm2d(input通道),
+                nn.Conv2d(input通道, output通道, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(output通道),
             )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -226,15 +226,15 @@ class ShuffleNet单元(nn.Module):
     ShuffleNet V2 基本单元
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 步长: int = 1):
+    def __init__(self, input通道: int, output通道: int, 步长: int = 1):
         """初始化ShuffleNet单元"""
         super().__init__()
         
         self.步长 = 步长
         
         if 步长 == 1:
-            # 步长为1时，输入通道分两半
-            分支通道 = 输出通道 // 2
+            # 步长为1时，input通道分两半
+            分支通道 = output通道 // 2
             
             self.分支1 = nn.Identity()
             self.分支2 = nn.Sequential(
@@ -250,20 +250,20 @@ class ShuffleNet单元(nn.Module):
         else:
             # 步长为2时，使用两个分支进行下采样
             self.分支1 = nn.Sequential(
-                nn.Conv2d(输入通道, 输入通道, 3, 步长, 1, groups=输入通道, bias=False),
-                nn.BatchNorm2d(输入通道),
-                nn.Conv2d(输入通道, 输出通道 // 2, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
+                nn.Conv2d(input通道, input通道, 3, 步长, 1, groups=input通道, bias=False),
+                nn.BatchNorm2d(input通道),
+                nn.Conv2d(input通道, output通道 // 2, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(output通道 // 2),
                 nn.SiLU(inplace=True),
             )
             self.分支2 = nn.Sequential(
-                nn.Conv2d(输入通道, 输出通道 // 2, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
+                nn.Conv2d(input通道, output通道 // 2, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(output通道 // 2),
                 nn.SiLU(inplace=True),
-                nn.Conv2d(输出通道 // 2, 输出通道 // 2, 3, 步长, 1, groups=输出通道 // 2, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
-                nn.Conv2d(输出通道 // 2, 输出通道 // 2, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
+                nn.Conv2d(output通道 // 2, output通道 // 2, 3, 步长, 1, groups=output通道 // 2, bias=False),
+                nn.BatchNorm2d(output通道 // 2),
+                nn.Conv2d(output通道 // 2, output通道 // 2, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(output通道 // 2),
                 nn.SiLU(inplace=True),
             )
         
@@ -285,18 +285,18 @@ class GhostC3(nn.Module):
     使用Ghost模块替换的C3模块
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 数量: int = 1, shortcut: bool = True):
+    def __init__(self, input通道: int, output通道: int, count: int = 1, shortcut: bool = True):
         """初始化GhostC3"""
         super().__init__()
         
-        隐藏通道 = 输出通道 // 2
+        隐藏通道 = output通道 // 2
         
-        self.cv1 = Ghost模块(输入通道, 隐藏通道)
-        self.cv2 = Ghost模块(输入通道, 隐藏通道)
-        self.cv3 = Ghost模块(2 * 隐藏通道, 输出通道)
+        self.cv1 = Ghost模块(input通道, 隐藏通道)
+        self.cv2 = Ghost模块(input通道, 隐藏通道)
+        self.cv3 = Ghost模块(2 * 隐藏通道, output通道)
         
         self.m = nn.Sequential(
-            *[Ghost瓶颈(隐藏通道, 隐藏通道) for _ in range(数量)]
+            *[Ghost瓶颈(隐藏通道, 隐藏通道) for _ in range(count)]
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -308,18 +308,18 @@ class ShuffleC3(nn.Module):
     使用ShuffleNet单元替换的C3模块
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 数量: int = 1, shortcut: bool = True):
+    def __init__(self, input通道: int, output通道: int, count: int = 1, shortcut: bool = True):
         """初始化ShuffleC3"""
         super().__init__()
         
-        隐藏通道 = 输出通道 // 2
+        隐藏通道 = output通道 // 2
         
-        self.cv1 = 标准卷积(输入通道, 隐藏通道, 1)
-        self.cv2 = 标准卷积(输入通道, 隐藏通道, 1)
-        self.cv3 = 标准卷积(2 * 隐藏通道, 输出通道, 1)
+        self.cv1 = 标准卷积(input通道, 隐藏通道, 1)
+        self.cv2 = 标准卷积(input通道, 隐藏通道, 1)
+        self.cv3 = 标准卷积(2 * 隐藏通道, output通道, 1)
         
         self.m = nn.Sequential(
-            *[ShuffleNet单元(隐藏通道, 隐藏通道, 1) for _ in range(数量)]
+            *[ShuffleNet单元(隐藏通道, 隐藏通道, 1) for _ in range(count)]
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:

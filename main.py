@@ -3,19 +3,19 @@
 """
 主函数 - 红外行人多目标检测与跟踪系统
 
-本脚本涵盖从数据准备到模型部署的完整流程：
-1. 数据准备阶段：下载和预处理数据集
-2. 模型训练阶段：训练YOLOv5检测器
+本脚本涵盖从data准备到model部署的完整流程：
+1. data准备阶段：下载和预处理data集
+2. model训练阶段：训练YOLOv5detector
 3. 跟踪集成阶段：集成多目标跟踪算法
-4. 评估测试阶段：评估检测和跟踪性能
-5. 模型部署阶段：转换模型并部署到嵌入式平台
+4. evaluate测试阶段：evaluate检测和跟踪性能
+5. model部署阶段：convertmodel并部署到嵌入式平台
 
 使用方式：
-    python main.py --mode full        # 运行完整流程
-    python main.py --mode prepare     # 仅数据准备
+    python main.py --mode full        # run完整流程
+    python main.py --mode prepare     # 仅data准备
     python main.py --mode train       # 仅训练
     python main.py --mode track       # 仅跟踪测试
-    python main.py --mode evaluate    # 仅评估
+    python main.py --mode evaluate    # 仅evaluate
     python main.py --mode deploy      # 仅部署
     python main.py --mode demo        # 演示模式
 
@@ -42,11 +42,11 @@ class InfraredMOTSystem:
     红外行人多目标检测与跟踪系统
     
     完整流程包括：
-    - 数据准备：下载和预处理FLIR/KAIST数据集
-    - 模型训练：训练改进的YOLOv5检测器
+    - data准备：下载和预处理FLIR/KAISTdata集
+    - model训练：训练改进的YOLOv5detector
     - 跟踪集成：集成DeepSORT/ByteTrack/CenterTrack
-    - 性能评估：计算mAP、MOTA、MOTP等指标
-    - 模型部署：转换为RKNN并部署到RV1126
+    - 性能evaluate：计算mAP、MOTA、MOTP等metrics
+    - model部署：convert为RKNN并部署到RV1126
     """
     
     def __init__(self, config_path: str = "configs/train_config.yaml"):
@@ -54,7 +54,7 @@ class InfraredMOTSystem:
         初始化系统
         
         Args:
-            config_path: 主配置文件路径
+            config_path: 主config文件路径
         """
         self.project_root = PROJECT_ROOT
         self.config_path = config_path
@@ -70,13 +70,13 @@ class InfraredMOTSystem:
         self.logger.info("=" * 60)
         
     def _load_config(self, config_path: str) -> Dict:
-        """加载配置文件"""
+        """load_config_file"""
         config_file = self.project_root / config_path
         if config_file.exists():
             with open(config_file, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
         else:
-            # 返回默认配置
+            # 返回默认config
             return {
                 'data': {
                     'dataset': 'flir',
@@ -113,7 +113,7 @@ class InfraredMOTSystem:
             'outputs/logs',
             'outputs/results',
             'outputs/visualizations',
-            'models/rknn',
+            'models/rknn_obj',
         ]
         for dir_path in directories:
             full_path = self.project_root / dir_path
@@ -133,61 +133,61 @@ class InfraredMOTSystem:
             )
             return logging.getLogger('main')
     
-    # ==================== 阶段1: 数据准备 ====================
+    # ==================== 阶段1: data准备 ====================
     
     def prepare_data(self, dataset: str = 'flir', download: bool = True) -> bool:
         """
-        数据准备阶段
+        data准备阶段
         
         Args:
-            dataset: 数据集名称 ('flir' 或 'kaist')
-            download: 是否下载数据集
+            dataset: data集name ('flir' 或 'kaist')
+            download: 是否download_dataset
             
         Returns:
-            是否成功完成
+            是否success完成
         """
         self.logger.info("=" * 60)
-        self.logger.info("阶段1: 数据准备")
+        self.logger.info("阶段1: data准备")
         self.logger.info("=" * 60)
         
         try:
-            # 步骤1.1: 下载数据集
+            # 步骤1.1: download_dataset
             if download:
-                self.logger.info(f"步骤1.1: 下载{dataset.upper()}数据集...")
+                self.logger.info(f"步骤1.1: 下载{dataset.upper()}data集...")
                 self._download_dataset(dataset)
             
-            # 步骤1.2: 预处理数据集
-            self.logger.info(f"步骤1.2: 预处理{dataset.upper()}数据集...")
+            # 步骤1.2: 预处理data集
+            self.logger.info(f"步骤1.2: 预处理{dataset.upper()}data集...")
             self._preprocess_dataset(dataset)
             
-            # 步骤1.3: 划分数据集
+            # 步骤1.3: split_dataset
             self.logger.info("步骤1.3: 划分训练/验证/测试集...")
             self._split_dataset()
             
-            # 步骤1.4: 生成数据增强
-            self.logger.info("步骤1.4: 配置红外数据增强策略...")
+            # 步骤1.4: 生成data增强
+            self.logger.info("步骤1.4: config红外data增强策略...")
             self._setup_data_augmentation()
             
-            self.logger.info("数据准备阶段完成！")
+            self.logger.info("data准备阶段完成！")
             return True
             
         except Exception as e:
-            self.logger.error(f"数据准备阶段失败: {e}")
+            self.logger.error(f"data准备阶段失败: {e}")
             return False
     
     def _download_dataset(self, dataset: str):
-        """下载数据集"""
-        self.logger.info(f"  - 检查{dataset.upper()}数据集...")
+        """download_dataset"""
+        self.logger.info(f"  - 检查{dataset.upper()}data集...")
         raw_path = self.project_root / 'data/raw' / dataset
         
         if raw_path.exists() and any(raw_path.iterdir()):
-            self.logger.info(f"  - 数据集已存在于 {raw_path}")
+            self.logger.info(f"  - data集已存在于 {raw_path}")
             return
         
         # 尝试使用下载脚本
         download_script = self.project_root / 'scripts/data/download_dataset.py'
         if download_script.exists():
-            self.logger.info(f"  - 使用脚本下载数据集...")
+            self.logger.info(f"  - 使用脚本download_dataset...")
             import subprocess
             result = subprocess.run(
                 [sys.executable, str(download_script), '--dataset', dataset, '--output', str(raw_path)],
@@ -195,20 +195,20 @@ class InfraredMOTSystem:
                 text=True
             )
             if result.returncode == 0:
-                self.logger.info(f"  - 数据集下载完成")
+                self.logger.info(f"  - data集下载完成")
             else:
-                self.logger.warning(f"  - 自动下载失败，请手动下载数据集到 {raw_path}")
+                self.logger.warning(f"  - 自动下载失败，请手动download_dataset到 {raw_path}")
         else:
-            self.logger.warning(f"  - 请手动下载{dataset.upper()}数据集到 {raw_path}")
+            self.logger.warning(f"  - 请手动下载{dataset.upper()}data集到 {raw_path}")
     
     def _preprocess_dataset(self, dataset: str):
-        """预处理数据集"""
+        """预处理data集"""
         raw_path = self.project_root / 'data/raw' / dataset
         processed_path = self.project_root / 'data/processed'
         
-        # 检查数据是否已处理
+        # 检查data是否已处理
         if (processed_path / 'images').exists():
-            self.logger.info("  - 发现已处理的数据")
+            self.logger.info("  - 发现已处理的data")
             return
         
         # 使用对应的预处理脚本
@@ -218,7 +218,7 @@ class InfraredMOTSystem:
             script_path = self.project_root / 'scripts/data/prepare_kaist.py'
         
         if script_path.exists() and raw_path.exists():
-            self.logger.info(f"  - 使用 {script_path.name} 处理数据...")
+            self.logger.info(f"  - 使用 {script_path.name} 处理data...")
             import subprocess
             result = subprocess.run(
                 [sys.executable, str(script_path), '--input', str(raw_path), '--output', str(processed_path)],
@@ -226,11 +226,11 @@ class InfraredMOTSystem:
                 text=True
             )
             if result.returncode == 0:
-                self.logger.info("  - 数据预处理完成")
+                self.logger.info("  - data预处理完成")
             else:
-                self.logger.warning("  - 数据预处理脚本执行失败，请检查数据")
+                self.logger.warning("  - data预处理脚本执行失败，请检查data")
         else:
-            self.logger.info("  - 创建数据目录结构...")
+            self.logger.info("  - 创建data目录结构...")
             (processed_path / 'images/train').mkdir(parents=True, exist_ok=True)
             (processed_path / 'images/val').mkdir(parents=True, exist_ok=True)
             (processed_path / 'images/test').mkdir(parents=True, exist_ok=True)
@@ -239,47 +239,47 @@ class InfraredMOTSystem:
             (processed_path / 'labels/test').mkdir(parents=True, exist_ok=True)
     
     def _split_dataset(self):
-        """划分数据集"""
-        self.logger.info("  - 数据集划分比例: 训练70% / 验证15% / 测试15%")
-        # 数据划分逻辑在预处理脚本中完成
+        """split_dataset"""
+        self.logger.info("  - data集划分比例: 训练70% / 验证15% / 测试15%")
+        # data划分逻辑在预处理脚本中完成
         pass
     
     def _setup_data_augmentation(self):
-        """设置数据增强"""
-        self.logger.info("  - 红外数据增强策略:")
+        """设置data增强"""
+        self.logger.info("  - 红外data增强策略:")
         self.logger.info("    * 亮度调整 (brightness)")
         self.logger.info("    * 对比度增强 (contrast)")
         self.logger.info("    * 高斯噪声 (gaussian noise)")
         self.logger.info("    * 随机翻转 (flip)")
         self.logger.info("    * 缩放裁剪 (scale & crop)")
     
-    # ==================== 阶段2: 模型训练 ====================
+    # ==================== 阶段2: model训练 ====================
     
     def train_detector(self, resume: bool = False) -> bool:
         """
-        模型训练阶段
+        model训练阶段
         
         Args:
             resume: 是否从检查点恢复训练
             
         Returns:
-            是否成功完成
+            是否success完成
         """
         self.logger.info("=" * 60)
-        self.logger.info("阶段2: 模型训练")
+        self.logger.info("阶段2: model训练")
         self.logger.info("=" * 60)
         
         try:
-            # 步骤2.1: 加载模型配置
-            self.logger.info("步骤2.1: 加载YOLOv5模型配置...")
+            # 步骤2.1: load_modelconfig
+            self.logger.info("步骤2.1: 加载YOLOv5modelconfig...")
             model_config = self._load_model_config()
             
-            # 步骤2.2: 初始化模型
-            self.logger.info("步骤2.2: 初始化YOLOv5检测器...")
+            # 步骤2.2: 初始化model
+            self.logger.info("步骤2.2: 初始化YOLOv5detector...")
             detector = self._init_detector(model_config)
             
             # 步骤2.3: 设置训练参数
-            self.logger.info("步骤2.3: 配置训练参数...")
+            self.logger.info("步骤2.3: config训练参数...")
             train_config = self._get_train_config()
             self._log_train_config(train_config)
             
@@ -287,33 +287,33 @@ class InfraredMOTSystem:
             self.logger.info("步骤2.4: 开始训练...")
             self._run_training(detector, train_config, resume)
             
-            # 步骤2.5: 保存最佳模型
-            self.logger.info("步骤2.5: 保存训练结果...")
+            # 步骤2.5: 保存最佳model
+            self.logger.info("步骤2.5: 保存训练results...")
             self._save_training_results()
             
-            self.logger.info("模型训练阶段完成！")
+            self.logger.info("model训练阶段完成！")
             return True
             
         except Exception as e:
-            self.logger.error(f"模型训练阶段失败: {e}")
+            self.logger.error(f"model训练阶段失败: {e}")
             import traceback
             self.logger.error(traceback.format_exc())
             return False
     
     def _load_model_config(self) -> Dict:
-        """加载模型配置"""
+        """load_modelconfig"""
         model_yaml = self.project_root / 'models/yolov5/yolov5s_infrared.yaml'
         if model_yaml.exists():
             with open(model_yaml, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-            self.logger.info(f"  - 加载模型配置: {model_yaml.name}")
+            self.logger.info(f"  - load_modelconfig: {model_yaml.name}")
             return config
         else:
-            self.logger.info("  - 使用默认YOLOv5s配置")
+            self.logger.info("  - 使用默认YOLOv5sconfig")
             return {'nc': 3, 'depth_multiple': 0.33, 'width_multiple': 0.50}
     
     def _init_detector(self, model_config: Dict):
-        """初始化检测器"""
+        """初始化detector"""
         try:
             from src.detection.yolov5_detector import YOLOv5Detector
             detector = YOLOv5Detector(
@@ -329,7 +329,7 @@ class InfraredMOTSystem:
             return None
     
     def _get_train_config(self) -> Dict:
-        """获取训练配置"""
+        """获取训练config"""
         return {
             'epochs': self.config.get('train', {}).get('epochs', 100),
             'batch_size': self.config.get('train', {}).get('batch_size', 16),
@@ -340,7 +340,7 @@ class InfraredMOTSystem:
         }
     
     def _log_train_config(self, config: Dict):
-        """记录训练配置"""
+        """记录训练config"""
         self.logger.info("  - 训练参数:")
         for key, value in config.items():
             self.logger.info(f"    * {key}: {value}")
@@ -350,7 +350,7 @@ class InfraredMOTSystem:
         train_script = self.project_root / 'scripts/train/train_yolov5.py'
         
         if detector is not None:
-            # 使用检测器类进行训练
+            # 使用detector类进行训练
             self.logger.info("  - 使用YOLOv5Detector进行训练...")
             # 这里可以调用detector.train()方法
             self.logger.info("  - 训练模拟中... (实际训练需要完整环境)")
@@ -365,15 +365,15 @@ class InfraredMOTSystem:
             if resume:
                 cmd.append('--resume')
             
-            self.logger.info(f"  - 命令: {' '.join(cmd)}")
-            self.logger.info("  - 训练已配置完成，可执行上述命令开始训练")
+            self.logger.info(f"  - command: {' '.join(cmd)}")
+            self.logger.info("  - 训练已config完成，可执行上述command开始训练")
         else:
             self.logger.warning("  - 训练脚本不存在，请检查scripts/train/目录")
     
     def _save_training_results(self):
-        """保存训练结果"""
+        """保存训练results"""
         weights_dir = self.project_root / 'outputs/weights'
-        self.logger.info(f"  - 模型权重保存目录: {weights_dir}")
+        self.logger.info(f"  - model权重保存目录: {weights_dir}")
         self.logger.info("  - best.pt: 最佳验证性能的权重")
         self.logger.info("  - last.pt: 最后一轮的权重")
     
@@ -387,27 +387,27 @@ class InfraredMOTSystem:
             algorithm: 跟踪算法 ('deepsort', 'bytetrack', 'centertrack')
             
         Returns:
-            是否成功完成
+            是否success完成
         """
         self.logger.info("=" * 60)
         self.logger.info("阶段3: 跟踪集成")
         self.logger.info("=" * 60)
         
         try:
-            # 步骤3.1: 加载检测器
-            self.logger.info("步骤3.1: 加载训练好的检测器...")
+            # 步骤3.1: load_detector
+            self.logger.info("步骤3.1: 加载训练好的detector...")
             detector = self._load_trained_detector()
             
-            # 步骤3.2: 初始化跟踪器
-            self.logger.info(f"步骤3.2: 初始化{algorithm.upper()}跟踪器...")
+            # 步骤3.2: 初始化tracker
+            self.logger.info(f"步骤3.2: 初始化{algorithm.upper()}tracker...")
             tracker = self._init_tracker(algorithm)
             
-            # 步骤3.3: 配置跟踪参数
-            self.logger.info("步骤3.3: 配置跟踪参数...")
+            # 步骤3.3: config跟踪参数
+            self.logger.info("步骤3.3: config跟踪参数...")
             self._log_tracker_config(algorithm)
             
-            # 步骤3.4: 运行跟踪测试
-            self.logger.info("步骤3.4: 运行跟踪测试...")
+            # 步骤3.4: run跟踪测试
+            self.logger.info("步骤3.4: run跟踪测试...")
             self._run_tracking_test(detector, tracker)
             
             self.logger.info("跟踪集成阶段完成！")
@@ -418,7 +418,7 @@ class InfraredMOTSystem:
             return False
     
     def _load_trained_detector(self):
-        """加载训练好的检测器"""
+        """加载训练好的detector"""
         weights_path = self.project_root / 'outputs/weights/best.pt'
         if weights_path.exists():
             self.logger.info(f"  - 加载权重: {weights_path}")
@@ -427,15 +427,15 @@ class InfraredMOTSystem:
                 detector = YOLOv5Detector(weights=str(weights_path))
                 return detector
             except ImportError:
-                self.logger.warning("  - 无法导入检测器模块")
+                self.logger.warning("  - 无法导入detector模块")
                 return None
         else:
             self.logger.warning(f"  - 权重文件不存在: {weights_path}")
-            self.logger.info("  - 请先运行训练阶段或提供预训练权重")
+            self.logger.info("  - 请先run训练阶段或提供预训练权重")
             return None
     
     def _init_tracker(self, algorithm: str):
-        """初始化跟踪器"""
+        """初始化tracker"""
         tracker_map = {
             'deepsort': 'DeepSORTTracker',
             'bytetrack': 'ByteTracker',
@@ -467,12 +467,12 @@ class InfraredMOTSystem:
             return None
     
     def _log_tracker_config(self, algorithm: str):
-        """记录跟踪器配置"""
+        """记录trackerconfig"""
         config_file = self.project_root / f'models/tracking/{algorithm}/config.yaml'
         if config_file.exists():
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-            self.logger.info(f"  - {algorithm.upper()}配置:")
+            self.logger.info(f"  - {algorithm.upper()}config:")
             for key, value in config.items():
                 if isinstance(value, dict):
                     self.logger.info(f"    * {key}:")
@@ -482,48 +482,48 @@ class InfraredMOTSystem:
                     self.logger.info(f"    * {key}: {value}")
     
     def _run_tracking_test(self, detector, tracker):
-        """运行跟踪测试"""
+        """run跟踪测试"""
         self.logger.info("  - 跟踪流程:")
         self.logger.info("    1. 读取视频帧")
-        self.logger.info("    2. 使用检测器获取目标边界框")
-        self.logger.info("    3. 将检测结果输入跟踪器")
+        self.logger.info("    2. 使用detector获取目标边界框")
+        self.logger.info("    3. 将检测resultsinputtracker")
         self.logger.info("    4. 更新目标轨迹并分配ID")
-        self.logger.info("    5. 可视化跟踪结果")
+        self.logger.info("    5. visualize跟踪results")
         
         if detector is not None and tracker is not None:
-            self.logger.info("  - 检测器和跟踪器已就绪，可以进行实时跟踪")
+            self.logger.info("  - detector和tracker已就绪，可以进行实时跟踪")
         else:
-            self.logger.info("  - 请确保检测器权重和跟踪器配置正确")
+            self.logger.info("  - 请确保detector权重和trackerconfig正确")
     
-    # ==================== 阶段4: 性能评估 ====================
+    # ==================== 阶段4: 性能evaluate ====================
     
     def evaluate_performance(self, eval_detection: bool = True, eval_tracking: bool = True) -> bool:
         """
-        性能评估阶段
+        性能evaluate阶段
         
         Args:
-            eval_detection: 是否评估检测性能
-            eval_tracking: 是否评估跟踪性能
+            eval_detection: 是否evaluate检测性能
+            eval_tracking: 是否evaluate跟踪性能
             
         Returns:
-            是否成功完成
+            是否success完成
         """
         self.logger.info("=" * 60)
-        self.logger.info("阶段4: 性能评估")
+        self.logger.info("阶段4: 性能evaluate")
         self.logger.info("=" * 60)
         
         try:
             results = {}
             
-            # 步骤4.1: 检测性能评估
+            # 步骤4.1: 检测性能evaluate
             if eval_detection:
-                self.logger.info("步骤4.1: 评估检测性能...")
+                self.logger.info("步骤4.1: evaluate检测性能...")
                 det_results = self._evaluate_detection()
                 results['detection'] = det_results
             
-            # 步骤4.2: 跟踪性能评估
+            # 步骤4.2: 跟踪性能evaluate
             if eval_tracking:
-                self.logger.info("步骤4.2: 评估跟踪性能...")
+                self.logger.info("步骤4.2: evaluate跟踪性能...")
                 track_results = self._evaluate_tracking()
                 results['tracking'] = track_results
             
@@ -532,20 +532,20 @@ class InfraredMOTSystem:
                 self.logger.info("步骤4.3: 对比不同跟踪算法...")
                 self._compare_trackers()
             
-            # 步骤4.4: 生成评估报告
-            self.logger.info("步骤4.4: 生成评估报告...")
+            # 步骤4.4: 生成evaluate报告
+            self.logger.info("步骤4.4: 生成evaluate报告...")
             self._generate_evaluation_report(results)
             
-            self.logger.info("性能评估阶段完成！")
+            self.logger.info("性能evaluate阶段完成！")
             return True
             
         except Exception as e:
-            self.logger.error(f"性能评估阶段失败: {e}")
+            self.logger.error(f"性能evaluate阶段失败: {e}")
             return False
     
     def _evaluate_detection(self) -> Dict:
-        """评估检测性能"""
-        self.logger.info("  - 检测评估指标:")
+        """evaluate检测性能"""
+        self.logger.info("  - 检测evaluatemetrics:")
         self.logger.info("    * mAP@0.5: 平均精度(IoU=0.5)")
         self.logger.info("    * mAP@0.5:0.95: 平均精度(IoU=0.5-0.95)")
         self.logger.info("    * Precision: 精确率")
@@ -555,16 +555,16 @@ class InfraredMOTSystem:
         try:
             from src.evaluation.detection_eval import DetectionEvaluator
             evaluator = DetectionEvaluator()
-            # 实际评估需要预测结果和真实标签
-            self.logger.info("  - 检测评估器已就绪")
+            # 实际evaluate需要预测results和真实label
+            self.logger.info("  - 检测evaluate器已就绪")
             return {'mAP50': 0.0, 'mAP50-95': 0.0, 'precision': 0.0, 'recall': 0.0}
         except ImportError:
-            self.logger.warning("  - 无法导入检测评估模块")
+            self.logger.warning("  - 无法导入检测evaluate模块")
             return {}
     
     def _evaluate_tracking(self) -> Dict:
-        """评估跟踪性能"""
-        self.logger.info("  - 跟踪评估指标 (MOT Challenge):")
+        """evaluate跟踪性能"""
+        self.logger.info("  - 跟踪evaluatemetrics (MOT Challenge):")
         self.logger.info("    * MOTA: 多目标跟踪准确度")
         self.logger.info("    * MOTP: 多目标跟踪精度")
         self.logger.info("    * IDF1: ID F1分数")
@@ -577,10 +577,10 @@ class InfraredMOTSystem:
         try:
             from src.evaluation.tracking_eval import MOTEvaluator
             evaluator = MOTEvaluator()
-            self.logger.info("  - 跟踪评估器已就绪")
+            self.logger.info("  - 跟踪evaluate器已就绪")
             return {'MOTA': 0.0, 'MOTP': 0.0, 'IDF1': 0.0}
         except ImportError:
-            self.logger.warning("  - 无法导入跟踪评估模块")
+            self.logger.warning("  - 无法导入跟踪evaluate模块")
             return {}
     
     def _compare_trackers(self):
@@ -593,10 +593,10 @@ class InfraredMOTSystem:
         compare_script = self.project_root / 'scripts/evaluate/compare_trackers.py'
         if compare_script.exists():
             self.logger.info(f"  - 对比脚本: {compare_script.name}")
-            self.logger.info("  - 执行命令: python scripts/evaluate/compare_trackers.py")
+            self.logger.info("  - 执行command: python scripts/evaluate/compare_trackers.py")
     
     def _generate_evaluation_report(self, results: Dict):
-        """生成评估报告"""
+        """生成evaluate报告"""
         report_path = self.project_root / 'outputs/results/evaluation_report.json'
         
         import json
@@ -608,97 +608,97 @@ class InfraredMOTSystem:
         with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         
-        self.logger.info(f"  - 评估报告保存至: {report_path}")
+        self.logger.info(f"  - evaluate报告保存至: {report_path}")
     
-    # ==================== 阶段5: 模型部署 ====================
+    # ==================== 阶段5: model部署 ====================
     
     def deploy_model(self, quantize: bool = True) -> bool:
         """
-        模型部署阶段
+        model部署阶段
         
         Args:
             quantize: 是否进行INT8量化
             
         Returns:
-            是否成功完成
+            是否success完成
         """
         self.logger.info("=" * 60)
-        self.logger.info("阶段5: 模型部署")
+        self.logger.info("阶段5: model部署")
         self.logger.info("=" * 60)
         
         try:
-            # 步骤5.1: 导出ONNX模型
-            self.logger.info("步骤5.1: 导出ONNX模型...")
+            # 步骤5.1: export_onnxmodel
+            self.logger.info("步骤5.1: export_onnxmodel...")
             onnx_path = self._export_onnx()
             
-            # 步骤5.2: 转换为RKNN模型
-            self.logger.info("步骤5.2: 转换为RKNN模型...")
-            rknn_path = self._convert_to_rknn(onnx_path, quantize)
+            # 步骤5.2: convert为RKNNmodel
+            self.logger.info("步骤5.2: convert为RKNNmodel...")
+            rknn_obj_path = self._convert_to_rknn_obj(onnx_path, quantize)
             
             # 步骤5.3: INT8量化（可选）
             if quantize:
                 self.logger.info("步骤5.3: 执行INT8量化...")
-                self._quantize_model(rknn_path)
+                self._quantize_model(rknn_obj_path)
             
-            # 步骤5.4: 测试RKNN模型
-            self.logger.info("步骤5.4: 测试RKNN模型...")
-            self._test_rknn_model(rknn_path)
+            # 步骤5.4: 测试RKNNmodel
+            self.logger.info("步骤5.4: 测试RKNNmodel...")
+            self._test_rknn_obj_model(rknn_obj_path)
             
             # 步骤5.5: 生成部署包
             self.logger.info("步骤5.5: 生成嵌入式部署包...")
             self._generate_deployment_package()
             
-            self.logger.info("模型部署阶段完成！")
+            self.logger.info("model部署阶段完成！")
             return True
             
         except Exception as e:
-            self.logger.error(f"模型部署阶段失败: {e}")
+            self.logger.error(f"model部署阶段失败: {e}")
             return False
     
     def _export_onnx(self) -> str:
-        """导出ONNX模型"""
+        """export_onnxmodel"""
         weights_path = self.project_root / 'outputs/weights/best.pt'
         onnx_path = self.project_root / 'outputs/weights/best.onnx'
         
-        self.logger.info(f"  - 输入权重: {weights_path}")
-        self.logger.info(f"  - 输出ONNX: {onnx_path}")
+        self.logger.info(f"  - input权重: {weights_path}")
+        self.logger.info(f"  - outputONNX: {onnx_path}")
         
         try:
             from src.deploy.export_onnx import ONNXExporter
             exporter = ONNXExporter(model_path=str(weights_path))
             exporter.export(str(onnx_path))
-            self.logger.info("  - ONNX导出成功")
+            self.logger.info("  - ONNX导出success")
         except ImportError:
             self.logger.warning("  - 无法导入ONNXExporter")
-            self.logger.info("  - 执行命令: python scripts/deploy/export_model.py --weights outputs/weights/best.pt --format onnx")
+            self.logger.info("  - 执行command: python scripts/deploy/export_model.py --weights outputs/weights/best.pt --format onnx")
         
         return str(onnx_path)
     
-    def _convert_to_rknn(self, onnx_path: str, quantize: bool) -> str:
-        """转换为RKNN模型"""
-        rknn_path = self.project_root / 'models/rknn/best.rknn'
+    def _convert_to_rknn_obj(self, onnx_path: str, quantize: bool) -> str:
+        """convert为RKNNmodel"""
+        rknn_obj_path = self.project_root / 'models/rknn_obj/best.rknn_obj'
         
-        self.logger.info(f"  - 输入ONNX: {onnx_path}")
-        self.logger.info(f"  - 输出RKNN: {rknn_path}")
+        self.logger.info(f"  - inputONNX: {onnx_path}")
+        self.logger.info(f"  - outputRKNN: {rknn_obj_path}")
         self.logger.info(f"  - 量化: {'是' if quantize else '否'}")
         self.logger.info(f"  - 目标平台: RV1126")
         
         try:
-            from src.deploy.convert_rknn import RKNNConverter
+            from src.deploy.convert_rknn_obj import RKNNConverter
             converter = RKNNConverter(onnx_path=onnx_path, target_platform='rv1126')
-            converter.convert(str(rknn_path), quantize=quantize)
-            self.logger.info("  - RKNN转换成功")
+            converter.convert(str(rknn_obj_path), quantize=quantize)
+            self.logger.info("  - RKNNconvertsuccess")
         except ImportError:
             self.logger.warning("  - 无法导入RKNNConverter (需要RKNN-Toolkit2环境)")
-            self.logger.info("  - 执行命令: python scripts/deploy/convert_to_rknn.py --onnx outputs/weights/best.onnx")
+            self.logger.info("  - 执行command: python scripts/deploy/convert_to_rknn_obj.py --onnx outputs/weights/best.onnx")
         
-        return str(rknn_path)
+        return str(rknn_obj_path)
     
-    def _quantize_model(self, rknn_path: str):
+    def _quantize_model(self, rknn_obj_path: str):
         """INT8量化"""
-        self.logger.info("  - 量化配置:")
+        self.logger.info("  - 量化config:")
         self.logger.info("    * 量化类型: INT8")
-        self.logger.info("    * 校准数据集: data/processed/calibration")
+        self.logger.info("    * 校准data集: data/processed/calibration")
         self.logger.info("    * 校准图片数: 100")
         
         try:
@@ -708,29 +708,29 @@ class InfraredMOTSystem:
         except ImportError:
             self.logger.warning("  - 无法导入量化模块")
     
-    def _test_rknn_model(self, rknn_path: str):
-        """测试RKNN模型"""
-        self.logger.info("  - RKNN模型测试:")
-        self.logger.info("    * 加载模型")
-        self.logger.info("    * 运行推理")
-        self.logger.info("    * 验证输出")
+    def _test_rknn_obj_model(self, rknn_obj_path: str):
+        """测试RKNNmodel"""
+        self.logger.info("  - RKNNmodel测试:")
+        self.logger.info("    * load_model")
+        self.logger.info("    * runinference")
+        self.logger.info("    * 验证output")
         self.logger.info("    * 测量性能")
         
-        test_script = self.project_root / 'scripts/deploy/test_rknn.py'
+        test_script = self.project_root / 'scripts/deploy/test_rknn_obj.py'
         if test_script.exists():
             self.logger.info(f"  - 测试脚本: {test_script.name}")
-            self.logger.info(f"  - 执行命令: python scripts/deploy/test_rknn.py --model {rknn_path}")
+            self.logger.info(f"  - 执行command: python scripts/deploy/test_rknn_obj.py --model {rknn_obj_path}")
     
     def _generate_deployment_package(self):
         """生成部署包"""
         embedded_dir = self.project_root / 'embedded'
         self.logger.info(f"  - 嵌入式代码目录: {embedded_dir}")
         self.logger.info("  - 部署包内容:")
-        self.logger.info("    * RKNN模型文件")
-        self.logger.info("    * C++推理代码")
-        self.logger.info("    * 配置文件")
+        self.logger.info("    * RKNNmodel文件")
+        self.logger.info("    * C++inference代码")
+        self.logger.info("    * config文件")
         self.logger.info("    * CMake构建脚本")
-        self.logger.info("  - 编译命令:")
+        self.logger.info("  - 编译command:")
         self.logger.info("    cd embedded && mkdir build && cd build")
         self.logger.info("    cmake -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake ..")
         self.logger.info("    make -j4")
@@ -739,13 +739,13 @@ class InfraredMOTSystem:
     
     def run_demo(self, source: str = "0") -> bool:
         """
-        运行演示模式
+        run演示模式
         
         Args:
             source: 视频源 ("0"表示摄像头, 或视频文件路径)
             
         Returns:
-            是否成功完成
+            是否success完成
         """
         self.logger.info("=" * 60)
         self.logger.info("演示模式: 实时检测与跟踪")
@@ -755,19 +755,19 @@ class InfraredMOTSystem:
         self.logger.info("  - 按'q'键退出演示")
         
         try:
-            # 加载检测器
+            # load_detector
             detector = self._load_trained_detector()
             
-            # 初始化跟踪器
+            # 初始化tracker
             algorithm = self.config.get('tracking', {}).get('algorithm', 'deepsort')
             tracker = self._init_tracker(algorithm)
             
             if detector is None or tracker is None:
-                self.logger.warning("  - 检测器或跟踪器未就绪，无法运行演示")
+                self.logger.warning("  - detector或tracker未就绪，无法run演示")
                 self.logger.info("  - 请先完成训练阶段")
                 return False
             
-            # 运行实时演示
+            # run实时演示
             self._run_realtime_demo(detector, tracker, source)
             
             return True
@@ -777,18 +777,18 @@ class InfraredMOTSystem:
             return False
     
     def _run_realtime_demo(self, detector, tracker, source: str):
-        """运行实时演示"""
+        """run实时演示"""
         self.logger.info("  - 开始实时演示...")
         self.logger.info("  - 处理流程:")
         self.logger.info("    1. 读取视频帧")
         self.logger.info("    2. 目标检测")
         self.logger.info("    3. 多目标跟踪")
-        self.logger.info("    4. 可视化显示")
+        self.logger.info("    4. visualize显示")
         
         # 实际演示代码需要OpenCV环境
         try:
             import cv2
-            self.logger.info("  - OpenCV已就绪，可以运行实时演示")
+            self.logger.info("  - OpenCV已就绪，可以run实时演示")
         except ImportError:
             self.logger.warning("  - 需要安装OpenCV: pip install opencv-python")
     
@@ -796,47 +796,47 @@ class InfraredMOTSystem:
     
     def run_full_pipeline(self) -> bool:
         """
-        运行完整流程
+        run完整流程
         
         Returns:
-            是否成功完成所有阶段
+            是否success完成所有阶段
         """
         self.logger.info("=" * 60)
-        self.logger.info("开始运行完整流程")
+        self.logger.info("开始run完整流程")
         self.logger.info("=" * 60)
         
         start_time = time.time()
         results = {}
         
-        # 阶段1: 数据准备
+        # 阶段1: data准备
         results['prepare'] = self.prepare_data()
         
-        # 阶段2: 模型训练
+        # 阶段2: model训练
         results['train'] = self.train_detector()
         
         # 阶段3: 跟踪集成
         results['track'] = self.integrate_tracking()
         
-        # 阶段4: 性能评估
+        # 阶段4: 性能evaluate
         results['evaluate'] = self.evaluate_performance()
         
-        # 阶段5: 模型部署
+        # 阶段5: model部署
         results['deploy'] = self.deploy_model()
         
-        # 汇总结果
+        # summarize_results
         elapsed_time = time.time() - start_time
         self.logger.info("=" * 60)
         self.logger.info("完整流程执行完毕")
         self.logger.info("=" * 60)
-        self.logger.info(f"总耗时: {elapsed_time:.2f}秒")
-        self.logger.info("各阶段结果:")
+        self.logger.info(f"总duration: {elapsed_time:.2f}秒")
+        self.logger.info("各阶段results:")
         for stage, success in results.items():
-            status = "✓ 成功" if success else "✗ 失败"
+            status = "✓ success" if success else "✗ 失败"
             self.logger.info(f"  - {stage}: {status}")
         
         all_success = all(results.values())
         if all_success:
-            self.logger.info("所有阶段执行成功！")
+            self.logger.info("所有阶段执行success！")
         else:
             self.logger.warning("部分阶段执行失败，请检查日志")
         
@@ -850,12 +850,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  python main.py --mode full        # 运行完整流程
-  python main.py --mode prepare     # 仅数据准备
-  python main.py --mode train       # 仅模型训练
+  python main.py --mode full        # run完整流程
+  python main.py --mode prepare     # 仅data准备
+  python main.py --mode train       # 仅model训练
   python main.py --mode track       # 仅跟踪集成
-  python main.py --mode evaluate    # 仅性能评估
-  python main.py --mode deploy      # 仅模型部署
+  python main.py --mode evaluate    # 仅性能evaluate
+  python main.py --mode deploy      # 仅model部署
   python main.py --mode demo        # 演示模式
         """
     )
@@ -865,14 +865,14 @@ def main():
         type=str, 
         default='full',
         choices=['full', 'prepare', 'train', 'track', 'evaluate', 'deploy', 'demo'],
-        help='运行模式 (默认: full)'
+        help='run模式 (默认: full)'
     )
     
     parser.add_argument(
         '--config', 
         type=str, 
         default='configs/train_config.yaml',
-        help='配置文件路径 (默认: configs/train_config.yaml)'
+        help='config文件路径 (默认: configs/train_config.yaml)'
     )
     
     parser.add_argument(
@@ -880,7 +880,7 @@ def main():
         type=str, 
         default='flir',
         choices=['flir', 'kaist'],
-        help='数据集名称 (默认: flir)'
+        help='data集name (默认: flir)'
     )
     
     parser.add_argument(

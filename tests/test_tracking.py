@@ -25,10 +25,10 @@ from src.tracking.centertrack_tracker import CenterTrack, create_centertrack_tra
 
 
 class TestCoordinateConversions(unittest.TestCase):
-    """测试坐标转换函数"""
+    """测试坐标convert函数"""
     
     def test_xyxy_to_xywh(self):
-        """测试xyxy到xywh转换"""
+        """测试xyxy到xywhconvert"""
         bbox = np.array([10, 20, 110, 120])
         result = xyxy_to_xywh(bbox)
         
@@ -36,7 +36,7 @@ class TestCoordinateConversions(unittest.TestCase):
         np.testing.assert_array_almost_equal(result, expected)
     
     def test_xywh_to_xyxy(self):
-        """测试xywh到xyxy转换"""
+        """测试xywh到xyxyconvert"""
         bbox = np.array([60, 70, 100, 100])
         result = xywh_to_xyxy(bbox)
         
@@ -44,13 +44,13 @@ class TestCoordinateConversions(unittest.TestCase):
         np.testing.assert_array_almost_equal(result, expected)
     
     def test_xyxy_xywh_roundtrip(self):
-        """测试xyxy-xywh往返转换"""
+        """测试xyxy-xywh往返convert"""
         original = np.array([15, 25, 115, 225])
         converted = xywh_to_xyxy(xyxy_to_xywh(original))
         np.testing.assert_array_almost_equal(converted, original)
     
     def test_xyxy_to_xyah(self):
-        """测试xyxy到xyah转换"""
+        """测试xyxy到xyahconvert"""
         bbox = np.array([10, 20, 110, 220])  # width=100, height=200
         result = xyxy_to_xyah(bbox)
         
@@ -59,7 +59,7 @@ class TestCoordinateConversions(unittest.TestCase):
         np.testing.assert_array_almost_equal(result, expected)
     
     def test_xyah_to_xyxy(self):
-        """测试xyah到xyxy转换"""
+        """测试xyah到xyxyconvert"""
         bbox = np.array([60, 120, 0.5, 200])
         result = xyah_to_xyxy(bbox)
         
@@ -67,7 +67,7 @@ class TestCoordinateConversions(unittest.TestCase):
         np.testing.assert_array_almost_equal(result, expected)
     
     def test_batch_conversion(self):
-        """测试批量转换"""
+        """测试批量convert"""
         bboxes = np.array([
             [10, 20, 110, 120],
             [50, 60, 150, 160]
@@ -96,7 +96,7 @@ class TestTrackObject(unittest.TestCase):
         self.assertEqual(track.class_id, 0)
     
     def test_track_object_to_dict(self):
-        """测试转换为字典"""
+        """测试convert为字典"""
         track = TrackObject(
             track_id=1,
             bbox=np.array([10, 20, 100, 200]),
@@ -115,7 +115,7 @@ class TestTrackingResult(unittest.TestCase):
     """测试TrackingResult类"""
     
     def test_empty_result(self):
-        """测试空跟踪结果"""
+        """测试空跟踪results"""
         result = TrackingResult()
         
         self.assertEqual(len(result), 0)
@@ -123,7 +123,7 @@ class TestTrackingResult(unittest.TestCase):
         self.assertEqual(len(result.get_ids()), 0)
     
     def test_result_with_tracks(self):
-        """测试有跟踪目标的结果"""
+        """测试有跟踪目标的results"""
         tracks = [
             TrackObject(track_id=1, bbox=np.array([10, 20, 100, 200])),
             TrackObject(track_id=2, bbox=np.array([50, 60, 150, 250]))
@@ -193,14 +193,14 @@ class TestKalmanFilter(unittest.TestCase):
 
 
 class TestKalmanBoxTracker(unittest.TestCase):
-    """测试单目标卡尔曼跟踪器"""
+    """测试单目标卡尔曼tracker"""
     
     def setUp(self):
         """重置计数器"""
         KalmanBoxTracker.reset_count()
     
     def test_tracker_creation(self):
-        """测试跟踪器创建"""
+        """测试tracker创建"""
         bbox = np.array([10, 20, 110, 220])
         tracker = KalmanBoxTracker(bbox)
         
@@ -292,10 +292,10 @@ class TestBaseTrackerMethods(unittest.TestCase):
 
 
 class TestDeepSORTTracker(unittest.TestCase):
-    """测试DeepSORT跟踪器"""
+    """测试DeepSORTtracker"""
     
     def test_tracker_creation(self):
-        """测试跟踪器创建"""
+        """测试tracker创建"""
         tracker = create_deepsort_tracker()
         
         self.assertIsInstance(tracker, DeepSORTTracker)
@@ -321,14 +321,14 @@ class TestDeepSORTTracker(unittest.TestCase):
         result = tracker.update(detections)
         
         # 第一帧可能还没有确认的跟踪
-        # 多次更新后应该有跟踪结果
+        # 多次更新后应该有跟踪results
         for _ in range(3):
             result = tracker.update(detections)
         
         self.assertGreater(len(result), 0)
     
     def test_tracker_reset(self):
-        """测试跟踪器重置"""
+        """测试tracker重置"""
         tracker = create_deepsort_tracker()
         
         detections = np.array([[10, 20, 100, 200]])
@@ -341,23 +341,23 @@ class TestDeepSORTTracker(unittest.TestCase):
 
 
 class TestByteTrack(unittest.TestCase):
-    """测试ByteTrack跟踪器"""
+    """测试ByteTracktracker"""
     
     def test_tracker_creation(self):
-        """测试跟踪器创建"""
+        """测试tracker创建"""
         tracker = create_bytetrack_tracker()
         
         self.assertIsInstance(tracker, ByteTrack)
     
     def test_tracker_high_low_detection(self):
-        """测试高低置信度检测处理"""
+        """测试高低confidence检测处理"""
         tracker = create_bytetrack_tracker(
             high_threshold=0.5,
             low_threshold=0.1,
             min_hits=1
         )
         
-        # 混合高低置信度检测
+        # 混合高低confidence检测
         detections = np.array([
             [10, 20, 100, 200],
             [150, 160, 250, 360]
@@ -370,15 +370,15 @@ class TestByteTrack(unittest.TestCase):
         for _ in range(3):
             result = tracker.update(detections, confidences)
         
-        # ByteTrack应该能利用低置信度检测
+        # ByteTrack应该能利用低confidence检测
         self.assertTrue(True)  # 主要测试不崩溃
 
 
 class TestCenterTrack(unittest.TestCase):
-    """测试CenterTrack跟踪器"""
+    """测试CenterTracktracker"""
     
     def test_tracker_creation(self):
-        """测试跟踪器创建"""
+        """测试tracker创建"""
         tracker = create_centertrack_tracker()
         
         self.assertIsInstance(tracker, CenterTrack)

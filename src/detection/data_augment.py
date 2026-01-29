@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-红外图像数据增强模块
+红外imagedata增强模块
 
-提供针对红外/热成像图像的专用数据增强方法
+提供针对红外/热成像image的专用data增强方法
 """
 
 import random
@@ -13,9 +13,9 @@ import numpy as np
 
 class InfraredDataAugmentor:
     """
-    红外图像数据增强器
+    红外imagedata增强器
     
-    针对红外/热成像图像设计的数据增强类，包含多种增强方法
+    针对红外/热成像image设计的data增强类，包含多种增强方法
     
     Attributes:
         brightness_range: 亮度调整范围
@@ -44,7 +44,7 @@ class InfraredDataAugmentor:
         mixup_prob: float = 0.0
     ):
         """
-        初始化红外数据增强器
+        初始化红外data增强器
         
         Args:
             brightness_range: 亮度调整范围，默认(-0.2, 0.2)
@@ -75,23 +75,23 @@ class InfraredDataAugmentor:
         labels: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """
-        对图像和标签应用数据增强
+        对image和label应用data增强
         
         Args:
-            image: 输入图像，形状为 (H, W) 或 (H, W, C)
-            labels: 标签数组，形状为 (N, 5)，格式为 [class_id, x_center, y_center, w, h]
+            image: inputimage，形状为 (H, W) 或 (H, W, C)
+            labels: label数组，形状为 (N, 5)，格式为 [class_id, x_center, y_center, w, h]
                    坐标为归一化的相对坐标
         
         Returns:
-            增强后的图像和标签
+            增强后的image和label
         """
-        # 确保图像是float类型
+        # 确保image是float类型
         if image.dtype != np.float32:
             image = image.astype(np.float32)
             if image.max() > 1.0:
                 image = image / 255.0
         
-        # 复制以避免修改原始数据
+        # 复制以避免修改原始data
         image = image.copy()
         if labels is not None:
             labels = labels.copy()
@@ -130,13 +130,13 @@ class InfraredDataAugmentor:
         """
         随机亮度调整
         
-        模拟红外图像中由于环境温度变化导致的整体亮度变化
+        模拟红外image中由于环境温度变化导致的整体亮度变化
         
         Args:
-            image: 输入图像
+            image: inputimage
             
         Returns:
-            亮度调整后的图像
+            亮度调整后的image
         """
         delta = random.uniform(self.brightness_range[0], self.brightness_range[1])
         image = image + delta
@@ -146,13 +146,13 @@ class InfraredDataAugmentor:
         """
         随机对比度调整
         
-        模拟红外图像中由于目标与背景温差变化导致的对比度变化
+        模拟红外image中由于目标与背景温差变化导致的对比度变化
         
         Args:
-            image: 输入图像
+            image: inputimage
             
         Returns:
-            对比度调整后的图像
+            对比度调整后的image
         """
         factor = random.uniform(self.contrast_range[0], self.contrast_range[1])
         mean = image.mean()
@@ -166,10 +166,10 @@ class InfraredDataAugmentor:
         模拟红外探测器的热噪声，包括固定模式噪声和随机噪声
         
         Args:
-            image: 输入图像
+            image: inputimage
             
         Returns:
-            添加噪声后的图像
+            添加噪声后的image
         """
         if self.noise_intensity <= 0:
             return image
@@ -184,13 +184,13 @@ class InfraredDataAugmentor:
         """
         模拟温度漂移
         
-        模拟红外传感器的温度漂移效应，在图像上添加渐变
+        模拟红外传感器的温度漂移效应，在image上添加渐变
         
         Args:
-            image: 输入图像
+            image: inputimage
             
         Returns:
-            添加温度漂移效果后的图像
+            添加温度漂移效果后的image
         """
         if random.random() > 0.3:  # 30%的概率应用
             return image
@@ -231,19 +231,19 @@ class InfraredDataAugmentor:
         水平翻转
         
         Args:
-            image: 输入图像
-            labels: 标签数组
+            image: inputimage
+            labels: label数组
             
         Returns:
-            翻转后的图像和标签
+            翻转后的image和label
         """
         if random.random() > self.flip_prob:
             return image, labels
         
-        # 翻转图像
+        # 翻转image
         image = np.fliplr(image).copy()
         
-        # 翻转标签
+        # 翻转label
         if labels is not None and len(labels) > 0:
             labels[:, 1] = 1.0 - labels[:, 1]  # x_center = 1 - x_center
         
@@ -259,19 +259,19 @@ class InfraredDataAugmentor:
         随机旋转
         
         Args:
-            image: 输入图像
-            labels: 标签数组
+            image: inputimage
+            labels: label数组
             min_angle_threshold: 最小旋转角度阈值，低于此值不进行旋转以避免不必要的插值
             
         Returns:
-            旋转后的图像和标签
+            旋转后的image和label
         """
         if self.rotation_angle <= 0:
             return image, labels
         
         angle = random.uniform(-self.rotation_angle, self.rotation_angle)
         
-        # 角度过小时跳过旋转，避免不必要的图像插值带来的质量损失
+        # 角度过小时跳过旋转，避免不必要的image插值带来的质量loss
         if abs(angle) < min_angle_threshold:
             return image, labels
         
@@ -283,13 +283,13 @@ class InfraredDataAugmentor:
         # 获取旋转矩阵
         rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
         
-        # 旋转图像
+        # 旋转image
         image = cv2.warpAffine(
             image, rotation_matrix, (w, h),
             borderMode=cv2.BORDER_REFLECT_101
         )
         
-        # 旋转标签
+        # 旋转label
         if labels is not None and len(labels) > 0:
             labels = self._rotate_labels(labels, angle, (w, h))
         
@@ -302,15 +302,15 @@ class InfraredDataAugmentor:
         img_size: Tuple[int, int]
     ) -> np.ndarray:
         """
-        旋转标签坐标
+        旋转label坐标
         
         Args:
-            labels: 标签数组
+            labels: label数组
             angle: 旋转角度（度）
-            img_size: 图像尺寸 (width, height)
+            img_size: img_size (width, height)
             
         Returns:
-            旋转后的标签
+            旋转后的label
         """
         w, h = img_size
         angle_rad = np.radians(angle)
@@ -351,13 +351,13 @@ class InfraredDataAugmentor:
             y_min = np.clip(y_min, 0, 1)
             y_max = np.clip(y_max, 0, 1)
             
-            # 更新标签
+            # 更新label
             new_labels[i, 1] = (x_min + x_max) / 2
             new_labels[i, 2] = (y_min + y_max) / 2
             new_labels[i, 3] = x_max - x_min
             new_labels[i, 4] = y_max - y_min
         
-        # 过滤无效标签（面积太小）
+        # 过滤无效label（面积太小）
         valid_mask = (new_labels[:, 3] > 0.01) & (new_labels[:, 4] > 0.01)
         new_labels = new_labels[valid_mask]
         
@@ -367,13 +367,13 @@ class InfraredDataAugmentor:
         """
         随机模糊
         
-        模拟红外图像的焦距模糊或运动模糊
+        模拟红外image的焦距模糊或运动模糊
         
         Args:
-            image: 输入图像
+            image: inputimage
             
         Returns:
-            模糊后的图像
+            模糊后的image
         """
         if random.random() > self.blur_prob:
             return image
@@ -410,11 +410,11 @@ class InfraredDataAugmentor:
         随机裁剪
         
         Args:
-            image: 输入图像
-            labels: 标签数组
+            image: inputimage
+            labels: label数组
             
         Returns:
-            裁剪后的图像和标签
+            裁剪后的image和label
         """
         # 如果裁剪范围最小值>=1.0，则不进行裁剪
         if self.crop_range[0] >= 1.0:
@@ -435,13 +435,13 @@ class InfraredDataAugmentor:
         top = random.randint(0, h - new_h)
         left = random.randint(0, w - new_w)
         
-        # 裁剪图像
+        # 裁剪image
         image = image[top:top+new_h, left:left+new_w]
         
         # 调整大小回原始尺寸
         image = cv2.resize(image, (w, h))
         
-        # 调整标签
+        # 调整label
         if labels is not None and len(labels) > 0:
             labels = self._adjust_labels_for_crop(
                 labels, (left/w, top/h), (new_w/w, new_h/h)
@@ -456,22 +456,22 @@ class InfraredDataAugmentor:
         crop_size: Tuple[float, float]
     ) -> np.ndarray:
         """
-        调整裁剪后的标签坐标
+        调整裁剪后的label坐标
         
         Args:
-            labels: 标签数组
+            labels: label数组
             offset: 裁剪偏移 (x_offset, y_offset)
             crop_size: 裁剪尺寸比例 (w_ratio, h_ratio)
             
         Returns:
-            调整后的标签
+            调整后的label
         """
         x_offset, y_offset = offset
         w_ratio, h_ratio = crop_size
         
         new_labels = labels.copy()
         
-        # 转换坐标
+        # convert坐标
         new_labels[:, 1] = (labels[:, 1] - x_offset) / w_ratio
         new_labels[:, 2] = (labels[:, 2] - y_offset) / h_ratio
         new_labels[:, 3] = labels[:, 3] / w_ratio
@@ -490,13 +490,13 @@ class InfraredDataAugmentor:
         x2 = np.clip(x2, 0, 1)
         y2 = np.clip(y2, 0, 1)
         
-        # 更新标签
+        # 更新label
         new_labels[:, 1] = (x1 + x2) / 2
         new_labels[:, 2] = (y1 + y2) / 2
         new_labels[:, 3] = x2 - x1
         new_labels[:, 4] = y2 - y1
         
-        # 过滤无效标签
+        # 过滤无效label
         valid_mask = (new_labels[:, 3] > 0.01) & (new_labels[:, 4] > 0.01)
         valid_mask &= (new_labels[:, 1] > 0) & (new_labels[:, 1] < 1)
         valid_mask &= (new_labels[:, 2] > 0) & (new_labels[:, 2] < 1)
@@ -510,20 +510,20 @@ class InfraredDataAugmentor:
         output_size: Tuple[int, int] = (640, 640)
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Mosaic数据增强
+        Mosaicdata增强
         
-        将4张图像拼接成一张，增加小目标的出现频率
+        将4张image拼接成一张，增加小目标的出现频率
         
         Args:
-            images: 4张图像的列表
-            labels_list: 对应的4个标签数组列表
-            output_size: 输出尺寸 (width, height)
+            images: 4张image的列表
+            labels_list: 对应的4个label数组列表
+            output_size: output尺寸 (width, height)
             
         Returns:
-            拼接后的图像和合并的标签
+            拼接后的image和合并的label
         """
         if len(images) != 4 or len(labels_list) != 4:
-            raise ValueError("Mosaic增强需要4张图像和4组标签")
+            raise ValueError("Mosaic增强需要4张image和4组label")
         
         import cv2
         
@@ -533,10 +533,10 @@ class InfraredDataAugmentor:
         cx = int(w * random.uniform(0.3, 0.7))
         cy = int(h * random.uniform(0.3, 0.7))
         
-        # 创建输出图像
+        # 创建outputimage
         mosaic_img = np.zeros((h, w, 3) if images[0].ndim == 3 else (h, w), dtype=np.float32)
         
-        # 合并的标签
+        # 合并的label
         mosaic_labels = []
         
         # 四个象限的位置
@@ -551,20 +551,20 @@ class InfraredDataAugmentor:
             x1, y1, x2, y2 = placements[i]
             pw, ph = x2 - x1, y2 - y1
             
-            # 缩放图像
+            # 缩放image
             img_h, img_w = img.shape[:2]
             img_resized = cv2.resize(img, (pw, ph))
             
-            # 放置图像
+            # 放置image
             if mosaic_img.ndim == 3 and img_resized.ndim == 2:
                 img_resized = np.stack([img_resized] * 3, axis=-1)
             mosaic_img[y1:y2, x1:x2] = img_resized
             
-            # 调整标签
+            # 调整label
             if labels is not None and len(labels) > 0:
                 adjusted_labels = labels.copy()
                 
-                # 缩放标签到当前象限
+                # 缩放label到当前象限
                 adjusted_labels[:, 1] = (labels[:, 1] * pw + x1) / w
                 adjusted_labels[:, 2] = (labels[:, 2] * ph + y1) / h
                 adjusted_labels[:, 3] = labels[:, 3] * pw / w
@@ -572,7 +572,7 @@ class InfraredDataAugmentor:
                 
                 mosaic_labels.append(adjusted_labels)
         
-        # 合并所有标签
+        # 合并所有label
         if mosaic_labels:
             mosaic_labels = np.vstack(mosaic_labels)
         else:
@@ -589,33 +589,33 @@ class InfraredDataAugmentor:
         alpha: float = 0.5
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        MixUp数据增强
+        MixUpdata增强
         
-        将两张图像按一定比例混合
+        将两张image按一定比例混合
         
         Args:
-            image1: 第一张图像
-            labels1: 第一张图像的标签
-            image2: 第二张图像
-            labels2: 第二张图像的标签
+            image1: 第一张image
+            labels1: 第一张image的label
+            image2: 第二张image
+            labels2: 第二张image的label
             alpha: 混合系数，默认0.5
             
         Returns:
-            混合后的图像和合并的标签
+            混合后的image和合并的label
         """
         import cv2
         
         # 随机混合比例
         lam = np.random.beta(alpha, alpha)
         
-        # 确保图像尺寸一致
+        # 确保img_size一致
         if image1.shape != image2.shape:
             image2 = cv2.resize(image2, (image1.shape[1], image1.shape[0]))
         
-        # 混合图像
+        # 混合image
         mixed_image = lam * image1 + (1 - lam) * image2
         
-        # 合并标签（保留所有标签）
+        # 合并label（保留所有label）
         if labels1 is not None and labels2 is not None:
             mixed_labels = np.vstack([labels1, labels2]) if len(labels1) > 0 and len(labels2) > 0 else (
                 labels1 if len(labels1) > 0 else labels2
@@ -632,12 +632,12 @@ class InfraredDataAugmentor:
 
 def create_train_augmentor() -> InfraredDataAugmentor:
     """
-    创建训练用数据增强器
+    创建训练用data增强器
     
-    使用较强的数据增强参数
+    使用较强的data增强参数
     
     Returns:
-        配置好的训练数据增强器
+        config好的训练data增强器
     """
     return InfraredDataAugmentor(
         brightness_range=(-0.3, 0.3),
@@ -655,12 +655,12 @@ def create_train_augmentor() -> InfraredDataAugmentor:
 
 def create_val_augmentor() -> InfraredDataAugmentor:
     """
-    创建验证用数据增强器
+    创建验证用data增强器
     
-    使用较弱的数据增强参数，主要用于保持数据一致性
+    使用较弱的data增强参数，主要用于保持data一致性
     
     Returns:
-        配置好的验证数据增强器
+        config好的验证data增强器
     """
     return InfraredDataAugmentor(
         brightness_range=(0.0, 0.0),
