@@ -197,7 +197,9 @@ def download_kaist_dataset(output_dir, skip_existing=False):
         
         try:
             # 对于Google Drive链接，使用gdown（如果可用）
-            if 'drive.google.com' in url:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(url)
+            if parsed_url.netloc == 'drive.google.com' or parsed_url.netloc.endswith('.drive.google.com'):
                 try:
                     import gdown
                     file_id = url.split('id=')[1] if 'id=' in url else None
