@@ -93,12 +93,12 @@ class ByteTrack(BaseTracker):
         high_mask = confidences >= self.high_threshold
         low_mask = (confidences >= self.low_threshold) & (confidences < self.high_threshold)
         
-        high_dets = detections[high_mask]
-        high_confs = confidences[high_mask]
+        high_detections = detections[high_mask]
+        high_confidences = confidences[high_mask]
         high_classes = classes[high_mask]
         
-        low_dets = detections[low_mask]
-        low_confs = confidences[low_mask]
+        low_detections = detections[low_mask]
+        low_confidences = confidences[low_mask]
         low_classes = classes[low_mask]
         
         # 预测现有跟踪目标
@@ -106,36 +106,36 @@ class ByteTrack(BaseTracker):
             track.predict()
         
         # 第一次关联：高confidence检测与活跃跟踪
-        matched1, unmatched_tracks1, unmatched_dets1 = self._match(
-            self.tracks, high_dets, self.match_threshold
+        matched_first, unmatched_tracks_first, unmatched_detections_first = self._match(
+            self.tracks, high_detections, self.match_threshold
         )
         
         # 更新匹配的跟踪目标
-        for track_idx, det_idx in matched1:
-            self.tracks[track_idx].update(high_dets[det_idx])
+        for track_idx, det_idx in matched_first:
+            self.tracks[track_idx].update(high_detections[det_idx])
             self.tracks[track_idx].class_id = int(high_classes[det_idx])
-            self.tracks[track_idx].conf = high_confs[det_idx]
+            self.tracks[track_idx].confidence = high_confidences[det_idx]
         
         # 获取未匹配的跟踪目标
-        remaining_tracks = [self.tracks[i] for i in unmatched_tracks1]
+        remaining_tracks = [self.tracks[i] for i in unmatched_tracks_first]
         
         # 第二次关联：低confidence检测与剩余跟踪目标
-        if len(low_dets) > 0 and len(remaining_tracks) > 0:
-            matched2, unmatched_tracks2, _ = self._match(
-                remaining_tracks, low_dets, self.second_match_threshold
+        if len(low_detections) > 0 and len(remaining_tracks) > 0:
+            matched_second, unmatched_tracks_second, _ = self._match(
+                remaining_tracks, low_detections, self.second_match_threshold
             )
             
             # 更新匹配的跟踪目标
-            for rel_track_idx, det_idx in matched2:
+            for rel_track_idx, det_idx in matched_second:
                 track = remaining_tracks[rel_track_idx]
-                track.update(low_dets[det_idx])
+                track.update(low_detections[det_idx])
                 track.class_id = int(low_classes[det_idx])
-                track.conf = low_confs[det_idx]
+                track.confidence = low_confidences[det_idx]
             
             # 更新未匹配的跟踪目标列表
-            remaining_track_indices = [unmatched_tracks1[i] for i in unmatched_tracks2]
+            remaining_track_indices = [unmatched_tracks_first[i] for i in unmatched_tracks_second]
         else:
-            remaining_track_indices = unmatched_tracks1
+            remaining_track_indices = unmatched_tracks_first
         
         # 处理丢失的跟踪目标
         for track_idx in remaining_track_indices:
@@ -144,41 +144,41 @@ class ByteTrack(BaseTracker):
                 self.lost_tracks.append(track)
         
         # 第三次关联：高confidence未匹配检测与丢失跟踪
-        unmatched_high_dets = [high_dets[i] for i in unmatched_dets1]
-        unmatched_high_confs = [high_confs[i] for i in unmatched_dets1]
-        unmatched_high_classes = [high_classes[i] for i in unmatched_dets1]
+        unmatched_high_detections = [high_detections[i] for i in unmatched_detections_first]
+        unmatched_high_confidences = [high_confidences[i] for i in unmatched_detections_first]
+        unmatched_high_classes = [high_classes[i] for i in unmatched_detections_first]
         
-        if len(unmatched_high_dets) > 0 and len(self.lost_tracks) > 0:
+        if len(unmatched_high_detections) > 0 and len(self.lost_tracks) > 0:
             # 预测丢失跟踪的位置
             for track in self.lost_tracks:
                 if track.time_since_update == 0:
                     track.predict()
             
-            matched3, unmatched_lost, final_unmatched = self._match(
-                self.lost_tracks, np.array(unmatched_high_dets), self.match_threshold
+            matched_third, unmatched_lost, final_unmatched = self._match(
+                self.lost_tracks, np.array(unmatched_high_detections), self.match_threshold
             )
             
             # 恢复匹配的丢失跟踪
-            for lost_idx, det_idx in matched3:
+            for lost_idx, det_idx in matched_third:
                 track = self.lost_tracks[lost_idx]
-                track.update(unmatched_high_dets[det_idx])
+                track.update(unmatched_high_detections[det_idx])
                 track.class_id = int(unmatched_high_classes[det_idx])
-                track.conf = unmatched_high_confs[det_idx]
+                track.confidence = unmatched_high_confidences[det_idx]
                 self.tracks.append(track)
             
             # 更新丢失跟踪列表
             self.lost_tracks = [self.lost_tracks[i] for i in unmatched_lost]
             
             # 更新未匹配检测
-            unmatched_high_dets = [unmatched_high_dets[i] for i in final_unmatched]
-            unmatched_high_confs = [unmatched_high_confs[i] for i in final_unmatched]
+            unmatched_high_detections = [unmatched_high_detections[i] for i in final_unmatched]
+            unmatched_high_confidences = [unmatched_high_confidences[i] for i in final_unmatched]
             unmatched_high_classes = [unmatched_high_classes[i] for i in final_unmatched]
         
         # 为未匹配的高confidence检测创建新跟踪
-        for det, conf, cls in zip(unmatched_high_dets, unmatched_high_confs, unmatched_high_classes):
+        for det, conf, cls in zip(unmatched_high_detections, unmatched_high_confidences, unmatched_high_classes):
             new_track = KalmanBoxTracker(det, self.get_next_id())
             new_track.class_id = int(cls)
-            new_track.conf = conf
+            new_track.confidence = conf
             self.tracks.append(new_track)
         
         # 删除超时的跟踪目标
@@ -192,7 +192,7 @@ class ByteTrack(BaseTracker):
                 track_obj = TrackObject(
                     track_id=track.track_id,
                     bbox=track.get_state(),
-                    confidence=getattr(track, 'conf', 1.0),
+                    confidence=getattr(track, 'confidence', 1.0),
                     class_id=getattr(track, 'class_id', 0),
                     state='confirmed' if track.hits >= self.min_hits else 'tentative',
                     age=track.age,
