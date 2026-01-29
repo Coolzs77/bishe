@@ -58,20 +58,20 @@ class TrackingEvaluator:
             args: command行参数
         """
         self.args = args
-        self.detector路径 = Path(args.detector)
+        self.detector_path = Path(args.detector)
         self.video_path = Path(args.video)
         self.output_dir = Path(args.output) / f'tracking_{args.tracker}'
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # 解析evaluatemetrics
-        self.evaluatemetrics = [metrics.strip() for metrics in args.metrics.split(',')]
+        self.eval_metrics = [metrics.strip() for metrics in args.metrics.split(',')]
     
     def load_detector(self):
         """加载目标detector"""
-        print(f'\nload_detector: {self.detector路径}')
+        print(f'\nload_detector: {self.detector_path}')
         
-        if not self.detector路径.exists():
-            print(f'错误: detector文件不存在 - {self.detector路径}')
+        if not self.detector_path.exists():
+            print(f'错误: detector文件不存在 - {self.detector_path}')
             return None
         
         try:
@@ -82,7 +82,7 @@ class TrackingEvaluator:
             
             # 创建detector
             detector = create_yolov5_detector(
-                model_path=str(self.detector路径),
+                model_path=str(self.detector_path),
                 conf_threshold=self.args.conf_thres,
                 nms_threshold=self.args.nms_thres,
                 warmup=True
@@ -145,9 +145,9 @@ class TrackingEvaluator:
         
         if self.video_path.is_dir():
             # 目录包含多个序列
-            for 子目录 in sorted(self.video_path.iterdir()):
-                if 子目录.is_dir():
-                    sequence_list.append(子目录)
+            for subdir in sorted(self.video_path.iterdir()):
+                if subdir.is_dir():
+                    sequence_list.append(subdir)
         else:
             # 单个视频文件
             sequence_list.append(self.video_path)
@@ -182,13 +182,13 @@ class TrackingEvaluator:
             elif sequence_path.is_file():
                 # 视频文件
                 cap = cv2.VideoCapture(str(sequence_path))
-                帧数 = 0
-                while cap.isOpened() and 帧数 < 100:  # 限制到100帧
+                frame_count = 0
+                while cap.isOpened() and frame_count < 100:  # 限制到100帧
                     ret, frame = cap.read()
                     if not ret:
                         break
                     frame_list.append(frame)
-                    帧数 += 1
+                    frame_count += 1
                 cap.release()
             
             frame_list = frame_list[:50] if len(frame_list) > 50 else frame_list  # 限制到50帧
@@ -214,10 +214,10 @@ class TrackingEvaluator:
                 # 检测
                 if detector and detector != 'mock_detector':
                     try:
-                        检测results = detector.detect(image)
-                        det_boxes = 检测results.boxes
-                        confidence = 检测results.confidences
-                        classes = 检测results.classes
+                        det_results = detector.detect(image)
+                        det_boxes = det_results.boxes
+                        confidence = det_results.confidences
+                        classes = det_results.classes
                     except Exception:
                         # 使用模拟检测
                         det_boxes = np.random.rand(3, 4) * 640
@@ -234,8 +234,8 @@ class TrackingEvaluator:
                 # 跟踪
                 if tracker and tracker != 'mock_tracker':
                     try:
-                        跟踪results = tracker.update(det_boxes, confidence, classes)
-                        current_track_count = len(跟踪results.tracks)
+                        track_results = tracker.update(det_boxes, confidence, classes)
+                        current_track_count = len(track_results.tracks)
                         total_tracks = max(total_tracks, current_track_count)
                     except Exception:
                         total_tracks = max(total_tracks, len(det_boxes))
@@ -252,7 +252,7 @@ class TrackingEvaluator:
             idf1 = 0.65 + np.random.rand() * 0.20  # 0.65-0.85
             motp = 0.80 + np.random.rand() * 0.10  # 0.80-0.90
             
-            序列results = {
+            sequence_results = {
                 'sequence': sequence_name,
                 'num_frames': len(frame_list),
                 'num_gt': len(frame_list) * 2,  # 假设每帧2个真实目标
@@ -275,7 +275,7 @@ class TrackingEvaluator:
         except Exception as e:
             print(f'  序列evaluate出错: {e}')
             # 返回默认results
-            序列results = {
+            sequence_results = {
                 'sequence': sequence_name,
                 'num_frames': 100,
                 'num_gt': 200,
@@ -293,14 +293,14 @@ class TrackingEvaluator:
                 }
             }
         
-        return 序列results
+        return sequence_results
     
     def calculate_overall_metrics(self, all_results):
         """
         计算总体evaluatemetrics
         
         参数:
-            所有results: 所有序列的evaluateresults
+            all_results: 所有序列的evaluateresults
         
         返回:
             总体metrics字典
@@ -366,16 +366,16 @@ class TrackingEvaluator:
         print('=' * 60)
         
         print('\n总体metrics:')
-        for metrics名, metrics值 in overall_metrics.items():
-            print(f"  {metrics名}: {metrics值 if metrics值 is not None else 'N/A'}")
+        for metric_name, metric_value in overall_metrics.items():
+            print(f"  {metric_name}: {metric_value if metric_value is not None else 'N/A'}")
         
-        print(f'\nevaluate了 {len(所有results)} 个序列')
+        print(f'\nevaluate了 {len(all_results)} 个序列')
     
     def save_results(self, overall_metrics, all_results):
         """保存evaluateresults"""
         results = {
             'tracker': self.args.tracker,
-            'detector': str(self.detector路径),
+            'detector': str(self.detector_path),
             'timestamp': datetime.now().isoformat(),
             'config': {
                 'conf_thres': self.args.conf_thres,
@@ -385,11 +385,11 @@ class TrackingEvaluator:
             'per_sequence': all_results,
         }
         
-        output文件 = self.output_dir / 'tracking_results.json'
-        with open(output文件, 'w', encoding='utf-8') as f:
+        output_file = self.output_dir / 'tracking_results.json'
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
-        print(f'\nresults已保存到: {output文件}')
+        print(f'\nresults已保存到: {output_file}')
     
     def run(self):
         """runevaluate流程"""
@@ -397,7 +397,7 @@ class TrackingEvaluator:
         print('多目标跟踪evaluate')
         print('=' * 60)
         print(f'tracker: {self.args.tracker}')
-        print(f'detector: {self.detector路径}')
+        print(f'detector: {self.detector_path}')
         print(f'video_path: {self.video_path}')
         
         # load_detector
@@ -407,11 +407,11 @@ class TrackingEvaluator:
         tracker = self.create_tracker()
         
         # get_test_sequences
-        sequence_list = self.get_test_sequences()
+        sequences = self.get_test_sequences()
         
         # evaluate每个序列
         all_results = []
-        for sequence_path in sequence_list:
+        for sequence_path in sequences:
             results = self.eval_sequence(detector, tracker, sequence_path)
             all_results.append(results)
         
@@ -431,8 +431,8 @@ def main():
     """主函数"""
     args = parse_args()
     
-    evaluate器 = TrackingEvaluator(args)
-    evaluate器.run()
+    evaluator = TrackingEvaluator(args)
+    evaluator.run()
 
 
 if __name__ == '__main__':
