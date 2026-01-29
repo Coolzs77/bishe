@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-目标检测评估模块
+目标检测evaluate模块
 
-提供目标检测模型的评估功能，包括mAP、精确率、召回率等指标
+提供目标检测model的evaluate功能，包括mAP、精确率、召回率等metrics
 """
 
 import os
@@ -14,15 +14,15 @@ import numpy as np
 
 class DetectionEvaluator:
     """
-    目标检测评估器
+    目标检测evaluate器
     
-    评估目标检测模型的性能
+    evaluate目标检测model的性能
     
     Attributes:
         iou_thresholds: IoU阈值列表
-        class_names: 类别名称列表
-        num_classes: 类别数量
-        detections: 收集的检测结果
+        class_names: classesname列表
+        num_classes: classescount
+        detections: 收集的检测results
         ground_truths: 收集的真实标注
     """
     
@@ -32,10 +32,10 @@ class DetectionEvaluator:
         iou_thresholds: List[float] = [0.5, 0.75]
     ):
         """
-        初始化检测评估器
+        初始化检测evaluate器
         
         Args:
-            class_names: 类别名称列表
+            class_names: classesname列表
             iou_thresholds: IoU阈值列表
         """
         self.class_names = class_names or []
@@ -45,7 +45,7 @@ class DetectionEvaluator:
         self.reset()
     
     def reset(self) -> None:
-        """重置评估器"""
+        """重置evaluate器"""
         self.detections: Dict[int, List[Dict]] = {}
         self.ground_truths: Dict[int, List[Dict]] = {}
         self.image_ids: List[int] = []
@@ -58,13 +58,13 @@ class DetectionEvaluator:
         class_ids: np.ndarray
     ) -> None:
         """
-        添加检测结果
+        添加检测results
         
         Args:
-            image_id: 图像ID
+            image_id: imageID
             boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-            scores: 置信度数组
-            class_ids: 类别ID数组
+            scores: confidence数组
+            class_ids: classesID数组
         """
         if image_id not in self.detections:
             self.detections[image_id] = []
@@ -89,9 +89,9 @@ class DetectionEvaluator:
         添加真实标注
         
         Args:
-            image_id: 图像ID
+            image_id: imageID
             boxes: 边界框数组
-            class_ids: 类别ID数组
+            class_ids: classesID数组
         """
         if image_id not in self.ground_truths:
             self.ground_truths[image_id] = []
@@ -107,10 +107,10 @@ class DetectionEvaluator:
     
     def compute_metrics(self) -> Dict[str, Any]:
         """
-        计算所有评估指标
+        计算所有evaluatemetrics
         
         Returns:
-            包含各项指标的字典
+            包含各项metrics的字典
         """
         results = {
             'num_images': len(self.image_ids),
@@ -149,7 +149,7 @@ class DetectionEvaluator:
         Returns:
             (mAP, 每类AP字典)
         """
-        # 收集所有类别
+        # 收集所有classes
         all_classes = set()
         for dets in self.detections.values():
             for det in dets:
@@ -174,16 +174,16 @@ class DetectionEvaluator:
     
     def _compute_ap_for_class(self, class_id: int, iou_threshold: float) -> float:
         """
-        计算单个类别的AP
+        计算单个classes的AP
         
         Args:
-            class_id: 类别ID
+            class_id: classesID
             iou_threshold: IoU阈值
             
         Returns:
             AP值
         """
-        # 收集该类别的检测和真实框
+        # 收集该classes的检测和真实框
         detections = []
         ground_truths = {}
         
@@ -205,7 +205,7 @@ class DetectionEvaluator:
                         'used': False
                     })
         
-        # 按置信度排序
+        # 按confidence排序
         detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
         
         # 统计真实框总数
@@ -343,14 +343,14 @@ class DetectionEvaluator:
     
     def save_results(self, filepath: str) -> None:
         """
-        保存评估结果
+        保存evaluateresults
         
         Args:
             filepath: 保存路径
         """
         results = self.compute_metrics()
         
-        # 转换numpy类型
+        # convertnumpy类型
         def convert(obj):
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
@@ -371,18 +371,18 @@ class DetectionEvaluator:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
-        print(f"评估结果已保存到: {filepath}")
+        print(f"evaluateresults已保存到: {filepath}")
     
     def print_results(self) -> None:
-        """打印评估结果"""
+        """打印evaluateresults"""
         results = self.compute_metrics()
         
         print("\n" + "=" * 50)
-        print("检测评估结果")
+        print("检测evaluateresults")
         print("=" * 50)
-        print(f"图像数量: {results['num_images']}")
-        print(f"检测数量: {results['num_detections']}")
-        print(f"真实框数量: {results['num_ground_truths']}")
+        print(f"imagecount: {results['num_images']}")
+        print(f"检测count: {results['num_detections']}")
+        print(f"真实框count: {results['num_ground_truths']}")
         print("-" * 50)
         
         for key, value in results['map'].items():
@@ -401,24 +401,24 @@ def evaluate_detection_model(
     class_names: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
-    评估检测模型
+    evaluate检测model
     
     Args:
-        detector: 检测器实例
-        test_images: 测试图像列表
-        test_labels: 测试标签列表，每个元素包含 'boxes' 和 'class_ids'
-        class_names: 类别名称列表
+        detector: detector实例
+        test_images: test_image列表
+        test_labels: 测试label列表，每个元素包含 'boxes' 和 'class_ids'
+        class_names: classesname列表
         
     Returns:
-        评估结果字典
+        evaluateresults字典
     """
     evaluator = DetectionEvaluator(class_names=class_names)
     
     for i, (image, label) in enumerate(zip(test_images, test_labels)):
-        # 获取检测结果
+        # 获取检测results
         result = detector.detect(image)
         
-        # 添加检测结果
+        # 添加检测results
         evaluator.add_detection(
             image_id=i,
             boxes=result.boxes,

@@ -22,7 +22,7 @@ __all__ = [
     'xywh_to_xyxy',
     'xyxy_to_xyah',
     'xyah_to_xyxy',
-    # 跟踪器
+    # tracker
     'DeepSORTTracker',
     'create_deepsort_tracker',
     'ByteTrack',

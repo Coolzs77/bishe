@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-KAIST数据集预处理脚本
-将KAIST多光谱行人数据集准备用于跟踪算法评估
+KAISTdata集预处理脚本
+将KAIST多光谱行人data集准备用于跟踪算法evaluate
 """
 
 import os
@@ -14,10 +14,10 @@ import cv2
 import json
 
 
-def 解析参数():
-    """解析命令行参数"""
+def parse_args():
+    """解析command行参数"""
     parser = argparse.ArgumentParser(
-        description='准备KAIST数据集',
+        description='准备KAISTdata集',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 示例:
@@ -27,59 +27,59 @@ def 解析参数():
     )
     
     parser.add_argument('--input', type=str, required=True,
-                        help='KAIST数据集路径')
+                        help='KAISTdata集路径')
     parser.add_argument('--output', type=str, default='data/processed/kaist',
-                        help='输出目录')
+                        help='output目录')
     parser.add_argument('--modality', type=str, default='thermal',
                         choices=['thermal', 'visible', 'both'],
-                        help='图像模态')
+                        help='image模态')
     parser.add_argument('--extract-frames', action='store_true', default=True,
                         help='是否提取视频帧')
     
     return parser.parse_args()
 
 
-class KAIST数据集转换器:
-    """KAIST数据集转换器类"""
+class KAISTDatasetConverter:
+    """KAISTdata集convert器类"""
     
-    def __init__(self, 输入目录, 输出目录, 模态='thermal'):
+    def __init__(self, input_dir, output_dir, modality='thermal'):
         """
-        初始化转换器
+        初始化convert器
         
         参数:
-            输入目录: KAIST数据集原始路径
-            输出目录: 转换后数据保存路径
-            模态: 图像模态 ('thermal', 'visible', 'both')
+            input目录: KAISTdata集原始路径
+            output目录: convert后data保存路径
+            模态: image模态 ('thermal', 'visible', 'both')
         """
-        self.输入目录 = Path(输入目录)
-        self.输出目录 = Path(输出目录)
-        self.模态 = 模态
+        self.input_dir = Path(input_dir)
+        self.output_dir = Path(output_dir)
+        self.modality = modality
         
-        # 创建输出目录
-        self.序列目录 = self.输出目录 / 'test_sequences'
-        self.标注目录 = self.输出目录 / 'annotations'
+        # create_output_dir
+        self.序列目录 = self.output_dir / 'test_sequences'
+        self.标注目录 = self.output_dir / 'annotations'
         
         self.序列目录.mkdir(parents=True, exist_ok=True)
         self.标注目录.mkdir(parents=True, exist_ok=True)
         
-        # 初始化统计信息
+        # 初始化statistics
         self.统计 = {
             '总序列数': 0,
             '总帧数': 0,
             '总标注数': 0,
         }
     
-    def 查找视频序列(self):
+    def find_video_sequences(self):
         """
         查找所有视频序列
         
         返回:
             序列信息列表
         """
-        序列列表 = []
+        sequence_list = []
         
-        # KAIST数据集结构: set00/V000, set00/V001, ...
-        for set目录 in sorted(self.输入目录.glob('set*')):
+        # KAISTdata集结构: set00/V000, set00/V001, ...
+        for set目录 in sorted(self.input_dir.glob('set*')):
             if not set目录.is_dir():
                 continue
             
@@ -87,29 +87,29 @@ class KAIST数据集转换器:
                 if not 视频目录.is_dir():
                     continue
                 
-                # 根据模态确定图像目录
-                if self.模态 == 'thermal':
-                    图像目录 = 视频目录 / 'lwir'
-                elif self.模态 == 'visible':
-                    图像目录 = 视频目录 / 'visible'
+                # 根据模态确定image目录
+                if self.modality == 'thermal':
+                    image目录 = 视频目录 / 'lwir'
+                elif self.modality == 'visible':
+                    image目录 = 视频目录 / 'visible'
                 else:
-                    图像目录 = 视频目录
+                    image目录 = 视频目录
                 
-                # 检查是否存在图像文件
-                存在图像 = (图像目录.exists() and 
-                          (any(图像目录.glob('*.jpg')) or any(图像目录.glob('*.png'))))
+                # 检查是否存在image文件
+                存在image = (image目录.exists() and 
+                          (any(image目录.glob('*.jpg')) or any(image目录.glob('*.png'))))
                 
-                if 存在图像:
-                    序列列表.append({
+                if 存在image:
+                    sequence_list.append({
                         'set': set目录.name,
                         'video': 视频目录.name,
                         'path': 视频目录,
-                        'img_dir': 图像目录,
+                        'img_dir': image目录,
                     })
         
-        return 序列列表
+        return sequence_list
     
-    def 解析标注文件(self, 标注路径):
+    def parse_annotation_file(self, annotation_path):
         """
         解析KAIST格式的标注文件
         
@@ -121,10 +121,10 @@ class KAIST数据集转换器:
         """
         标注列表 = []
         
-        if not 标注路径.exists():
+        if not annotation_path.exists():
             return 标注列表
         
-        with open(标注路径, 'r', encoding='utf-8') as f:
+        with open(annotation_path, 'r', encoding='utf-8') as f:
             行列表 = f.readlines()
         
         for 行 in 行列表:
@@ -138,11 +138,11 @@ class KAIST数据集转换器:
             
             try:
                 # 格式: class x y w h [occlusion] [...]
-                类别 = 部分列表[0]
+                classes = 部分列表[0]
                 x, y, w, h = map(int, 部分列表[1:5])
                 
                 标注列表.append({
-                    'class': 类别,
+                    'class': classes,
                     'bbox': [x, y, w, h],
                     'occlusion': int(部分列表[5]) if len(部分列表) > 5 else 0,
                 })
@@ -151,7 +151,7 @@ class KAIST数据集转换器:
         
         return 标注列表
     
-    def 处理视频序列(self, 序列信息):
+    def process_video_sequence(self, sequence_info):
         """
         处理单个视频序列
         
@@ -161,45 +161,45 @@ class KAIST数据集转换器:
         返回:
             处理的帧数
         """
-        序列名称 = f"{序列信息['set']}_{序列信息['video']}"
-        输出序列目录 = self.序列目录 / 序列名称 / 'images'
-        输出标注目录 = self.标注目录 / 序列名称
+        sequence_name = f"{序列信息['set']}_{序列信息['video']}"
+        output序列目录 = self.序列目录 / sequence_name / 'images'
+        output标注目录 = self.标注目录 / sequence_name
         
-        输出序列目录.mkdir(parents=True, exist_ok=True)
-        输出标注目录.mkdir(parents=True, exist_ok=True)
+        output序列目录.mkdir(parents=True, exist_ok=True)
+        output标注目录.mkdir(parents=True, exist_ok=True)
         
-        # 获取图像文件列表
-        图像目录 = 序列信息['img_dir']
-        图像文件列表 = sorted(list(图像目录.glob('*.jpg')) + list(图像目录.glob('*.png')))
+        # 获取image文件列表
+        image目录 = sequence_info['img_dir']
+        image文件列表 = sorted(list(image目录.glob('*.jpg')) + list(image目录.glob('*.png')))
         
-        if not 图像文件列表:
+        if not image文件列表:
             return 0
         
         # 标注目录
-        标注目录 = 序列信息['path'] / 'annotations'
+        标注目录 = sequence_info['path'] / 'annotations'
         
         # 准备跟踪标注格式
         跟踪标注列表 = []
         
-        for 帧索引, 图像路径 in enumerate(图像文件列表):
-            # 复制图像
-            输出图像路径 = 输出序列目录 / f'{帧索引:06d}.jpg'
+        for frame_idx, image_path in enumerate(image文件列表):
+            # 复制image
+            outputimage_path = output序列目录 / f'{frame_idx:06d}.jpg'
             
-            图像 = cv2.imread(str(图像路径))
-            if 图像 is not None:
-                cv2.imwrite(str(输出图像路径), 图像)
+            image = cv2.imread(str(image_path))
+            if image is not None:
+                cv2.imwrite(str(outputimage_path), image)
             
             # 处理标注
-            标注文件名 = 图像路径.stem + '.txt'
-            标注路径 = 标注目录 / 标注文件名
+            标注文件名 = image_path.stem + '.txt'
+            annotation_path = 标注目录 / 标注文件名
             
-            帧标注列表 = self.解析标注文件(标注路径)
+            帧标注列表 = self.parse_annotation_file(annotation_path)
             
             for 标注 in 帧标注列表:
                 if 标注['class'].lower() == 'person':
                     跟踪标注列表.append({
-                        'frame': 帧索引,
-                        'id': -1,  # KAIST原始数据没有跟踪ID
+                        'frame': frame_idx,
+                        'id': -1,  # KAIST原始data没有跟踪ID
                         'bbox': 标注['bbox'],
                         'class': 标注['class'],
                     })
@@ -207,45 +207,45 @@ class KAIST数据集转换器:
             self.统计['总标注数'] += len(帧标注列表)
         
         # 保存跟踪标注
-        标注输出路径 = 输出标注目录 / 'gt.json'
-        with open(标注输出路径, 'w', encoding='utf-8') as f:
+        标注output路径 = output标注目录 / 'gt.json'
+        with open(标注output路径, 'w', encoding='utf-8') as f:
             json.dump(跟踪标注列表, f, indent=2, ensure_ascii=False)
         
         # 更新统计
-        self.统计['总帧数'] += len(图像文件列表)
+        self.统计['总帧数'] += len(image文件列表)
         self.统计['总序列数'] += 1
         
-        return len(图像文件列表)
+        return len(image文件列表)
     
-    def 生成序列列表文件(self):
-        """生成序列列表文件"""
-        列表文件路径 = self.输出目录 / 'sequences.txt'
+    def generate_sequence_list_file(self):
+        """生成sequence_list文件"""
+        列表文件路径 = self.output_dir / 'sequences.txt'
         
-        序列列表 = sorted([目录.name for 目录 in self.序列目录.iterdir() if 目录.is_dir()])
+        sequence_list = sorted([目录.name for 目录 in self.序列目录.iterdir() if 目录.is_dir()])
         
         with open(列表文件路径, 'w', encoding='utf-8') as f:
-            for 序列 in 序列列表:
+            for 序列 in sequence_list:
                 f.write(序列 + '\n')
         
-        print(f'序列列表已保存到: {列表文件路径}')
+        print(f'sequence_list已保存到: {列表文件路径}')
     
-    def 执行转换(self):
-        """执行完整的数据集转换流程"""
+    def perform_convert(self):
+        """执行完整的data集convert流程"""
         print('=' * 50)
-        print('KAIST数据集转换')
+        print('KAISTdata集convert')
         print('=' * 50)
-        print(f'输入目录: {self.输入目录}')
-        print(f'输出目录: {self.输出目录}')
-        print(f'图像模态: {self.模态}')
+        print(f'input目录: {self.input目录}')
+        print(f'output目录: {self.output目录}')
+        print(f'image模态: {self.模态}')
         print()
         
         # 查找视频序列
-        序列列表 = self.查找视频序列()
-        print(f'找到 {len(序列列表)} 个视频序列')
+        sequence_list = self.find_video_sequences()
+        print(f'找到 {len(sequence_list)} 个视频序列')
         
-        if not 序列列表:
+        if not sequence_list:
             print('未找到可处理的序列!')
-            print('请确保KAIST数据集目录结构正确:')
+            print('请确保KAISTdata集目录结构正确:')
             print('  kaist/')
             print('  ├── set00/')
             print('  │   ├── V000/')
@@ -256,15 +256,15 @@ class KAIST数据集转换器:
             return
         
         # 处理每个序列
-        for 序列信息 in tqdm(序列列表, desc='处理序列'):
-            self.处理视频序列(序列信息)
+        for sequence_info in tqdm(sequence_list, desc='处理序列'):
+            self.process_video_sequence(sequence_info)
         
-        # 生成序列列表文件
-        self.生成序列列表文件()
+        # 生成sequence_list文件
+        self.generate_sequence_list_file()
         
-        # 打印统计信息
+        # 打印statistics
         print('\n' + '=' * 50)
-        print('转换完成!')
+        print('convert完成!')
         print('=' * 50)
         print(f"处理序列数: {self.统计['总序列数']}")
         print(f"总帧数: {self.统计['总帧数']}")
@@ -273,15 +273,15 @@ class KAIST数据集转换器:
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    转换器 = KAIST数据集转换器(
-        输入目录=args.input,
-        输出目录=args.output,
-        模态=args.modality
+    convert器 = KAISTDatasetConverter(
+        input_dir=args.input,
+        output_dir=args.output,
+        modality=args.modality
     )
     
-    转换器.执行转换()
+    convert器.perform_convert()
 
 
 if __name__ == '__main__':

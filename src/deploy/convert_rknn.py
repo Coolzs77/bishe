@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RKNN模型转换模块
+RKNNmodelconvert模块
 
-提供将ONNX模型转换为RKNN格式的功能，用于在RK3588等嵌入式平台部署
+提供将ONNXmodelconvert为RKNN格式的功能，用于在RK3588等嵌入式平台部署
 """
 
 import os
@@ -13,15 +13,15 @@ import numpy as np
 
 class RKNNConverter:
     """
-    RKNN模型转换器
+    RKNNmodelconvert器
     
-    将ONNX模型转换为RKNN格式
+    将ONNXmodelconvert为RKNN格式
     
     Attributes:
         target_platform: 目标平台 (rk3588, rk3566, etc.)
         quantization_type: 量化类型 (i8, fp)
-        mean_values: 输入均值
-        std_values: 输入标准差
+        mean_values: input均值
+        std_values: inputstd_dev
     """
     
     def __init__(
@@ -32,13 +32,13 @@ class RKNNConverter:
         std_values: List[float] = [255, 255, 255]
     ):
         """
-        初始化RKNN转换器
+        初始化RKNNconvert器
         
         Args:
             target_platform: 目标平台
             quantization_type: 量化类型 ('i8' 或 'fp')
-            mean_values: 输入均值 (RGB顺序)
-            std_values: 输入标准差 (RGB顺序)
+            mean_values: input均值 (RGB顺序)
+            std_values: inputstd_dev (RGB顺序)
         """
         self.target_platform = target_platform
         self.quantization_type = quantization_type
@@ -53,28 +53,28 @@ class RKNNConverter:
         do_quantization: bool = True
     ) -> str:
         """
-        将ONNX模型转换为RKNN格式
+        将ONNXmodelconvert为RKNN格式
         
         Args:
-            onnx_path: ONNX模型路径
-            output_path: 输出RKNN模型路径
-            dataset_path: 量化校准数据集路径（txt文件，每行一个图像路径）
+            onnx_path: ONNXmodel路径
+            output_path: outputRKNNmodel路径
+            dataset_path: 量化校准data集路径（txt文件，每行一个image_path）
             do_quantization: 是否进行量化
             
         Returns:
-            转换后的RKNN模型路径
+            convert后的RKNNmodel路径
         """
         try:
-            from rknn.api import RKNN
+            from rknn_obj.api import RKNN
         except ImportError:
             raise ImportError("RKNN-Toolkit未安装，请参考官方文档安装")
         
         # 创建RKNN对象
-        rknn = RKNN(verbose=True)
+        rknn_obj = RKNN(verbose=True)
         
-        # 配置模型
-        print(f"配置RKNN模型...")
-        rknn.config(
+        # configmodel
+        print(f"configRKNNmodel...")
+        rknn_obj.config(
             mean_values=[self.mean_values],
             std_values=[self.std_values],
             target_platform=self.target_platform,
@@ -83,38 +83,38 @@ class RKNNConverter:
             optimization_level=3
         )
         
-        # 加载ONNX模型
-        print(f"加载ONNX模型: {onnx_path}")
-        ret = rknn.load_onnx(model=onnx_path)
+        # 加载ONNXmodel
+        print(f"加载ONNXmodel: {onnx_path}")
+        ret = rknn_obj.load_onnx(model=onnx_path)
         if ret != 0:
-            raise RuntimeError(f"加载ONNX模型失败，错误码: {ret}")
+            raise RuntimeError(f"加载ONNXmodel失败，错误码: {ret}")
         
-        # 构建模型
-        print(f"构建RKNN模型...")
-        ret = rknn.build(
+        # build_model
+        print(f"构建RKNNmodel...")
+        ret = rknn_obj.build(
             do_quantization=do_quantization,
             dataset=dataset_path
         )
         if ret != 0:
-            raise RuntimeError(f"构建RKNN模型失败，错误码: {ret}")
+            raise RuntimeError(f"构建RKNNmodel失败，错误码: {ret}")
         
-        # 确保输出目录存在
+        # 确保output目录存在
         os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
         
-        # 导出RKNN模型
-        print(f"导出RKNN模型到: {output_path}")
-        ret = rknn.export_rknn(output_path)
+        # 导出RKNNmodel
+        print(f"导出RKNNmodel到: {output_path}")
+        ret = rknn_obj.export_rknn_obj(output_path)
         if ret != 0:
-            raise RuntimeError(f"导出RKNN模型失败，错误码: {ret}")
+            raise RuntimeError(f"导出RKNNmodel失败，错误码: {ret}")
         
         # 释放资源
-        rknn.release()
+        rknn_obj.release()
         
-        print(f"RKNN模型转换完成: {output_path}")
+        print(f"RKNNmodelconvert完成: {output_path}")
         return output_path
 
 
-def convert_to_rknn(
+def convert_to_rknn_obj(
     onnx_path: str,
     output_path: str,
     target_platform: str = 'rk3588',
@@ -124,19 +124,19 @@ def convert_to_rknn(
     std_values: List[float] = [255, 255, 255]
 ) -> str:
     """
-    将ONNX模型转换为RKNN格式
+    将ONNXmodelconvert为RKNN格式
     
     Args:
-        onnx_path: ONNX模型路径
-        output_path: 输出RKNN模型路径
+        onnx_path: ONNXmodel路径
+        output_path: outputRKNNmodel路径
         target_platform: 目标平台
-        dataset_path: 量化校准数据集路径
+        dataset_path: 量化校准data集路径
         do_quantization: 是否进行量化
-        mean_values: 输入均值
-        std_values: 输入标准差
+        mean_values: input均值
+        std_values: inputstd_dev
         
     Returns:
-        转换后的RKNN模型路径
+        convert后的RKNNmodel路径
     """
     converter = RKNNConverter(
         target_platform=target_platform,
@@ -152,64 +152,64 @@ def convert_to_rknn(
     )
 
 
-def test_rknn_model(
+def test_rknn_obj_model(
     model_path: str,
     input_size: Tuple[int, int] = (640, 640),
     test_image: Optional[np.ndarray] = None
 ) -> Tuple[bool, Optional[np.ndarray]]:
     """
-    测试RKNN模型
+    测试RKNNmodel
     
     Args:
-        model_path: RKNN模型路径
-        input_size: 输入尺寸 (height, width)
-        test_image: 测试图像，如果为None则使用随机输入
+        model_path: RKNNmodel路径
+        input_size: input尺寸 (height, width)
+        test_image: test_image，如果为None则使用随机input
         
     Returns:
-        (是否成功, 输出结果)
+        (是否success, outputresults)
     """
     try:
-        from rknn.api import RKNN
+        from rknn_obj.api import RKNN
     except ImportError:
         try:
-            from rknnlite.api import RKNNLite as RKNN
+            from rknn_objlite.api import RKNNLite as RKNN
         except ImportError:
             print("RKNN-Toolkit未安装")
             return False, None
     
     try:
         # 创建RKNN对象
-        rknn = RKNN()
+        rknn_obj = RKNN()
         
-        # 加载模型
-        ret = rknn.load_rknn(model_path)
+        # load_model
+        ret = rknn_obj.load_rknn_obj(model_path)
         if ret != 0:
-            print(f"加载RKNN模型失败，错误码: {ret}")
+            print(f"加载RKNNmodel失败，错误码: {ret}")
             return False, None
         
-        # 初始化运行时
-        ret = rknn.init_runtime()
+        # 初始化run时
+        ret = rknn_obj.init_runtime()
         if ret != 0:
-            print(f"初始化运行时失败，错误码: {ret}")
+            print(f"初始化run时失败，错误码: {ret}")
             return False, None
         
-        # 准备输入
+        # 准备input
         if test_image is None:
             test_image = np.random.randint(0, 255, (input_size[0], input_size[1], 3), dtype=np.uint8)
         
-        # 运行推理
-        outputs = rknn.inference(inputs=[test_image])
+        # runinference
+        outputs = rknn_obj.inference(inputs=[test_image])
         
         # 释放资源
-        rknn.release()
+        rknn_obj.release()
         
-        print(f"RKNN推理测试成功")
-        print(f"输出形状: {[o.shape for o in outputs]}")
+        print(f"RKNNinference测试success")
+        print(f"output形状: {[o.shape for o in outputs]}")
         
         return True, outputs[0]
         
     except Exception as e:
-        print(f"RKNN推理测试失败: {e}")
+        print(f"RKNNinference测试失败: {e}")
         return False, None
 
 
@@ -220,28 +220,28 @@ def create_calibration_dataset(
     extensions: List[str] = ['.jpg', '.jpeg', '.png']
 ) -> str:
     """
-    创建量化校准数据集文件
+    创建量化校准data集文件
     
     Args:
-        image_dir: 图像目录
-        output_file: 输出的数据集文件路径（txt格式）
-        num_samples: 采样数量
-        extensions: 支持的图像扩展名
+        image_dir: image目录
+        output_file: output的data集文件路径（txt格式）
+        num_samples: 采样count
+        extensions: 支持的imageextension
         
     Returns:
-        数据集文件路径
+        data集文件路径
     """
     import glob
     import random
     
-    # 收集所有图像
+    # 收集所有image
     images = []
     for ext in extensions:
         images.extend(glob.glob(os.path.join(image_dir, f'**/*{ext}'), recursive=True))
         images.extend(glob.glob(os.path.join(image_dir, f'**/*{ext.upper()}'), recursive=True))
     
     if len(images) == 0:
-        raise ValueError(f"在 {image_dir} 中未找到图像")
+        raise ValueError(f"在 {image_dir} 中未找到image")
     
     # 随机采样
     if len(images) > num_samples:
@@ -254,21 +254,21 @@ def create_calibration_dataset(
         for img_path in images:
             f.write(os.path.abspath(img_path) + '\n')
     
-    print(f"校准数据集已创建: {output_file}")
-    print(f"共 {len(images)} 张图像")
+    print(f"校准data集已创建: {output_file}")
+    print(f"共 {len(images)} 张image")
     
     return output_file
 
 
-def get_rknn_info(model_path: str) -> Dict[str, Any]:
+def get_rknn_obj_info(model_path: str) -> Dict[str, Any]:
     """
-    获取RKNN模型信息
+    获取RKNNmodel信息
     
     Args:
-        model_path: RKNN模型路径
+        model_path: RKNNmodel路径
         
     Returns:
-        模型信息字典
+        model信息字典
     """
     info = {
         'file_path': model_path,
@@ -276,20 +276,20 @@ def get_rknn_info(model_path: str) -> Dict[str, Any]:
     }
     
     try:
-        from rknn.api import RKNN
+        from rknn_obj.api import RKNN
         
-        rknn = RKNN()
-        ret = rknn.load_rknn(model_path)
+        rknn_obj = RKNN()
+        ret = rknn_obj.load_rknn_obj(model_path)
         
         if ret == 0:
-            # RKNN SDK可能没有直接获取模型信息的API
+            # RKNN SDK可能没有直接获取model信息的API
             # 这里只提供基本信息
             info['load_success'] = True
         else:
             info['load_success'] = False
             info['error_code'] = ret
         
-        rknn.release()
+        rknn_obj.release()
         
     except ImportError:
         info['note'] = 'RKNN-Toolkit未安装，无法获取详细信息'

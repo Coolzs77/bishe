@@ -1,7 +1,7 @@
 """
-可视化工具模块
+visualize工具模块
 
-提供目标检测和多目标跟踪结果的可视化功能，包括绘制边界框、轨迹、信息面板等。
+提供目标检测和多目标跟踪results的visualize功能，包括绘制边界框、轨迹、信息面板等。
 """
 
 import cv2
@@ -15,7 +15,7 @@ def generate_color_list(num: int) -> List[Tuple[int, int, int]]:
     生成一组区分度高的颜色列表
     
     Args:
-        num: 需要生成的颜色数量
+        num: 需要生成的颜色count
     
     Returns:
         颜色列表，每个颜色为 (B, G, R) 格式的元组
@@ -49,7 +49,7 @@ def generate_color_list(num: int) -> List[Tuple[int, int, int]]:
             hue = int(180 * (i - len(predefined_colors)) / (num - len(predefined_colors)))
             # 创建HSV颜色
             hsv_color = np.uint8([[[hue, 255, 255]]])
-            # 转换为BGR
+            # convert为BGR
             bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0][0]
             colors.append(tuple(int(c) for c in bgr_color))
     
@@ -75,7 +75,7 @@ def get_id_color(track_id: int, num_colors: int = 256) -> Tuple[int, int, int]:
     saturation = rng.randint(150, 256)
     value = rng.randint(150, 256)
     
-    # 转换HSV到BGR
+    # convertHSV到BGR
     hsv_color = np.uint8([[[hue, saturation, value]]])
     bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0][0]
     
@@ -91,20 +91,20 @@ def draw_bounding_box(
     thickness: int = 2
 ) -> np.ndarray:
     """
-    在图像上绘制单个边界框
+    在image上绘制单个边界框
     
     Args:
-        image: 输入图像 (BGR格式)
+        image: inputimage (BGR格式)
         bbox: 边界框坐标 [x1, y1, x2, y2]
-        class_name: 类别名称，可选
-        confidence: 置信度，可选
+        class_name: classesname，可选
+        confidence: confidence，可选
         color: 边界框颜色 (B, G, R)
         thickness: 线条粗细
     
     Returns:
-        绘制后的图像
+        绘制后的image
     """
-    # 复制图像以避免修改原图
+    # 复制image以避免修改原图
     img = image.copy()
     
     # 获取边界框坐标
@@ -113,7 +113,7 @@ def draw_bounding_box(
     # 绘制边界框
     cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
     
-    # 准备标签文本
+    # 准备label文本
     if class_name is not None or confidence is not None:
         label_parts = []
         if class_name is not None:
@@ -130,12 +130,12 @@ def draw_bounding_box(
             label, font, font_scale, font_thickness
         )
         
-        # 绘制标签背景
+        # 绘制label背景
         label_y1 = max(y1 - text_height - 10, 0)
         label_y2 = y1
         cv2.rectangle(img, (x1, label_y1), (x1 + text_width + 4, label_y2), color, -1)
         
-        # 绘制标签文本（白色）
+        # 绘制label文本（白色）
         cv2.putText(
             img, label, (x1 + 2, label_y2 - 4),
             font, font_scale, (255, 255, 255), font_thickness
@@ -153,18 +153,18 @@ def draw_detection_results(
     thickness: int = 2
 ) -> np.ndarray:
     """
-    在图像上绘制检测结果
+    在image上绘制检测results
     
     Args:
-        image: 输入图像 (BGR格式)
+        image: inputimage (BGR格式)
         boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-        classes: 类别名称列表，长度为 N
-        confidences: 置信度数组，形状为 (N,)
+        classes: classesname列表，长度为 N
+        confidences: confidence数组，形状为 (N,)
         colors: 颜色列表，如果为None则自动生成
         thickness: 线条粗细
     
     Returns:
-        绘制后的图像
+        绘制后的image
     """
     img = image.copy()
     
@@ -177,7 +177,7 @@ def draw_detection_results(
     # 生成颜色
     if colors is None:
         if classes is not None:
-            # 为每个类别分配固定颜色
+            # 为每个classes分配固定颜色
             unique_classes = list(set(classes))
             class_colors = generate_color_list(len(unique_classes))
             class_to_color = {cls: color for cls, color in zip(unique_classes, class_colors)}
@@ -211,13 +211,13 @@ def draw_tracking_results(
     thickness: int = 2
 ) -> np.ndarray:
     """
-    在图像上绘制跟踪结果
+    在image上绘制跟踪results
     
     Args:
-        image: 输入图像 (BGR格式)
+        image: inputimage (BGR格式)
         boxes: 边界框数组，形状为 (N, 4)
         track_ids: 跟踪ID数组，形状为 (N,)
-        classes: 类别名称列表，长度为 N
+        classes: classesname列表，长度为 N
         draw_trajectory: 是否绘制运动轨迹
         trajectory_history: 轨迹历史字典，格式为 {track_id: [(x, y), ...]}
                           如果为None则使用全局历史
@@ -225,7 +225,7 @@ def draw_tracking_results(
         thickness: 线条粗细
     
     Returns:
-        绘制后的图像
+        绘制后的image
     """
     global _trajectory_history
     
@@ -250,13 +250,13 @@ def draw_tracking_results(
         x1, y1, x2, y2 = [int(v) for v in box]
         cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
         
-        # 准备标签
+        # 准备label
         label_parts = [f'ID:{track_id}']
         if classes is not None and i < len(classes):
             label_parts.insert(0, classes[i])
         label = ' '.join(label_parts)
         
-        # 绘制标签背景和文本
+        # 绘制label背景和文本
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.5
         font_thickness = 1
@@ -304,10 +304,10 @@ def draw_info_panel(
     alpha: float = 0.7
 ) -> np.ndarray:
     """
-    在图像上绘制信息面板
+    在image上绘制信息面板
     
     Args:
-        image: 输入图像 (BGR格式)
+        image: inputimage (BGR格式)
         info_dict: 要显示的信息字典
         position: 面板位置，可选 'top-left', 'top-right', 'bottom-left', 'bottom-right'
         bg_color: 背景颜色 (B, G, R)
@@ -315,7 +315,7 @@ def draw_info_panel(
         alpha: 背景透明度
     
     Returns:
-        绘制后的图像
+        绘制后的image
     """
     img = image.copy()
     h, w = img.shape[:2]
@@ -382,18 +382,18 @@ def create_image_grid(
     bg_color: Tuple[int, int, int] = (128, 128, 128)
 ) -> np.ndarray:
     """
-    创建图像网格
+    创建image网格
     
     Args:
-        images: 图像列表
+        images: image_list
         rows: 网格行数
         cols: 网格列数
-        cell_size: 每个单元格的大小 (width, height)，如果为None则使用第一张图像的大小
+        cell_size: 每个单元格的大小 (width, height)，如果为None则使用第一张image的大小
         padding: 单元格之间的间距
         bg_color: 背景颜色 (B, G, R)
     
     Returns:
-        拼接后的网格图像
+        拼接后的网格image
     """
     if len(images) == 0:
         return np.zeros((100, 100, 3), dtype=np.uint8)
@@ -412,7 +412,7 @@ def create_image_grid(
     # 创建背景
     grid = np.full((grid_height, grid_width, 3), bg_color, dtype=np.uint8)
     
-    # 填充图像
+    # 填充image
     for idx, img in enumerate(images):
         if idx >= rows * cols:
             break
@@ -420,7 +420,7 @@ def create_image_grid(
         row = idx // cols
         col = idx % cols
         
-        # 调整图像大小
+        # 调整image大小
         if img.shape[0] != cell_height or img.shape[1] != cell_width:
             img = cv2.resize(img, (cell_width, cell_height))
         
@@ -432,7 +432,7 @@ def create_image_grid(
         x = padding + col * (cell_width + padding)
         y = padding + row * (cell_height + padding)
         
-        # 放置图像
+        # 放置image
         grid[y:y+cell_height, x:x+cell_width] = img
     
     return grid
@@ -448,17 +448,17 @@ def save_visualization_video(
     将帧序列保存为视频文件
     
     Args:
-        output_path: 输出视频文件路径
-        frames: 帧列表，每帧为BGR格式的numpy数组
+        output_path: output视频文件路径
+        frames: frame_list，每帧为BGR格式的numpy数组
         fps: 帧率
         codec: 视频编码器，默认为 'mp4v'
     
     Returns:
-        是否保存成功
+        是否保存success
     """
     if len(frames) == 0:
         import logging
-        logging.warning("帧列表为空，无法保存视频")
+        logging.warning("frame_list为空，无法保存视频")
         return False
     
     # 获取帧大小

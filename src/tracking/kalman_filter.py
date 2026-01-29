@@ -12,13 +12,13 @@ from typing import Tuple, Optional
 
 def xyxy_to_xywh(bbox: np.ndarray) -> np.ndarray:
     """
-    将边界框从 [x1, y1, x2, y2] 格式转换为 [x_center, y_center, width, height] 格式
+    将边界框从 [x1, y1, x2, y2] 格式convert为 [x_center, y_center, width, height] 格式
     
     Args:
         bbox: 边界框坐标，可以是 (4,) 或 (N, 4) 形状
         
     Returns:
-        转换后的边界框坐标
+        convert后的边界框坐标
     """
     bbox = np.asarray(bbox)
     if bbox.ndim == 1:
@@ -40,13 +40,13 @@ def xyxy_to_xywh(bbox: np.ndarray) -> np.ndarray:
 
 def xywh_to_xyxy(bbox: np.ndarray) -> np.ndarray:
     """
-    将边界框从 [x_center, y_center, width, height] 格式转换为 [x1, y1, x2, y2] 格式
+    将边界框从 [x_center, y_center, width, height] 格式convert为 [x1, y1, x2, y2] 格式
     
     Args:
         bbox: 边界框坐标，可以是 (4,) 或 (N, 4) 形状
         
     Returns:
-        转换后的边界框坐标
+        convert后的边界框坐标
     """
     bbox = np.asarray(bbox)
     if bbox.ndim == 1:
@@ -68,13 +68,13 @@ def xywh_to_xyxy(bbox: np.ndarray) -> np.ndarray:
 
 def xyxy_to_xyah(bbox: np.ndarray) -> np.ndarray:
     """
-    将边界框从 [x1, y1, x2, y2] 格式转换为 [x_center, y_center, aspect_ratio, height] 格式
+    将边界框从 [x1, y1, x2, y2] 格式convert为 [x_center, y_center, aspect_ratio, height] 格式
     
     Args:
         bbox: 边界框坐标
         
     Returns:
-        转换后的边界框坐标
+        convert后的边界框坐标
     """
     bbox = np.asarray(bbox)
     if bbox.ndim == 1:
@@ -100,13 +100,13 @@ def xyxy_to_xyah(bbox: np.ndarray) -> np.ndarray:
 
 def xyah_to_xyxy(bbox: np.ndarray) -> np.ndarray:
     """
-    将边界框从 [x_center, y_center, aspect_ratio, height] 格式转换为 [x1, y1, x2, y2] 格式
+    将边界框从 [x_center, y_center, aspect_ratio, height] 格式convert为 [x1, y1, x2, y2] 格式
     
     Args:
         bbox: 边界框坐标
         
     Returns:
-        转换后的边界框坐标
+        convert后的边界框坐标
     """
     bbox = np.asarray(bbox)
     if bbox.ndim == 1:
@@ -337,7 +337,7 @@ class KalmanFilter:
 
 class KalmanBoxTracker:
     """
-    单目标卡尔曼滤波跟踪器
+    单目标卡尔曼滤波tracker
     
     封装了卡尔曼滤波器，用于跟踪单个目标
     
@@ -355,7 +355,7 @@ class KalmanBoxTracker:
     
     def __init__(self, bbox: np.ndarray, track_id: Optional[int] = None):
         """
-        初始化单目标跟踪器
+        初始化单目标tracker
         
         Args:
             bbox: 初始边界框 [x1, y1, x2, y2]
@@ -363,7 +363,7 @@ class KalmanBoxTracker:
         """
         self.kf = KalmanFilter()
         
-        # 转换为 [x, y, a, h] 格式
+        # convert为 [x, y, a, h] 格式
         measurement = xyxy_to_xyah(bbox)
         self.mean, self.covariance = self.kf.initiate(measurement)
         

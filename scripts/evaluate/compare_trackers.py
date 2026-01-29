@@ -14,8 +14,8 @@ from datetime import datetime
 import subprocess
 
 
-def 解析参数():
-    """解析命令行参数"""
+def parse_args():
+    """解析command行参数"""
     parser = argparse.ArgumentParser(
         description='对比不同跟踪算法的性能',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -27,20 +27,20 @@ def 解析参数():
     )
     
     parser.add_argument('--detector', type=str, required=True,
-                        help='检测器权重路径')
+                        help='detectorweights_path')
     parser.add_argument('--video', type=str, required=True,
-                        help='测试视频路径')
+                        help='测试video_path')
     parser.add_argument('--trackers', type=str, default='deepsort,bytetrack,centertrack',
-                        help='要对比的跟踪器列表，逗号分隔')
+                        help='要对比的tracker列表，逗号分隔')
     parser.add_argument('--output', type=str, default='outputs/results/tracking_comparison.csv',
-                        help='对比结果输出路径')
+                        help='对比resultsoutput路径')
     parser.add_argument('--scenarios', type=str, default='all',
                         help='测试场景')
     
     return parser.parse_args()
 
 
-class 跟踪器对比器:
+class TrackerComparator:
     """跟踪算法对比器类"""
     
     def __init__(self, args):
@@ -48,117 +48,117 @@ class 跟踪器对比器:
         初始化对比器
         
         参数:
-            args: 命令行参数
+            args: command行参数
         """
         self.args = args
-        self.检测器路径 = args.detector
-        self.视频路径 = args.video
-        self.输出路径 = Path(args.output)
-        self.输出路径.parent.mkdir(parents=True, exist_ok=True)
+        self.detector路径 = args.detector
+        self.video_path = args.video
+        self.output路径 = Path(args.output)
+        self.output路径.parent.mkdir(parents=True, exist_ok=True)
         
-        # 解析跟踪器列表
-        self.跟踪器列表 = [跟踪器.strip() for 跟踪器 in args.trackers.split(',')]
+        # 解析tracker列表
+        self.tracker列表 = [tracker.strip() for tracker in args.trackers.split(',')]
     
-    def 运行单个跟踪器评估(self, 跟踪器名称):
+    def run_single_tracker_eval(self, trackername):
         """
-        运行单个跟踪器的评估
+        run单个tracker的evaluate
         
         参数:
-            跟踪器名称: 跟踪器名称
+            trackername: trackername
         
         返回:
-            评估结果字典
+            evaluateresults字典
         """
-        print(f'\n评估跟踪器: {跟踪器名称}')
+        print(f'\nevaluatetracker: {trackername}')
         
-        # 构建评估命令
-        命令 = [
+        # 构建evaluatecommand
+        command = [
             'python', 'scripts/evaluate/eval_tracking.py',
-            '--detector', self.检测器路径,
-            '--tracker', 跟踪器名称,
-            '--video', self.视频路径,
+            '--detector', self.detector路径,
+            '--tracker', trackername,
+            '--video', self.video_path,
         ]
         
-        开始时间 = datetime.now()
+        start_time = datetime.now()
         
         try:
-            结果 = subprocess.run(命令, capture_output=True, text=True, timeout=3600)
-            成功 = 结果.returncode == 0
+            results = subprocess.run(command, capture_output=True, text=True, timeout=3600)
+            success = results.returncode == 0
         except subprocess.TimeoutExpired:
-            成功 = False
+            success = False
         except Exception as e:
             print(f'错误: {e}')
-            成功 = False
+            success = False
         
-        结束时间 = datetime.now()
-        耗时 = (结束时间 - 开始时间).total_seconds()
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
         
-        # 加载评估结果
-        结果文件 = Path(f'outputs/results/tracking_{跟踪器名称}/tracking_results.json')
+        # 加载evaluateresults
+        results文件 = Path(f'outputs/results/tracking_{trackername}/tracking_results.json')
         
-        if 结果文件.exists():
-            with open(结果文件, 'r', encoding='utf-8') as f:
-                评估结果 = json.load(f)
-            指标 = 评估结果.get('overall_metrics', {})
+        if results文件.exists():
+            with open(results文件, 'r', encoding='utf-8') as f:
+                evaluateresults = json.load(f)
+            metrics = evaluateresults.get('overall_metrics', {})
         else:
-            指标 = {}
+            metrics = {}
         
         return {
-            'tracker': 跟踪器名称,
-            'success': 成功,
-            'duration': 耗时,
-            'metrics': 指标,
+            'tracker': trackername,
+            'success': success,
+            'duration': duration,
+            'metrics': metrics,
         }
     
-    def 生成对比报告(self, 所有结果):
+    def generate_comparison_report(self, all_results):
         """
         生成对比报告
         
         参数:
-            所有结果: 所有跟踪器的评估结果
+            所有results: 所有tracker的evaluateresults
         """
         # 生成CSV格式报告
-        csv内容 = ['跟踪器,MOTA,IDF1,IDSW,MOTP,FP,FN,耗时(秒)\n']
+        csv内容 = ['tracker,MOTA,IDF1,IDSW,MOTP,FP,FN,duration(秒)\n']
         
-        for 结果 in 所有结果:
-            指标 = 结果.get('metrics', {})
+        for results in all_results:
+            metrics = results.get('metrics', {})
             行 = [
-                结果['tracker'],
-                str(指标.get('MOTA', 'N/A')),
-                str(指标.get('IDF1', 'N/A')),
-                str(指标.get('IDSW', 'N/A')),
-                str(指标.get('MOTP', 'N/A')),
-                str(指标.get('FP', 'N/A')),
-                str(指标.get('FN', 'N/A')),
-                f"{结果.get('duration', 0):.1f}",
+                results['tracker'],
+                str(metrics.get('MOTA', 'N/A')),
+                str(metrics.get('IDF1', 'N/A')),
+                str(metrics.get('IDSW', 'N/A')),
+                str(metrics.get('MOTP', 'N/A')),
+                str(metrics.get('FP', 'N/A')),
+                str(metrics.get('FN', 'N/A')),
+                f"{results.get('duration', 0):.1f}",
             ]
             csv内容.append(','.join(行) + '\n')
         
         # 保存CSV
-        with open(self.输出路径, 'w', encoding='utf-8') as f:
+        with open(self.output路径, 'w', encoding='utf-8') as f:
             f.writelines(csv内容)
         
-        print(f'\nCSV报告已保存到: {self.输出路径}')
+        print(f'\nCSV报告已保存到: {self.output路径}')
         
         # 生成Markdown报告
-        md路径 = self.输出路径.with_suffix('.md')
+        md路径 = self.output路径.with_suffix('.md')
         md内容 = ['# 跟踪算法对比报告\n\n']
         md内容.append(f'生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n\n')
-        md内容.append(f'检测器: {self.检测器路径}\n\n')
+        md内容.append(f'detector: {self.detector路径}\n\n')
         md内容.append('## 性能对比\n\n')
-        md内容.append('| 跟踪器 | MOTA | IDF1 | IDSW | MOTP | FP | FN | 耗时(秒) |\n')
+        md内容.append('| tracker | MOTA | IDF1 | IDSW | MOTP | FP | FN | duration(秒) |\n')
         md内容.append('|--------|------|------|------|------|----|----|----------|\n')
         
-        for 结果 in 所有结果:
-            指标 = 结果.get('metrics', {})
-            行 = f"| {结果['tracker']} | "
-            行 += f"{指标.get('MOTA', 'N/A')} | "
-            行 += f"{指标.get('IDF1', 'N/A')} | "
-            行 += f"{指标.get('IDSW', 'N/A')} | "
-            行 += f"{指标.get('MOTP', 'N/A')} | "
-            行 += f"{指标.get('FP', 'N/A')} | "
-            行 += f"{指标.get('FN', 'N/A')} | "
-            行 += f"{结果.get('duration', 0):.1f} |\n"
+        for results in all_results:
+            metrics = results.get('metrics', {})
+            行 = f"| {results['tracker']} | "
+            行 += f"{metrics.get('MOTA', 'N/A')} | "
+            行 += f"{metrics.get('IDF1', 'N/A')} | "
+            行 += f"{metrics.get('IDSW', 'N/A')} | "
+            行 += f"{metrics.get('MOTP', 'N/A')} | "
+            行 += f"{metrics.get('FP', 'N/A')} | "
+            行 += f"{metrics.get('FN', 'N/A')} | "
+            行 += f"{results.get('duration', 0):.1f} |\n"
             md内容.append(行)
         
         md内容.append('\n## 分析\n\n')
@@ -173,63 +173,80 @@ class 跟踪器对比器:
         print(f'Markdown报告已保存到: {md路径}')
         
         # 保存JSON汇总
-        json路径 = self.输出路径.with_suffix('.json')
+        json路径 = self.output路径.with_suffix('.json')
         with open(json路径, 'w', encoding='utf-8') as f:
             json.dump({
                 'timestamp': datetime.now().isoformat(),
-                'detector': self.检测器路径,
-                'video': self.视频路径,
-                'results': 所有结果,
+                'detector': self.detector路径,
+                'video': self.video_path,
+                'results': all_results,
             }, f, indent=2, ensure_ascii=False)
         
         print(f'JSON汇总已保存到: {json路径}')
     
-    def 打印对比结果(self, 所有结果):
-        """打印对比结果"""
+    def print_comparison_results(self, all_results):
+        """print_comparison_results"""
         print('\n' + '=' * 80)
-        print('跟踪算法对比结果')
+        print('跟踪算法对比results')
         print('=' * 80)
         
         # 表头
-        print(f"{'跟踪器':<12} {'MOTA':>8} {'IDF1':>8} {'IDSW':>8} {'耗时(秒)':>10}")
+        print(f"{'tracker':<12} {'MOTA':>8} {'IDF1':>8} {'IDSW':>8} {'duration(秒)':>10}")
         print('-' * 50)
         
-        for 结果 in 所有结果:
-            指标 = 结果.get('metrics', {})
-            mota = 指标.get('MOTA', 'N/A')
-            idf1 = 指标.get('IDF1', 'N/A')
-            idsw = 指标.get('IDSW', 'N/A')
-            耗时 = 结果.get('duration', 0)
+        for results in all_results:
+            metrics = results.get('metrics', {})
+            mota = metrics.get('MOTA', 'N/A')
+            idf1 = metrics.get('IDF1', 'N/A')
+            idsw = metrics.get('IDSW', 'N/A')
+            duration = results.get('duration', 0)
             
-            print(f"{结果['tracker']:<12} {str(mota):>8} {str(idf1):>8} {str(idsw):>8} {耗时:>10.1f}")
+            print(f"{results['tracker']:<12} {str(mota):>8} {str(idf1):>8} {str(idsw):>8} {duration:>10.1f}")
         
         # 找出最优
-        print('\n最优跟踪器分析:')
-        # TODO: 根据实际指标找出最优
-        print('  - 综合性能最优: 待评估')
-        print('  - 身份保持最优: 待评估')
-        print('  - 速度最快: 待评估')
+        print('\n最优tracker分析:')
+        
+        try:
+            # 按MOTA排序找出最优
+            mota排名 = sorted(all_results, key=lambda x: x.get('overall_metrics', {}).get('MOTA', 0) or 0, reverse=True)
+            if mota排名:
+                print(f'  - 综合性能最优 (MOTA): {mota排名[0]["tracker"]} ({mota排名[0].get("overall_metrics", {}).get("MOTA", "N/A")})')
+            
+            # 按IDF1排序找出身份保持最优
+            idf1排名 = sorted(all_results, key=lambda x: x.get('overall_metrics', {}).get('IDF1', 0) or 0, reverse=True)
+            if idf1排名:
+                print(f'  - 身份保持最优 (IDF1): {idf1排名[0]["tracker"]} ({idf1排名[0].get("overall_metrics", {}).get("IDF1", "N/A")})')
+            
+            # 按速度排序找出最快
+            速度排名 = sorted(all_results, key=lambda x: x.get('duration', float('inf')))
+            if 速度排名:
+                print(f'  - 速度最快: {速度排名[0]["tracker"]} ({速度排名[0].get("duration", "N/A"):.2f}s)')
+        except Exception as e:
+            print(f'  分析出错: {e}')
+            print('  - 综合性能最优: 待evaluate')
+            print('  - 身份保持最优: 待evaluate')
+            print('  - 速度最快: 待evaluate')
     
-    def 运行(self):
-        """运行对比流程"""
+    def run(self):
+        """run对比流程"""
         print('=' * 60)
         print('跟踪算法对比')
         print('=' * 60)
-        print(f'检测器: {self.检测器路径}')
-        print(f'视频路径: {self.视频路径}')
-        print(f'跟踪器: {", ".join(self.跟踪器列表)}')
+        print(f'detector: {self.detector路径}')
+        print(f'video_path: {self.video_path}')
+        print(f'tracker: {", ".join(self.tracker列表)}')
         
-        # 运行每个跟踪器的评估
-        所有结果 = []
-        for 跟踪器 in self.跟踪器列表:
-            结果 = self.运行单个跟踪器评估(跟踪器)
-            所有结果.append(结果)
+        # run每个tracker的evaluate
+        all_results = []
+        for tracker in self.tracker列表:
+            results = self.run_single_tracker_eval(tracker)
+            all_results.append(results)
         
-        # 打印对比结果
-        self.打印对比结果(所有结果)
+        # print_comparison_results
+        self.print_comparison_results(all_results)
         
-        # 生成报告
-        self.生成对比报告(所有结果)
+        # generate_report
+        self.generate_comparison_report(all_results)
         
         print('\n' + '=' * 60)
         print('对比完成!')
@@ -238,10 +255,10 @@ class 跟踪器对比器:
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    对比器 = 跟踪器对比器(args)
-    对比器.运行()
+    对比器 = TrackerComparator(args)
+    对比器.run()
 
 
 if __name__ == '__main__':

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DeepSORT跟踪器模块
+DeepSORTtracker模块
 
-实现DeepSORT多目标跟踪算法，结合外观特征和运动模型
+实现DeepSORT多目标跟踪算法，结合外观特征和运动model
 """
 
 import numpy as np
@@ -24,8 +24,8 @@ class DeepSORTTrack:
         mean: 状态均值
         covariance: 状态协方差
         features: 外观特征历史
-        class_id: 类别ID
-        confidence: 置信度
+        class_id: classesID
+        confidence: confidence
         state: 跟踪状态
         hits: 命中次数
         age: 目标存在帧数
@@ -49,8 +49,8 @@ class DeepSORTTrack:
             track_id: 跟踪ID
             bbox: 初始边界框 [x1, y1, x2, y2]
             feature: 初始外观特征
-            class_id: 类别ID
-            confidence: 置信度
+            class_id: classesID
+            confidence: confidence
             n_init: 确认所需的命中次数
             max_features: 最大保存特征数
         """
@@ -94,7 +94,7 @@ class DeepSORTTrack:
         Args:
             bbox: 观测的边界框
             feature: 外观特征
-            confidence: 置信度
+            confidence: confidence
         """
         measurement = xyxy_to_xyah(bbox)
         self.mean, self.covariance = self.kf.update(self.mean, self.covariance, measurement)
@@ -131,7 +131,7 @@ class DeepSORTTrack:
         return xyah_to_xyxy(self.mean[:4])
     
     def to_track_object(self) -> TrackObject:
-        """转换为TrackObject"""
+        """convert为TrackObject"""
         return TrackObject(
             track_id=self.track_id,
             bbox=self.get_bbox(),
@@ -147,7 +147,7 @@ class DeepSORTTrack:
 
 class DeepSORTTracker(BaseTracker):
     """
-    DeepSORT多目标跟踪器
+    DeepSORT多目标tracker
     
     结合外观特征和卡尔曼滤波的多目标跟踪算法
     
@@ -169,7 +169,7 @@ class DeepSORTTracker(BaseTracker):
         max_iou_distance: float = 0.7
     ):
         """
-        初始化DeepSORT跟踪器
+        初始化DeepSORTtracker
         
         Args:
             max_age: 目标最大存活帧数
@@ -196,16 +196,16 @@ class DeepSORTTracker(BaseTracker):
         features: Optional[np.ndarray] = None
     ) -> TrackingResult:
         """
-        更新跟踪器
+        更新tracker
         
         Args:
-            detections: 检测框数组，形状为 (N, 4)
-            confidences: 置信度数组
-            classes: 类别数组
+            detections: det_boxes数组，形状为 (N, 4)
+            confidences: confidence数组
+            classes: classes数组
             features: 特征数组
             
         Returns:
-            跟踪结果
+            跟踪results
         """
         self.frame_count += 1
         
@@ -265,7 +265,7 @@ class DeepSORTTracker(BaseTracker):
         # 删除超时的跟踪目标
         self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
         
-        # 生成结果
+        # 生成results
         result_tracks = [t.to_track_object() for t in self.tracks if t.is_confirmed()]
         
         return TrackingResult(tracks=result_tracks, frame_id=self.frame_count)
@@ -316,7 +316,7 @@ class DeepSORTTracker(BaseTracker):
                 cost_matrix, self.max_cosine_distance
             )
             
-            # 更新结果
+            # 更新results
             for m in matches:
                 matched.append((track_indices[m[0]], unmatched_detections[m[1]]))
             
@@ -342,7 +342,7 @@ class DeepSORTTracker(BaseTracker):
                 cost_matrix, self.max_iou_distance
             )
             
-            # 更新结果
+            # 更新results
             for m in iou_matches:
                 matched.append((candidate_tracks[m[0]], unmatched_detections[m[1]]))
             
@@ -452,7 +452,7 @@ class DeepSORTTracker(BaseTracker):
         return 1 - cosine_sim
     
     def reset(self) -> None:
-        """重置跟踪器"""
+        """重置tracker"""
         super().reset()
         self.tracks = []
 
@@ -465,7 +465,7 @@ def create_deepsort_tracker(
     nn_budget: int = 100
 ) -> DeepSORTTracker:
     """
-    创建DeepSORT跟踪器
+    创建DeepSORTtracker
     
     Args:
         max_age: 目标最大存活帧数
@@ -475,7 +475,7 @@ def create_deepsort_tracker(
         nn_budget: 特征库容量
         
     Returns:
-        配置好的DeepSORT跟踪器
+        config好的DeepSORTtracker
     """
     return DeepSORTTracker(
         max_age=max_age,

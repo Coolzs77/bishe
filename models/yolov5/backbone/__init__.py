@@ -5,12 +5,12 @@
 """
 
 from .lightweight import (
-    标准卷积,
-    深度可分离卷积,
-    Ghost模块,
-    Ghost瓶颈,
-    Shuffle通道,
-    ShuffleNet单元,
+    standard_conv,
+    depthwise_separable_conv,
+    GhostModule,
+    GhostBottleneck,
+    shuffle_channels,
+    ShuffleNetUnit,
     GhostC3,
     ShuffleC3,
 )

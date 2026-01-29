@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-检测器基类模块
+detector基类模块
 
-提供目标检测的基础抽象类和检测结果数据类
+提供目标检测的基础抽象类和检测resultsdata类
 """
 
 from abc import ABC, abstractmethod
@@ -15,15 +15,15 @@ import numpy as np
 @dataclass
 class DetectionResult:
     """
-    检测结果数据类
+    检测resultsdata类
     
-    存储目标检测的结果，包括边界框、置信度、类别等信息
+    存储目标检测的results，包括边界框、confidence、classes等信息
     
     Attributes:
         boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-        confidences: 置信度数组，形状为 (N,)
-        classes: 类别索引数组，形状为 (N,)
-        class_names: 类别名称列表
+        confidences: confidence数组，形状为 (N,)
+        classes: classes索引数组，形状为 (N,)
+        class_names: classesname列表
     """
     boxes: np.ndarray = field(default_factory=lambda: np.array([]))
     confidences: np.ndarray = field(default_factory=lambda: np.array([]))
@@ -31,7 +31,7 @@ class DetectionResult:
     class_names: List[str] = field(default_factory=list)
     
     def __post_init__(self):
-        """初始化后处理，确保数组类型正确"""
+        """初始化postprocess，确保数组类型正确"""
         if not isinstance(self.boxes, np.ndarray):
             self.boxes = np.array(self.boxes)
         if not isinstance(self.confidences, np.ndarray):
@@ -46,21 +46,21 @@ class DetectionResult:
             self.boxes = np.array([]).reshape(0, 4)
     
     def __len__(self) -> int:
-        """返回检测结果的数量"""
+        """返回检测results的count"""
         return len(self.boxes)
     
     def __getitem__(self, idx: Union[int, slice, np.ndarray]) -> 'DetectionResult':
         """
-        获取指定索引的检测结果
+        获取指定索引的检测results
         
         Args:
             idx: 索引，可以是整数、切片或布尔数组
             
         Returns:
-            新的DetectionResult对象，包含指定索引的结果
+            新的DetectionResult对象，包含指定索引的results
         """
         if isinstance(idx, int):
-            # 单个索引，返回包含单个结果的DetectionResult
+            # 单个索引，返回包含单个results的DetectionResult
             return DetectionResult(
                 boxes=self.boxes[idx:idx+1] if len(self.boxes) > 0 else np.array([]).reshape(0, 4),
                 confidences=self.confidences[idx:idx+1] if len(self.confidences) > 0 else np.array([]),
@@ -78,10 +78,10 @@ class DetectionResult:
     
     def filter_by_confidence(self, min_confidence: float) -> 'DetectionResult':
         """
-        按置信度过滤检测结果
+        按confidence过滤检测results
         
         Args:
-            min_confidence: 最小置信度阈值
+            min_confidence: 最小confidence阈值
             
         Returns:
             过滤后的DetectionResult对象
@@ -94,10 +94,10 @@ class DetectionResult:
     
     def filter_by_class(self, class_indices: Union[int, List[int]]) -> 'DetectionResult':
         """
-        按类别过滤检测结果
+        按classes过滤检测results
         
         Args:
-            class_indices: 要保留的类别索引，可以是单个整数或整数列表
+            class_indices: 要保留的classes索引，可以是单个整数或整数列表
             
         Returns:
             过滤后的DetectionResult对象
@@ -113,14 +113,14 @@ class DetectionResult:
     
     def to_list(self) -> List[Dict[str, Any]]:
         """
-        将检测结果转换为字典列表格式
+        将检测resultsconvert为字典列表格式
         
         Returns:
-            包含检测结果的字典列表，每个字典包含：
+            包含检测results的字典列表，每个字典包含：
             - box: [x1, y1, x2, y2]
-            - confidence: 置信度
-            - class_id: 类别索引
-            - class_name: 类别名称
+            - confidence: confidence
+            - class_id: classes索引
+            - class_name: classesname
         """
         results = []
         for i in range(len(self)):
@@ -129,7 +129,7 @@ class DetectionResult:
                 'confidence': float(self.confidences[i]),
                 'class_id': int(self.classes[i]),
             }
-            # 添加类别名称（如果可用）
+            # 添加classesname（如果可用）
             if self.class_names and int(self.classes[i]) < len(self.class_names):
                 result['class_name'] = self.class_names[int(self.classes[i])]
             results.append(result)
@@ -138,18 +138,18 @@ class DetectionResult:
 
 class BaseDetector(ABC):
     """
-    检测器基类
+    detector基类
     
-    提供目标检测器的抽象接口，所有具体检测器都应继承此类
+    提供目标detector的抽象接口，所有具体detector都应继承此类
     
     Attributes:
-        model_path: 模型文件路径
-        class_names: 类别名称列表
-        num_classes: 类别数量
-        conf_threshold: 置信度阈值
+        model_path: model文件路径
+        class_names: classesname列表
+        num_classes: classescount
+        conf_threshold: confidence阈值
         nms_threshold: NMS阈值
-        device: 运行设备（cpu/cuda）
-        model: 加载的模型对象
+        device: run设备（cpu/cuda）
+        model: 加载的model对象
     """
     
     def __init__(
@@ -161,14 +161,14 @@ class BaseDetector(ABC):
         device: str = 'cpu'
     ):
         """
-        初始化检测器
+        初始化detector
         
         Args:
-            model_path: 模型文件路径
-            class_names: 类别名称列表，如果为None则使用默认类别
-            conf_threshold: 置信度阈值，默认0.25
+            model_path: model文件路径
+            class_names: classesname列表，如果为None则使用默认classes
+            conf_threshold: confidence阈值，默认0.25
             nms_threshold: NMS阈值，默认0.45
-            device: 运行设备，默认'cpu'
+            device: run设备，默认'cpu'
         """
         self.model_path = model_path
         self.class_names = class_names or []
@@ -181,35 +181,35 @@ class BaseDetector(ABC):
     @abstractmethod
     def load_model(self) -> None:
         """
-        加载模型
+        load_model
         
-        子类必须实现此方法来加载具体的模型
+        子类必须实现此方法来加载具体的model
         """
         pass
     
     @abstractmethod
     def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
-        图像预处理
+        image预处理
         
         Args:
-            image: 输入图像，BGR格式，形状为 (H, W, C)
+            image: inputimage，BGR格式，形状为 (H, W, C)
             
         Returns:
-            预处理后的图像和预处理信息字典
+            预处理后的image和预处理信息字典
         """
         pass
     
     @abstractmethod
     def inference(self, input_tensor: np.ndarray) -> np.ndarray:
         """
-        模型推理
+        modelinference
         
         Args:
-            input_tensor: 预处理后的输入张量
+            input_tensor: 预处理后的input张量
             
         Returns:
-            模型输出
+            modeloutput
         """
         pass
     
@@ -221,27 +221,27 @@ class BaseDetector(ABC):
         preprocess_info: Optional[Dict[str, Any]] = None
     ) -> DetectionResult:
         """
-        后处理
+        postprocess
         
         Args:
-            output: 模型输出
-            orig_size: 原始图像尺寸 (height, width)
+            output: modeloutput
+            orig_size: 原始img_size (height, width)
             preprocess_info: 预处理信息字典
             
         Returns:
-            检测结果
+            检测results
         """
         pass
     
     def detect(self, image: np.ndarray) -> DetectionResult:
         """
-        执行单张图像的检测
+        执行单张image的检测
         
         Args:
-            image: 输入图像，BGR格式
+            image: inputimage，BGR格式
             
         Returns:
-            检测结果
+            检测results
         """
         if self.model is None:
             self.load_model()
@@ -251,23 +251,23 @@ class BaseDetector(ABC):
         # 预处理
         input_tensor, preprocess_info = self.preprocess(image)
         
-        # 推理
+        # inference
         output = self.inference(input_tensor)
         
-        # 后处理
+        # postprocess
         result = self.postprocess(output, orig_size, preprocess_info)
         
         return result
     
     def batch_detect(self, images: List[np.ndarray]) -> List[DetectionResult]:
         """
-        批量检测多张图像
+        批量检测多张image
         
         Args:
-            images: 图像列表
+            images: image_list
             
         Returns:
-            检测结果列表
+            检测results列表
         """
         results = []
         for image in images:
@@ -284,7 +284,7 @@ class BaseDetector(ABC):
         设置阈值
         
         Args:
-            conf_threshold: 置信度阈值
+            conf_threshold: confidence阈值
             nms_threshold: NMS阈值
         """
         if conf_threshold is not None:
@@ -294,13 +294,13 @@ class BaseDetector(ABC):
     
     def get_class_name(self, class_id: int) -> str:
         """
-        获取类别名称
+        获取classesname
         
         Args:
-            class_id: 类别索引
+            class_id: classes索引
             
         Returns:
-            类别名称，如果索引无效则返回'unknown'
+            classesname，如果索引无效则返回'unknown'
         """
         if 0 <= class_id < len(self.class_names):
             return self.class_names[class_id]
@@ -317,7 +317,7 @@ class BaseDetector(ABC):
         
         Args:
             boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-            scores: 置信度数组，形状为 (N,)
+            scores: confidence数组，形状为 (N,)
             iou_threshold: IoU阈值
             
         Returns:
@@ -335,7 +335,7 @@ class BaseDetector(ABC):
         # 计算面积
         areas = (x2 - x1) * (y2 - y1)
         
-        # 按置信度排序
+        # 按confidence排序
         order = scores.argsort()[::-1]
         
         keep = []

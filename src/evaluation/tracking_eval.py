@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-多目标跟踪评估模块
+多目标跟踪evaluate模块
 
-提供多目标跟踪的评估功能，包括MOTA、MOTP、IDF1等指标
+提供多目标跟踪的evaluate功能，包括MOTA、MOTP、IDF1等metrics
 """
 
 import os
@@ -15,19 +15,19 @@ from collections import defaultdict
 
 class MOTEvaluator:
     """
-    多目标跟踪评估器
+    多目标跟踪evaluate器
     
-    评估多目标跟踪算法的性能，计算CLEAR MOT和ID评估指标
+    evaluate多目标跟踪算法的性能，计算CLEAR MOT和IDevaluatemetrics
     
     Attributes:
         iou_threshold: IoU匹配阈值
-        frame_results: 帧级别的跟踪结果
+        frame_results: 帧级别的跟踪results
         frame_gts: 帧级别的真实标注
     """
     
     def __init__(self, iou_threshold: float = 0.5):
         """
-        初始化MOT评估器
+        初始化MOTevaluate器
         
         Args:
             iou_threshold: IoU匹配阈值
@@ -36,7 +36,7 @@ class MOTEvaluator:
         self.reset()
     
     def reset(self) -> None:
-        """重置评估器"""
+        """重置evaluate器"""
         self.frame_results: Dict[int, List[Dict]] = {}
         self.frame_gts: Dict[int, List[Dict]] = {}
         
@@ -70,7 +70,7 @@ class MOTEvaluator:
         gt_ids: np.ndarray
     ) -> None:
         """
-        添加单帧的跟踪结果和真实标注
+        添加单帧的跟踪results和真实标注
         
         Args:
             frame_id: 帧ID
@@ -93,10 +93,10 @@ class MOTEvaluator:
     
     def compute_metrics(self) -> Dict[str, float]:
         """
-        计算所有MOT评估指标
+        计算所有MOTevaluatemetrics
         
         Returns:
-            包含各项指标的字典
+            包含各项metrics的字典
         """
         # 重置累积统计量
         self.num_gt = 0
@@ -118,7 +118,7 @@ class MOTEvaluator:
         for frame_id in frame_ids:
             self._process_frame(frame_id)
         
-        # 计算最终指标
+        # 计算最终metrics
         metrics = {}
         
         # MOTA (Multiple Object Tracking Accuracy)
@@ -291,7 +291,7 @@ class MOTEvaluator:
     
     def save_results(self, filepath: str) -> None:
         """
-        保存评估结果
+        保存evaluateresults
         
         Args:
             filepath: 保存路径
@@ -303,14 +303,14 @@ class MOTEvaluator:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
-        print(f"MOT评估结果已保存到: {filepath}")
+        print(f"MOTevaluateresults已保存到: {filepath}")
     
     def print_results(self) -> None:
-        """打印评估结果"""
+        """打印evaluateresults"""
         results = self.compute_metrics()
         
         print("\n" + "=" * 50)
-        print("多目标跟踪评估结果")
+        print("多目标跟踪evaluateresults")
         print("=" * 50)
         print(f"帧数: {results['num_frames']}")
         print(f"真实目标数: {results['num_gt']}")
@@ -338,27 +338,27 @@ def evaluate_tracker(
     iou_threshold: float = 0.5
 ) -> Dict[str, float]:
     """
-    评估跟踪器
+    evaluatetracker
     
     Args:
-        tracker: 跟踪器实例
-        frames: 帧图像列表
-        detections: 检测结果列表，每个元素形状为 (N, 4)
+        tracker: tracker实例
+        frames: 帧image_list
+        detections: 检测results列表，每个元素形状为 (N, 4)
         ground_truths: 真实标注列表，每个元素包含 'boxes' 和 'ids'
         iou_threshold: IoU阈值
         
     Returns:
-        评估结果字典
+        evaluateresults字典
     """
     evaluator = MOTEvaluator(iou_threshold=iou_threshold)
     
     tracker.reset()
     
     for frame_id, (frame, dets, gt) in enumerate(zip(frames, detections, ground_truths)):
-        # 运行跟踪器
+        # runtracker
         result = tracker.update(dets)
         
-        # 获取跟踪结果
+        # 获取跟踪results
         pred_boxes = result.get_boxes()
         pred_ids = result.get_ids()
         
@@ -366,7 +366,7 @@ def evaluate_tracker(
         gt_boxes = np.array(gt['boxes'])
         gt_ids = np.array(gt['ids'])
         
-        # 添加到评估器
+        # 添加到evaluate器
         evaluator.add_frame(frame_id, pred_boxes, pred_ids, gt_boxes, gt_ids)
     
     return evaluator.compute_metrics()
@@ -380,22 +380,22 @@ def compare_trackers(
     iou_threshold: float = 0.5
 ) -> Dict[str, Dict[str, float]]:
     """
-    对比多个跟踪器
+    对比多个tracker
     
     Args:
-        trackers: 跟踪器字典 {名称: 跟踪器实例}
-        frames: 帧图像列表
-        detections: 检测结果列表
+        trackers: tracker字典 {name: tracker实例}
+        frames: 帧image_list
+        detections: 检测results列表
         ground_truths: 真实标注列表
         iou_threshold: IoU阈值
         
     Returns:
-        各跟踪器的评估结果字典
+        各tracker的evaluateresults字典
     """
     results = {}
     
     for name, tracker in trackers.items():
-        print(f"评估跟踪器: {name}")
+        print(f"evaluatetracker: {name}")
         metrics = evaluate_tracker(
             tracker, frames, detections, ground_truths, iou_threshold
         )
@@ -407,15 +407,15 @@ def compare_trackers(
 
 def print_comparison_table(results: Dict[str, Dict[str, float]]) -> None:
     """
-    打印跟踪器对比表格
+    打印tracker对比表格
     
     Args:
-        results: 各跟踪器的评估结果
+        results: 各tracker的evaluateresults
     """
     metrics = ['MOTA', 'MOTP', 'IDF1', 'Precision', 'Recall', 'F1', 'num_switches']
     
     print("\n" + "=" * 80)
-    print("跟踪器性能对比")
+    print("tracker性能对比")
     print("=" * 80)
     
     # 打印表头
@@ -425,7 +425,7 @@ def print_comparison_table(results: Dict[str, Dict[str, float]]) -> None:
     print(header)
     print("-" * 80)
     
-    # 打印各跟踪器结果
+    # 打印各trackerresults
     for name, result in results.items():
         row = f"{name:<20}"
         for metric in metrics:

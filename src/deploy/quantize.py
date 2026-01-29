@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-模型量化模块
+model量化模块
 
-提供INT8量化功能，用于模型压缩和加速
+提供INT8量化功能，用于model压缩和加速
 """
 
 import os
@@ -15,12 +15,12 @@ class QuantizationCalibrator:
     """
     量化校准器
     
-    收集校准数据并计算量化参数
+    收集校准data并计算量化参数
     
     Attributes:
-        num_samples: 校准样本数量
+        num_samples: 校准样本count
         percentile: 百分位数（用于确定量化范围）
-        data_collector: 数据收集列表
+        data_collector: data收集列表
     """
     
     def __init__(self, num_samples: int = 100, percentile: float = 99.99):
@@ -28,7 +28,7 @@ class QuantizationCalibrator:
         初始化量化校准器
         
         Args:
-            num_samples: 校准样本数量
+            num_samples: 校准样本count
             percentile: 百分位数，用于计算量化范围
         """
         self.num_samples = num_samples
@@ -37,10 +37,10 @@ class QuantizationCalibrator:
     
     def collect(self, data: np.ndarray) -> None:
         """
-        收集校准数据
+        收集校准data
         
         Args:
-            data: 输入数据
+            data: inputdata
         """
         if len(self.data_collector) < self.num_samples:
             self.data_collector.append(data.copy())
@@ -58,7 +58,7 @@ class QuantizationCalibrator:
         if len(self.data_collector) == 0:
             return 1.0, 0
         
-        # 合并所有收集的数据
+        # 合并所有收集的data
         all_data = np.concatenate([d.flatten() for d in self.data_collector])
         
         # 计算范围
@@ -92,7 +92,7 @@ def compute_quantization_params(
     计算量化参数
     
     Args:
-        data: 输入数据
+        data: inputdata
         bits: 量化位数
         symmetric: 是否使用对称量化
         percentile: 百分位数
@@ -131,7 +131,7 @@ def quantize_tensor(
     量化张量
     
     Args:
-        tensor: 输入张量
+        tensor: input张量
         scale: 缩放因子
         zero_point: 零点
         bits: 量化位数
@@ -180,7 +180,7 @@ def evaluate_quantization_error(
     zero_point: int = 0
 ) -> Dict[str, float]:
     """
-    评估量化误差
+    evaluate量化误差
     
     Args:
         original: 原始张量
@@ -189,7 +189,7 @@ def evaluate_quantization_error(
         zero_point: 零点
         
     Returns:
-        误差指标字典
+        误差metrics字典
     """
     # 反量化
     reconstructed = dequantize_tensor(quantized, scale, zero_point)
@@ -209,9 +209,9 @@ def evaluate_quantization_error(
 
 class ModelQuantizer:
     """
-    模型量化器
+    model量化器
     
-    提供模型量化功能
+    提供model量化功能
     
     Attributes:
         calibrator: 量化校准器
@@ -227,7 +227,7 @@ class ModelQuantizer:
         percentile: float = 99.99
     ):
         """
-        初始化模型量化器
+        初始化model量化器
         
         Args:
             bits: 量化位数
@@ -245,7 +245,7 @@ class ModelQuantizer:
         添加校准钩子
         
         Args:
-            layer_name: 层名称
+            layer_name: 层name
             
         Returns:
             校准钩子函数
@@ -277,7 +277,7 @@ class ModelQuantizer:
         
         Args:
             weights: 权重张量
-            layer_name: 层名称
+            layer_name: 层name
             
         Returns:
             (量化后的权重, scale, zero_point)
@@ -342,18 +342,18 @@ def quantize_onnx_model(
     quantization_type: str = 'int8'
 ) -> str:
     """
-    量化ONNX模型
+    量化ONNXmodel
     
     使用ONNX Runtime的量化工具
     
     Args:
-        input_path: 输入ONNX模型路径
-        output_path: 输出量化模型路径
-        calibration_data: 校准数据列表
+        input_path: inputONNXmodel路径
+        output_path: output量化model路径
+        calibration_data: 校准data列表
         quantization_type: 量化类型 ('int8', 'uint8')
         
     Returns:
-        量化后的模型路径
+        量化后的model路径
     """
     try:
         from onnxruntime.quantization import quantize_dynamic, quantize_static, CalibrationDataReader
@@ -389,5 +389,5 @@ def quantize_onnx_model(
             reader
         )
     
-    print(f"量化模型已保存到: {output_path}")
+    print(f"量化model已保存到: {output_path}")
     return output_path

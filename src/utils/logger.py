@@ -1,7 +1,7 @@
 """
 日志工具模块
 
-提供统一的日志管理功能，包括日志管理器、训练日志记录器和进度条等工具。
+提供统一的日志管理功能，包括日志管理器、训练日志记录器和progress_bar等工具。
 """
 
 import json
@@ -17,7 +17,7 @@ class LogManager:
     """
     日志管理器（单例模式）
     
-    提供统一的日志记录接口，支持控制台和文件输出。
+    提供统一的日志记录接口，支持控制台和文件output。
     使用线程锁确保多线程安全。
     """
     
@@ -46,11 +46,11 @@ class LogManager:
         初始化日志管理器
         
         Args:
-            name: 日志器名称
+            name: 日志器name
             log_dir: 日志文件保存目录
             level: 日志级别
-            console_output: 是否输出到控制台
-            file_output: 是否输出到文件
+            console_output: 是否output到控制台
+            file_output: 是否output到文件
         """
         # 避免重复初始化
         if LogManager._initialized:
@@ -71,14 +71,14 @@ class LogManager:
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         
-        # 控制台输出
+        # 控制台output
         if console_output:
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setLevel(level)
             console_handler.setFormatter(formatter)
             self.logger.addHandler(console_handler)
         
-        # 文件输出
+        # 文件output
         if file_output and log_dir is not None:
             os.makedirs(log_dir, exist_ok=True)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -171,7 +171,7 @@ class TrainingLogger:
     """
     训练日志记录器
     
-    专门用于记录模型训练过程中的损失、指标等信息。
+    专门用于记录model训练过程中的loss、metrics等信息。
     """
     
     def __init__(
@@ -184,12 +184,12 @@ class TrainingLogger:
         
         Args:
             log_dir: 日志保存目录
-            experiment_name: 实验名称
+            experiment_name: experiment_name
         """
         self.log_dir = log_dir
         self.experiment_name = experiment_name
         
-        # 创建日志目录
+        # 创建log_dir
         os.makedirs(log_dir, exist_ok=True)
         
         # 初始化记录
@@ -207,7 +207,7 @@ class TrainingLogger:
         self.epoch_losses = {}
         self.epoch_metrics = {}
         
-        # 最佳指标跟踪
+        # 最佳metrics跟踪
         self.best_metrics = {}
     
     def start_epoch(self, epoch: int, learning_rate: Optional[float] = None):
@@ -234,11 +234,11 @@ class TrainingLogger:
     
     def log_loss(self, loss_name: str, loss_value: float, step: Optional[int] = None):
         """
-        记录损失值
+        记录loss值
         
         Args:
-            loss_name: 损失名称
-            loss_value: 损失值
+            loss_name: lossname
+            loss_value: loss值
             step: 当前步数，可选
         """
         if loss_name not in self.epoch_losses:
@@ -251,19 +251,19 @@ class TrainingLogger:
     
     def log_metric(self, metric_name: str, metric_value: float, higher_is_better: bool = True):
         """
-        记录评估指标
+        记录evaluatemetrics
         
         Args:
-            metric_name: 指标名称
-            metric_value: 指标值
-            higher_is_better: 指标是否越大越好（如loss应设为False）
+            metric_name: metricsname
+            metric_value: metrics值
+            higher_is_better: metrics是否越大越好（如loss应设为False）
         """
         self.epoch_metrics[metric_name] = metric_value
         
         if metric_name not in self.history['metrics']:
             self.history['metrics'][metric_name] = []
         
-        # 更新最佳指标
+        # 更新最佳metrics
         if metric_name not in self.best_metrics:
             self.best_metrics[metric_name] = {
                 'value': metric_value,
@@ -271,7 +271,7 @@ class TrainingLogger:
                 'higher_is_better': higher_is_better
             }
         else:
-            # 根据指标类型判断是否更新最佳值
+            # 根据metrics类型判断是否更新最佳值
             is_better = higher_is_better == self.best_metrics[metric_name].get('higher_is_better', True)
             current_best = self.best_metrics[metric_name]['value']
             
@@ -289,7 +289,7 @@ class TrainingLogger:
     
     def end_epoch(self):
         """
-        结束当前epoch，汇总并保存统计信息
+        结束当前epoch，汇总并保存statistics
         """
         # 计算epoch用时
         epoch_time = time.time() - self.epoch_start_time if self.epoch_start_time else 0
@@ -298,17 +298,17 @@ class TrainingLogger:
         self.history['epochs'].append(self.current_epoch)
         self.history['timestamps'].append(datetime.now().isoformat())
         
-        # 汇总损失（取平均值）
+        # 汇总loss（取平均值）
         print(f"\nEpoch {self.current_epoch} 结束 (用时: {epoch_time:.2f}s)")
         print("-" * 40)
-        print("损失:")
+        print("loss:")
         for loss_name, loss_values in self.epoch_losses.items():
             avg_loss = sum(loss_values) / len(loss_values) if loss_values else 0
             self.history['losses'][loss_name].append(avg_loss)
             print(f"  {loss_name}: {avg_loss:.6f}")
         
-        # 记录指标
-        print("指标:")
+        # 记录metrics
+        print("metrics:")
         for metric_name, metric_value in self.epoch_metrics.items():
             self.history['metrics'][metric_name].append(metric_value)
             is_best = ""
@@ -362,10 +362,10 @@ class TrainingLogger:
     
     def get_best_metric(self, metric_name: str) -> Optional[Dict[str, Any]]:
         """
-        获取指定指标的最佳值
+        获取指定metrics的最佳值
         
         Args:
-            metric_name: 指标名称
+            metric_name: metricsname
         
         Returns:
             包含最佳值和对应epoch的字典，如果不存在则返回None
@@ -374,13 +374,13 @@ class TrainingLogger:
     
     def get_last_loss(self, loss_name: str) -> Optional[float]:
         """
-        获取指定损失的最新值
+        获取指定loss的最新值
         
         Args:
-            loss_name: 损失名称
+            loss_name: lossname
         
         Returns:
-            最新的损失值，如果不存在则返回None
+            最新的loss值，如果不存在则返回None
         """
         if loss_name in self.history['losses'] and self.history['losses'][loss_name]:
             return self.history['losses'][loss_name][-1]
@@ -389,9 +389,9 @@ class TrainingLogger:
 
 class ProgressBar:
     """
-    进度条
+    progress_bar
     
-    提供命令行进度显示功能。
+    提供command行进度显示功能。
     """
     
     def __init__(
@@ -405,14 +405,14 @@ class ProgressBar:
         empty: str = '-'
     ):
         """
-        初始化进度条
+        初始化progress_bar
         
         Args:
             total: 总步数
             prefix: 前缀文本
-            suffix: 后缀文本
+            suffix: suffix文本
             decimals: 百分比小数位数
-            length: 进度条字符长度
+            length: progress_bar字符长度
             fill: 已完成部分的填充字符
             empty: 未完成部分的填充字符
         """
@@ -429,11 +429,11 @@ class ProgressBar:
     
     def update(self, current: Optional[int] = None, suffix: Optional[str] = None):
         """
-        更新进度条
+        更新progress_bar
         
         Args:
             current: 当前步数，如果为None则自动加1
-            suffix: 后缀文本更新
+            suffix: suffix文本更新
         """
         if current is not None:
             self.current = current
@@ -456,13 +456,13 @@ class ProgressBar:
         else:
             eta_str = '--:--'
         
-        # 打印进度条
+        # 打印progress_bar
         sys.stdout.write(f'\r{self.prefix} |{bar}| {percent:.{self.decimals}f}% ETA: {eta_str} {self.suffix}')
         sys.stdout.flush()
     
     def finish(self, message: Optional[str] = None):
         """
-        完成进度条
+        完成progress_bar
         
         Args:
             message: 完成消息
@@ -516,11 +516,11 @@ def init_logger(
     初始化全局日志管理器
     
     Args:
-        name: 日志器名称
+        name: 日志器name
         log_dir: 日志文件保存目录
         level: 日志级别
-        console_output: 是否输出到控制台
-        file_output: 是否输出到文件
+        console_output: 是否output到控制台
+        file_output: 是否output到文件
     
     Returns:
         日志管理器实例
@@ -546,7 +546,7 @@ def get_logger() -> LogManager:
     """
     获取全局日志管理器实例
     
-    如果尚未初始化，则使用默认配置初始化
+    如果尚未初始化，则使用默认config初始化
     
     Returns:
         日志管理器实例

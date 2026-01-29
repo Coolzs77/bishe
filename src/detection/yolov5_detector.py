@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-YOLOv5检测器模块
+YOLOv5detector模块
 
-实现基于YOLOv5的目标检测，支持PyTorch、ONNX和RKNN模型格式
+实现基于YOLOv5的目标检测，支持PyTorch、ONNX和RKNNmodel格式
 """
 
 import os
@@ -15,22 +15,22 @@ from .detector import BaseDetector, DetectionResult
 
 class YOLOv5Detector(BaseDetector):
     """
-    YOLOv5目标检测器
+    YOLOv5目标detector
     
-    支持多种模型格式：
+    支持多种model格式：
     - PyTorch (.pt)
     - ONNX (.onnx)
-    - RKNN (.rknn)
+    - RKNN (.rknn_obj)
     
     Attributes:
-        input_size: 模型输入尺寸 (width, height)
-        model_type: 模型类型 ('pytorch', 'onnx', 'rknn')
-        half: 是否使用半精度推理
-        onnx_session: ONNX推理会话
-        rknn_runtime: RKNN运行时对象
+        input_size: modelinput尺寸 (width, height)
+        model_type: model类型 ('pytorch', 'onnx', 'rknn_obj')
+        half: 是否使用半精度inference
+        onnx_session: ONNXinference会话
+        rknn_obj_runtime: RKNNrun时对象
     """
     
-    # 默认类别名称（可根据实际数据集修改）
+    # 默认classesname（可根据实际data集修改）
     DEFAULT_CLASS_NAMES = ['person', 'vehicle', 'animal']
     
     def __init__(
@@ -44,18 +44,18 @@ class YOLOv5Detector(BaseDetector):
         half: bool = False
     ):
         """
-        初始化YOLOv5检测器
+        初始化YOLOv5detector
         
         Args:
-            model_path: 模型文件路径
-            class_names: 类别名称列表
-            input_size: 输入尺寸 (width, height)，默认 (640, 640)
-            conf_threshold: 置信度阈值，默认0.25
+            model_path: model文件路径
+            class_names: classesname列表
+            input_size: input尺寸 (width, height)，默认 (640, 640)
+            conf_threshold: confidence阈值，默认0.25
             nms_threshold: NMS阈值，默认0.45
-            device: 运行设备，默认'cpu'
+            device: run设备，默认'cpu'
             half: 是否使用半精度，默认False
         """
-        # 如果未指定类别名称，使用默认类别
+        # 如果未指定classesname，使用默认classes
         if class_names is None:
             class_names = self.DEFAULT_CLASS_NAMES
         
@@ -73,17 +73,17 @@ class YOLOv5Detector(BaseDetector):
         
         # 不同后端的特定属性
         self.onnx_session = None
-        self.rknn_runtime = None
+        self.rknn_obj_runtime = None
         
         # 是否已预热
         self._warmed_up = False
     
     def _determine_model_type(self) -> str:
         """
-        根据文件扩展名确定模型类型
+        根据文件extension确定model类型
         
         Returns:
-            模型类型字符串：'pytorch', 'onnx', 或 'rknn'
+            model类型字符串：'pytorch', 'onnx', 或 'rknn_obj'
         """
         ext = os.path.splitext(self.model_path)[1].lower()
         
@@ -91,32 +91,32 @@ class YOLOv5Detector(BaseDetector):
             return 'pytorch'
         elif ext == '.onnx':
             return 'onnx'
-        elif ext == '.rknn':
-            return 'rknn'
+        elif ext == '.rknn_obj':
+            return 'rknn_obj'
         else:
-            raise ValueError(f"不支持的模型格式: {ext}，支持的格式: .pt, .onnx, .rknn")
+            raise ValueError(f"不支持的model格式: {ext}，支持的格式: .pt, .onnx, .rknn_obj")
     
     def load_model(self) -> None:
         """
-        加载模型
+        load_model
         
-        根据模型类型调用相应的加载方法
+        根据model类型调用相应的加载方法
         """
         if self.model_type == 'pytorch':
             self._load_pytorch_model()
         elif self.model_type == 'onnx':
             self._load_onnx_model()
-        elif self.model_type == 'rknn':
-            self._load_rknn_model()
+        elif self.model_type == 'rknn_obj':
+            self._load_rknn_obj_model()
     
     def _load_pytorch_model(self) -> None:
-        """加载PyTorch模型"""
+        """加载PyTorchmodel"""
         try:
             import torch
         except ImportError:
-            raise ImportError("PyTorch未安装，请运行: pip install torch")
+            raise ImportError("PyTorch未安装，请run: pip install torch")
         
-        # 加载模型
+        # load_model
         self.model = torch.hub.load(
             'ultralytics/yolov5', 
             'custom', 
@@ -125,7 +125,7 @@ class YOLOv5Detector(BaseDetector):
             force_reload=False
         )
         
-        # 设置模型参数
+        # 设置model参数
         self.model.conf = self.conf_threshold
         self.model.iou = self.nms_threshold
         
@@ -133,15 +133,15 @@ class YOLOv5Detector(BaseDetector):
         if self.half and self.device != 'cpu':
             self.model.half()
         
-        # 设置为评估模式
+        # 设置为evaluate模式
         self.model.eval()
     
     def _load_onnx_model(self) -> None:
-        """加载ONNX模型"""
+        """加载ONNXmodel"""
         try:
             import onnxruntime as ort
         except ImportError:
-            raise ImportError("ONNX Runtime未安装，请运行: pip install onnxruntime")
+            raise ImportError("ONNX Runtime未安装，请run: pip install onnxruntime")
         
         # 选择执行提供者
         providers = ['CPUExecutionProvider']
@@ -149,7 +149,7 @@ class YOLOv5Detector(BaseDetector):
             if 'CUDAExecutionProvider' in ort.get_available_providers():
                 providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         
-        # 创建推理会话
+        # 创建inference会话
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         
@@ -159,50 +159,50 @@ class YOLOv5Detector(BaseDetector):
             providers=providers
         )
         
-        # 获取输入输出信息
+        # 获取inputoutput信息
         self.input_name = self.onnx_session.get_inputs()[0].name
         self.output_names = [o.name for o in self.onnx_session.get_outputs()]
         
-        # 模型对象引用ONNX会话
+        # model对象引用ONNX会话
         self.model = self.onnx_session
     
-    def _load_rknn_model(self) -> None:
-        """加载RKNN模型"""
+    def _load_rknn_obj_model(self) -> None:
+        """加载RKNNmodel"""
         try:
-            from rknnlite.api import RKNNLite
+            from rknn_objlite.api import RKNNLite
         except ImportError:
             try:
-                from rknn.api import RKNN as RKNNLite
+                from rknn_obj.api import RKNN as RKNNLite
             except ImportError:
-                raise ImportError("RKNN未安装，请安装rknn-toolkit或rknnlite")
+                raise ImportError("RKNN未安装，请安装rknn_obj-toolkit或rknn_objlite")
         
-        # 创建RKNN运行时
-        self.rknn_runtime = RKNNLite()
+        # 创建RKNNrun时
+        self.rknn_obj_runtime = RKNNLite()
         
-        # 加载RKNN模型
-        ret = self.rknn_runtime.load_rknn(self.model_path)
+        # 加载RKNNmodel
+        ret = self.rknn_obj_runtime.load_rknn_obj(self.model_path)
         if ret != 0:
-            raise RuntimeError(f"加载RKNN模型失败，错误码: {ret}")
+            raise RuntimeError(f"加载RKNNmodel失败，错误码: {ret}")
         
-        # 初始化运行时环境
-        ret = self.rknn_runtime.init_runtime()
+        # 初始化run时环境
+        ret = self.rknn_obj_runtime.init_runtime()
         if ret != 0:
-            raise RuntimeError(f"初始化RKNN运行时失败，错误码: {ret}")
+            raise RuntimeError(f"初始化RKNNrun时失败，错误码: {ret}")
         
-        # 模型对象引用RKNN运行时
-        self.model = self.rknn_runtime
+        # model对象引用RKNNrun时
+        self.model = self.rknn_obj_runtime
     
     def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
-        图像预处理
+        image预处理
         
         使用letterbox缩放，保持宽高比并用灰色填充
         
         Args:
-            image: 输入图像，BGR格式，形状为 (H, W, C)
+            image: inputimage，BGR格式，形状为 (H, W, C)
             
         Returns:
-            预处理后的图像和预处理信息字典（包含scale和padding信息）
+            预处理后的image和预处理信息字典（包含scale和padding信息）
         """
         img, preprocess_info = self._letterbox(
             image, 
@@ -242,10 +242,10 @@ class YOLOv5Detector(BaseDetector):
         """
         Letterbox缩放
         
-        将图像缩放到指定尺寸，保持宽高比，用指定颜色填充
+        将image缩放到指定尺寸，保持宽高比，用指定颜色填充
         
         Args:
-            img: 输入图像
+            img: inputimage
             new_shape: 目标尺寸 (width, height)
             color: 填充颜色
             auto: 是否自动计算最小padding
@@ -254,7 +254,7 @@ class YOLOv5Detector(BaseDetector):
             stride: 对齐步长
             
         Returns:
-            缩放后的图像和预处理信息
+            缩放后的image和预处理信息
         """
         shape = img.shape[:2]  # 当前形状 [height, width]
         
@@ -283,7 +283,7 @@ class YOLOv5Detector(BaseDetector):
         dw /= 2
         dh /= 2
         
-        # 缩放图像
+        # 缩放image
         if shape[::-1] != new_unpad:
             import cv2
             img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
@@ -311,38 +311,38 @@ class YOLOv5Detector(BaseDetector):
     
     def inference(self, input_tensor: np.ndarray) -> np.ndarray:
         """
-        模型推理
+        modelinference
         
         Args:
-            input_tensor: 预处理后的输入张量，形状为 (1, 3, H, W)
+            input_tensor: 预处理后的input张量，形状为 (1, 3, H, W)
             
         Returns:
-            模型输出
+            modeloutput
         """
         if self.model_type == 'pytorch':
             return self._inference_pytorch(input_tensor)
         elif self.model_type == 'onnx':
             return self._inference_onnx(input_tensor)
-        elif self.model_type == 'rknn':
-            return self._inference_rknn(input_tensor)
+        elif self.model_type == 'rknn_obj':
+            return self._inference_rknn_obj(input_tensor)
     
     def _inference_pytorch(self, input_tensor: np.ndarray) -> np.ndarray:
-        """PyTorch推理"""
+        """PyTorchinference"""
         import torch
         
         with torch.no_grad():
-            # 转换为PyTorch张量
+            # convert为PyTorch张量
             x = torch.from_numpy(input_tensor).to(self.device)
             
             if self.half:
                 x = x.half()
             
-            # 推理
+            # inference
             pred = self.model(x)
             
-            # 转换为numpy
+            # convert为numpy
             if hasattr(pred, 'pred'):
-                # YOLOv5 hub模型输出格式
+                # YOLOv5 hubmodeloutput格式
                 output = pred.pred[0].cpu().numpy()
             else:
                 output = pred[0].cpu().numpy()
@@ -350,22 +350,22 @@ class YOLOv5Detector(BaseDetector):
         return output
     
     def _inference_onnx(self, input_tensor: np.ndarray) -> np.ndarray:
-        """ONNX推理"""
+        """ONNXinference"""
         outputs = self.onnx_session.run(
             self.output_names,
             {self.input_name: input_tensor}
         )
         return outputs[0]
     
-    def _inference_rknn(self, input_tensor: np.ndarray) -> np.ndarray:
-        """RKNN推理"""
+    def _inference_rknn_obj(self, input_tensor: np.ndarray) -> np.ndarray:
+        """RKNNinference"""
         # RKNN需要NHWC格式
         input_tensor = input_tensor.transpose(0, 2, 3, 1)
         
-        # 转换为uint8（RKNN通常使用量化模型）
+        # convert为uint8（RKNN通常使用量化model）
         input_tensor = (input_tensor * 255).astype(np.uint8)
         
-        outputs = self.rknn_runtime.inference(inputs=[input_tensor])
+        outputs = self.rknn_obj_runtime.inference(inputs=[input_tensor])
         return outputs[0]
     
     def postprocess(
@@ -375,24 +375,24 @@ class YOLOv5Detector(BaseDetector):
         preprocess_info: Optional[Dict[str, Any]] = None
     ) -> DetectionResult:
         """
-        后处理
+        postprocess
         
-        包括置信度过滤、NMS和坐标映射
+        包括confidence过滤、NMS和坐标映射
         
         Args:
-            output: 模型输出
-            orig_size: 原始图像尺寸 (height, width)
+            output: modeloutput
+            orig_size: 原始img_size (height, width)
             preprocess_info: 预处理信息字典
             
         Returns:
-            检测结果
+            检测results
         """
-        # 确保输出是2D数组
+        # 确保output是2D数组
         if output.ndim == 3:
             output = output[0]
         
-        # 过滤低置信度检测
-        # YOLOv5输出格式: [x, y, w, h, obj_conf, cls1_conf, cls2_conf, ...]
+        # 过滤低confidence检测
+        # YOLOv5output格式: [x, y, w, h, obj_conf, cls1_conf, cls2_conf, ...]
         obj_conf = output[:, 4]
         mask = obj_conf >= self.conf_threshold
         output = output[mask]
@@ -400,7 +400,7 @@ class YOLOv5Detector(BaseDetector):
         if len(output) == 0:
             return DetectionResult(class_names=self.class_names)
         
-        # 计算类别置信度
+        # 计算classesconfidence
         class_scores = output[:, 5:] * output[:, 4:5]
         class_ids = np.argmax(class_scores, axis=1)
         confidences = np.max(class_scores, axis=1)
@@ -414,14 +414,14 @@ class YOLOv5Detector(BaseDetector):
         if len(output) == 0:
             return DetectionResult(class_names=self.class_names)
         
-        # 转换坐标格式: xywh -> xyxy
+        # convert坐标格式: xywh -> xyxy
         boxes = self._xywh2xyxy(output[:, :4])
         
         # 映射坐标回原始尺寸
         if preprocess_info is not None:
             boxes = self._scale_coords(boxes, preprocess_info, orig_size)
         
-        # 类别分组NMS
+        # classes分组NMS
         keep_indices = self._batched_nms(
             boxes, confidences, class_ids, self.nms_threshold
         )
@@ -439,13 +439,13 @@ class YOLOv5Detector(BaseDetector):
     
     def _xywh2xyxy(self, x: np.ndarray) -> np.ndarray:
         """
-        坐标格式转换: xywh -> xyxy
+        坐标格式convert: xywh -> xyxy
         
         Args:
-            x: 输入坐标，形状为 (N, 4)，格式为 [cx, cy, w, h]
+            x: input坐标，形状为 (N, 4)，格式为 [cx, cy, w, h]
             
         Returns:
-            转换后的坐标，格式为 [x1, y1, x2, y2]
+            convert后的坐标，格式为 [x1, y1, x2, y2]
         """
         y = np.zeros_like(x)
         y[:, 0] = x[:, 0] - x[:, 2] / 2  # x1
@@ -461,7 +461,7 @@ class YOLOv5Detector(BaseDetector):
         orig_size: Tuple[int, int]
     ) -> np.ndarray:
         """
-        将坐标从模型输入尺寸映射回原始图像尺寸
+        将坐标从modelinput尺寸映射回原始img_size
         
         Args:
             boxes: 边界框坐标
@@ -483,7 +483,7 @@ class YOLOv5Detector(BaseDetector):
         # 除以缩放比例
         boxes /= scale
         
-        # 裁剪到图像边界
+        # 裁剪到image边界
         boxes[:, 0] = np.clip(boxes[:, 0], 0, orig_size[1])  # x1
         boxes[:, 1] = np.clip(boxes[:, 1], 0, orig_size[0])  # y1
         boxes[:, 2] = np.clip(boxes[:, 2], 0, orig_size[1])  # x2
@@ -499,12 +499,12 @@ class YOLOv5Detector(BaseDetector):
         iou_threshold: float
     ) -> np.ndarray:
         """
-        按类别分组的NMS
+        按classes分组的NMS
         
         Args:
             boxes: 边界框
-            scores: 置信度
-            class_ids: 类别ID
+            scores: confidence
+            class_ids: classesID
             iou_threshold: IoU阈值
             
         Returns:
@@ -513,7 +513,7 @@ class YOLOv5Detector(BaseDetector):
         if len(boxes) == 0:
             return np.array([], dtype=np.int64)
         
-        # 为每个类别分别执行NMS
+        # 为每个classes分别执行NMS
         unique_classes = np.unique(class_ids)
         keep_indices = []
         
@@ -531,9 +531,9 @@ class YOLOv5Detector(BaseDetector):
     
     def warmup(self, iterations: int = 3) -> None:
         """
-        模型预热
+        model预热
         
-        通过运行几次推理来预热模型，提高后续推理速度
+        通过run几次inference来预热model，提高后续inference速度
         
         Args:
             iterations: 预热迭代次数，默认3次
@@ -541,13 +541,13 @@ class YOLOv5Detector(BaseDetector):
         if self.model is None:
             self.load_model()
         
-        # 创建虚拟输入
+        # 创建虚拟input
         dummy_input = np.zeros(
             (1, 3, self.input_size[1], self.input_size[0]),
             dtype=np.float32
         )
         
-        # 执行预热推理
+        # 执行预热inference
         for _ in range(iterations):
             _ = self.inference(dummy_input)
         
@@ -555,9 +555,9 @@ class YOLOv5Detector(BaseDetector):
     
     def __del__(self):
         """析构函数，释放资源"""
-        if self.rknn_runtime is not None:
+        if self.rknn_obj_runtime is not None:
             try:
-                self.rknn_runtime.release()
+                self.rknn_obj_runtime.release()
             except Exception:
                 pass
 
@@ -573,20 +573,20 @@ def create_yolov5_detector(
     warmup: bool = True
 ) -> YOLOv5Detector:
     """
-    创建YOLOv5检测器的工厂函数
+    创建YOLOv5detector的工厂函数
     
     Args:
-        model_path: 模型文件路径
-        class_names: 类别名称列表
-        input_size: 输入尺寸
-        conf_threshold: 置信度阈值
+        model_path: model文件路径
+        class_names: classesname列表
+        input_size: input尺寸
+        conf_threshold: confidence阈值
         nms_threshold: NMS阈值
-        device: 运行设备
+        device: run设备
         half: 是否使用半精度
-        warmup: 是否预热模型
+        warmup: 是否预热model
         
     Returns:
-        配置好的YOLOv5Detector实例
+        config好的YOLOv5Detector实例
     """
     detector = YOLOv5Detector(
         model_path=model_path,
@@ -598,7 +598,7 @@ def create_yolov5_detector(
         half=half
     )
     
-    # 加载模型
+    # load_model
     detector.load_model()
     
     # 预热

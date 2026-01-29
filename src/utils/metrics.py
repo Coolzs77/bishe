@@ -1,7 +1,7 @@
 """
-评估指标计算模块
+evaluatemetrics计算模块
 
-提供目标检测和多目标跟踪的各种评估指标计算功能，包括IoU、精确率、召回率、AP、mAP等。
+提供目标检测和多目标跟踪的各种evaluatemetrics计算功能，包括IoU、精确率、召回率、AP、mAP等。
 """
 
 import json
@@ -21,7 +21,7 @@ def compute_iou(box1: np.ndarray, box2: np.ndarray) -> float:
     Returns:
         IoU值，范围为 [0, 1]
     """
-    # 确保输入为numpy数组
+    # 确保input为numpy数组
     box1 = np.asarray(box1)
     box2 = np.asarray(box2)
     
@@ -65,7 +65,7 @@ def compute_batch_iou(boxes1: np.ndarray, boxes2: np.ndarray) -> np.ndarray:
     boxes1 = np.asarray(boxes1)
     boxes2 = np.asarray(boxes2)
     
-    # 处理空输入
+    # 处理空input
     if len(boxes1) == 0 or len(boxes2) == 0:
         return np.zeros((len(boxes1), len(boxes2)))
     
@@ -116,8 +116,8 @@ def compute_precision_recall(
     计算精确率和召回率曲线
     
     Args:
-        true_positives: 真正例数组，按置信度降序排列
-        false_positives: 假正例数组，按置信度降序排列
+        true_positives: 真正例数组，按confidence降序排列
+        false_positives: 假正例数组，按confidence降序排列
         num_gt: 真实目标总数
     
     Returns:
@@ -139,7 +139,7 @@ def compute_precision_recall(
 
 def compute_ap(precision: np.ndarray, recall: np.ndarray, use_07_metric: bool = False) -> float:
     """
-    计算单个类别的平均精度(AP)
+    计算单个classes的平均精度(AP)
     
     Args:
         precision: 精确率数组
@@ -187,19 +187,19 @@ def compute_map(
     num_classes: Optional[int] = None
 ) -> Tuple[float, Dict[int, float]]:
     """
-    计算所有类别的平均精度均值(mAP)
+    计算所有classes的平均精度均值(mAP)
     
     Args:
-        all_detections: 所有检测结果，格式为 {image_id: [{'bbox': [x1,y1,x2,y2], 'class_id': int, 'confidence': float}, ...]}
+        all_detections: 所有检测results，格式为 {image_id: [{'bbox': [x1,y1,x2,y2], 'class_id': int, 'confidence': float}, ...]}
         all_ground_truths: 所有真实标注，格式为 {image_id: [{'bbox': [x1,y1,x2,y2], 'class_id': int}, ...]}
         iou_threshold: IoU阈值，用于判断检测是否正确
-        num_classes: 类别数量，如果为None则自动推断
+        num_classes: classescount，如果为None则自动推断
     
     Returns:
-        mAP: 所有类别的平均精度均值
-        ap_per_class: 每个类别的AP字典
+        mAP: 所有classes的平均精度均值
+        ap_per_class: 每个classes的AP字典
     """
-    # 收集所有类别ID
+    # 收集所有classesID
     class_ids = set()
     for dets in all_detections.values():
         for det in dets:
@@ -214,7 +214,7 @@ def compute_map(
     ap_per_class = {}
     
     for class_id in class_ids:
-        # 收集该类别的所有检测和真实标注
+        # 收集该classes的所有检测和真实标注
         detections = []
         ground_truths = defaultdict(list)
         
@@ -235,7 +235,7 @@ def compute_map(
                         'used': False
                     })
         
-        # 按置信度降序排列
+        # 按confidence降序排列
         detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
         
         # 统计真实目标总数
@@ -294,14 +294,14 @@ def compute_map(
 
 class MOTMetricsCalculator:
     """
-    多目标跟踪(MOT)指标计算器
+    多目标跟踪(MOT)metrics计算器
     
-    支持计算MOTA、MOTP、IDF1等标准MOT评估指标
+    支持计算MOTA、MOTP、IDF1等标准MOTevaluatemetrics
     """
     
     def __init__(self, iou_threshold: float = 0.5):
         """
-        初始化MOT指标计算器
+        初始化MOTmetrics计算器
         
         Args:
             iou_threshold: IoU阈值，用于匹配预测和真实目标
@@ -316,7 +316,7 @@ class MOTMetricsCalculator:
         # 基础统计量
         self.num_gt = 0  # 真实目标总数
         self.num_pred = 0  # 预测目标总数
-        self.num_matches = 0  # 匹配成功数
+        self.num_matches = 0  # 匹配success数
         self.num_false_positives = 0  # 假正例数
         self.num_misses = 0  # 漏检数
         self.num_switches = 0  # ID切换数
@@ -446,10 +446,10 @@ class MOTMetricsCalculator:
     
     def compute_metrics(self) -> Dict[str, float]:
         """
-        计算所有MOT指标
+        计算所有MOTmetrics
         
         Returns:
-            包含各项指标的字典
+            包含各项metrics的字典
         """
         metrics = {}
         
@@ -513,14 +513,14 @@ class MOTMetricsCalculator:
 
 def save_metrics_to_json(metrics: Dict, filepath: str, indent: int = 2):
     """
-    将指标保存到JSON文件
+    将metrics保存到JSON文件
     
     Args:
-        metrics: 指标字典
+        metrics: metrics字典
         filepath: 保存路径
         indent: JSON缩进空格数
     """
-    # 将numpy类型转换为Python原生类型
+    # 将numpy类型convert为Python原生类型
     def convert_to_serializable(obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
@@ -542,13 +542,13 @@ def save_metrics_to_json(metrics: Dict, filepath: str, indent: int = 2):
 
 def load_metrics_from_json(filepath: str) -> Dict:
     """
-    从JSON文件加载指标
+    从JSON文件加载metrics
     
     Args:
         filepath: JSON文件路径
     
     Returns:
-        指标字典
+        metrics字典
     """
     with open(filepath, 'r', encoding='utf-8') as f:
         metrics = json.load(f)

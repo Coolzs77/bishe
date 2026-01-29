@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ONNX模型导出模块
+ONNXmodel导出模块
 
-提供将PyTorch模型导出为ONNX格式的功能
+提供将PyTorchmodel导出为ONNX格式的功能
 """
 
 import os
@@ -13,15 +13,15 @@ import numpy as np
 
 class ONNXExporter:
     """
-    ONNX模型导出器
+    ONNXModelExporter
     
-    将PyTorch模型导出为ONNX格式
+    将PyTorchmodel导出为ONNX格式
     
     Attributes:
-        model: PyTorch模型
-        input_size: 输入尺寸 (height, width)
-        opset_version: ONNX opset版本
-        dynamic_axes: 动态轴配置
+        model: PyTorchmodel
+        input_size: input尺寸 (height, width)
+        opset_version: ONNX opsetversion
+        dynamic_axes: 动态轴config
     """
     
     def __init__(
@@ -31,18 +31,18 @@ class ONNXExporter:
         dynamic_batch: bool = False
     ):
         """
-        初始化ONNX导出器
+        初始化ONNXexporter
         
         Args:
-            input_size: 输入尺寸 (height, width)
-            opset_version: ONNX opset版本
+            input_size: input尺寸 (height, width)
+            opset_version: ONNX opsetversion
             dynamic_batch: 是否使用动态batch维度
         """
         self.input_size = input_size
         self.opset_version = opset_version
         self.dynamic_batch = dynamic_batch
         
-        # 动态轴配置
+        # 动态轴config
         self.dynamic_axes = None
         if dynamic_batch:
             self.dynamic_axes = {
@@ -59,14 +59,14 @@ class ONNXExporter:
         simplify: bool = True
     ) -> str:
         """
-        导出模型为ONNX格式
+        导出model为ONNX格式
         
         Args:
-            model: PyTorch模型
-            output_path: 输出文件路径
-            input_names: 输入节点名称列表
-            output_names: 输出节点名称列表
-            simplify: 是否简化ONNX模型
+            model: PyTorchmodel
+            output_path: output文件路径
+            input_names: input节点name列表
+            output_names: output节点name列表
+            simplify: 是否simplify_onnxmodel
             
         Returns:
             导出的ONNX文件路径
@@ -74,22 +74,22 @@ class ONNXExporter:
         try:
             import torch
         except ImportError:
-            raise ImportError("PyTorch未安装，请运行: pip install torch")
+            raise ImportError("PyTorch未安装，请run: pip install torch")
         
-        # 确保模型在评估模式
+        # 确保model在evaluate模式
         model.eval()
         
-        # 创建虚拟输入
+        # 创建虚拟input
         dummy_input = torch.zeros(1, 3, self.input_size[0], self.input_size[1])
         
         # 获取设备
         device = next(model.parameters()).device
         dummy_input = dummy_input.to(device)
         
-        # 确保输出目录存在
+        # 确保output目录存在
         os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
         
-        # 导出ONNX
+        # export_onnx
         torch.onnx.export(
             model,
             dummy_input,
@@ -101,9 +101,9 @@ class ONNXExporter:
             do_constant_folding=True
         )
         
-        print(f"模型已导出到: {output_path}")
+        print(f"model已导出到: {output_path}")
         
-        # 简化模型
+        # 简化model
         if simplify:
             output_path = simplify_onnx_model(output_path, output_path)
         
@@ -119,15 +119,15 @@ def export_to_onnx(
     simplify: bool = True
 ) -> str:
     """
-    导出PyTorch模型为ONNX格式
+    导出PyTorchmodel为ONNX格式
     
     Args:
-        model: PyTorch模型
-        output_path: 输出文件路径
-        input_size: 输入尺寸 (height, width)
-        opset_version: ONNX opset版本
+        model: PyTorchmodel
+        output_path: output文件路径
+        input_size: input尺寸 (height, width)
+        opset_version: ONNX opsetversion
         dynamic_batch: 是否使用动态batch维度
-        simplify: 是否简化ONNX模型
+        simplify: 是否simplify_onnxmodel
         
     Returns:
         导出的ONNX文件路径
@@ -143,13 +143,13 @@ def export_to_onnx(
 
 def simplify_onnx_model(input_path: str, output_path: Optional[str] = None) -> str:
     """
-    简化ONNX模型
+    simplify_onnxmodel
     
-    使用onnx-simplifier简化模型，去除冗余操作
+    使用onnx-simplifier简化model，去除冗余操作
     
     Args:
-        input_path: 输入ONNX文件路径
-        output_path: 输出文件路径，如果为None则覆盖原文件
+        input_path: inputONNX文件路径
+        output_path: output文件路径，如果为None则覆盖原文件
         
     Returns:
         简化后的ONNX文件路径
@@ -164,28 +164,28 @@ def simplify_onnx_model(input_path: str, output_path: Optional[str] = None) -> s
     if output_path is None:
         output_path = input_path
     
-    # 加载模型
+    # load_model
     model = onnx.load(input_path)
     
-    # 简化模型
+    # 简化model
     model_simplified, check = simplify(model)
     
     if not check:
-        print("警告: 简化后的模型验证失败，使用原始模型")
+        print("警告: 简化后的model验证失败，使用原始model")
         return input_path
     
-    # 保存简化后的模型
+    # 保存简化后的model
     onnx.save(model_simplified, output_path)
-    print(f"简化后的模型已保存到: {output_path}")
+    print(f"简化后的model已保存到: {output_path}")
     
     return output_path
 
 
 def verify_onnx_model(model_path: str) -> bool:
     """
-    验证ONNX模型
+    verify_onnxmodel
     
-    检查ONNX模型的有效性
+    检查ONNXmodel的有效性
     
     Args:
         model_path: ONNX文件路径
@@ -196,16 +196,16 @@ def verify_onnx_model(model_path: str) -> bool:
     try:
         import onnx
     except ImportError:
-        print("onnx未安装，无法验证模型")
+        print("onnx未安装，无法验证model")
         return False
     
     try:
         model = onnx.load(model_path)
         onnx.checker.check_model(model)
-        print(f"模型验证通过: {model_path}")
+        print(f"model验证通过: {model_path}")
         return True
     except Exception as e:
-        print(f"模型验证失败: {e}")
+        print(f"model验证失败: {e}")
         return False
 
 
@@ -215,17 +215,17 @@ def test_onnx_inference(
     device: str = 'cpu'
 ) -> Tuple[bool, Optional[np.ndarray]]:
     """
-    测试ONNX模型推理
+    测试ONNXmodelinference
     
-    使用随机输入测试模型是否能正常运行
+    使用随机input测试model是否能正常run
     
     Args:
         model_path: ONNX文件路径
-        input_size: 输入尺寸 (height, width)
-        device: 运行设备
+        input_size: input尺寸 (height, width)
+        device: run设备
         
     Returns:
-        (是否成功, 输出结果)
+        (是否success, outputresults)
     """
     try:
         import onnxruntime as ort
@@ -239,37 +239,37 @@ def test_onnx_inference(
         if device != 'cpu' and 'CUDAExecutionProvider' in ort.get_available_providers():
             providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         
-        # 创建推理会话
+        # 创建inference会话
         session = ort.InferenceSession(model_path, providers=providers)
         
-        # 获取输入名称
+        # 获取inputname
         input_name = session.get_inputs()[0].name
         
-        # 创建随机输入
+        # 创建随机input
         dummy_input = np.random.randn(1, 3, input_size[0], input_size[1]).astype(np.float32)
         
-        # 运行推理
+        # runinference
         outputs = session.run(None, {input_name: dummy_input})
         
-        print(f"ONNX推理测试成功")
-        print(f"输出形状: {[o.shape for o in outputs]}")
+        print(f"ONNXinference测试success")
+        print(f"output形状: {[o.shape for o in outputs]}")
         
         return True, outputs[0]
         
     except Exception as e:
-        print(f"ONNX推理测试失败: {e}")
+        print(f"ONNXinference测试失败: {e}")
         return False, None
 
 
 def get_onnx_info(model_path: str) -> Dict[str, Any]:
     """
-    获取ONNX模型信息
+    获取ONNXmodel信息
     
     Args:
         model_path: ONNX文件路径
         
     Returns:
-        模型信息字典
+        model信息字典
     """
     try:
         import onnx
@@ -287,7 +287,7 @@ def get_onnx_info(model_path: str) -> Dict[str, Any]:
             'file_size_mb': os.path.getsize(model_path) / (1024 * 1024)
         }
         
-        # 输入信息
+        # input信息
         for inp in model.graph.input:
             shape = [d.dim_value for d in inp.type.tensor_type.shape.dim]
             info['inputs'].append({
@@ -295,7 +295,7 @@ def get_onnx_info(model_path: str) -> Dict[str, Any]:
                 'shape': shape
             })
         
-        # 输出信息
+        # output信息
         for out in model.graph.output:
             shape = [d.dim_value for d in out.type.tensor_type.shape.dim]
             info['outputs'].append({

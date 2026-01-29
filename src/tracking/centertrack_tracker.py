@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CenterTrack跟踪器模块
+CenterTracktracker模块
 
 实现基于中心点的多目标跟踪算法
 """
@@ -15,7 +15,7 @@ from .kalman_filter import KalmanBoxTracker
 
 class CenterTrack(BaseTracker):
     """
-    CenterTrack多目标跟踪器
+    CenterTrack多目标tracker
     
     基于目标中心点位移的跟踪算法
     
@@ -35,7 +35,7 @@ class CenterTrack(BaseTracker):
         pre_thresh: float = 0.3
     ):
         """
-        初始化CenterTrack跟踪器
+        初始化CenterTracktracker
         
         Args:
             max_age: 目标最大存活帧数
@@ -61,17 +61,17 @@ class CenterTrack(BaseTracker):
         offsets: Optional[np.ndarray] = None
     ) -> TrackingResult:
         """
-        更新跟踪器
+        更新tracker
         
         Args:
-            detections: 检测框数组，形状为 (N, 4)
-            confidences: 置信度数组
-            classes: 类别数组
+            detections: det_boxes数组，形状为 (N, 4)
+            confidences: confidence数组
+            classes: classes数组
             features: 特征数组（不使用）
             offsets: 中心点偏移量，形状为 (N, 2)
             
         Returns:
-            跟踪结果
+            跟踪results
         """
         self.frame_count += 1
         
@@ -131,7 +131,7 @@ class CenterTrack(BaseTracker):
         # 删除超时的跟踪目标
         self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
         
-        # 生成结果
+        # 生成results
         result_tracks = []
         for track in self.tracks:
             if track.hits >= self.min_hits or self.frame_count <= self.min_hits:
@@ -178,7 +178,7 @@ class CenterTrack(BaseTracker):
         基于中心点距离进行匹配
         
         Args:
-            detections: 检测框数组
+            detections: det_boxes数组
             current_centers: 当前检测的中心点
             predicted_centers: 预测的跟踪目标中心点
             prev_centers_from_offset: 从偏移量推断的前一帧位置
@@ -238,7 +238,7 @@ class CenterTrack(BaseTracker):
         return matched, unmatched_tracks, unmatched_dets
     
     def reset(self) -> None:
-        """重置跟踪器"""
+        """重置tracker"""
         super().reset()
         self.tracks = []
         self.prev_centers = {}
@@ -253,7 +253,7 @@ def create_centertrack_tracker(
     pre_thresh: float = 0.3
 ) -> CenterTrack:
     """
-    创建CenterTrack跟踪器
+    创建CenterTracktracker
     
     Args:
         max_age: 目标最大存活帧数
@@ -263,7 +263,7 @@ def create_centertrack_tracker(
         pre_thresh: 前一帧检测阈值
         
     Returns:
-        配置好的CenterTrack跟踪器
+        config好的CenterTracktracker
     """
     return CenterTrack(
         max_age=max_age,

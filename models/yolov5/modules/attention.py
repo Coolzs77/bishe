@@ -10,30 +10,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class SE注意力(nn.Module):
+class SEAttention(nn.Module):
     """
     Squeeze-and-Excitation注意力模块
     
     通过全局平均池化和全连接层学习通道间的依赖关系
     """
     
-    def __init__(self, 通道数: int, 缩减比例: int = 16):
+    def __init__(self, channels: int, reduction_ratio: int = 16):
         """
         初始化SE模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             缩减比例: 中间层通道缩减比例
         """
         super().__init__()
         
-        中间通道 = max(通道数 // 缩减比例, 8)
+        mid_channels = max(channels // reduction_ratio, 8)
         
-        self.全局池化 = nn.AdaptiveAvgPool2d(1)
-        self.全连接 = nn.Sequential(
-            nn.Linear(通道数, 中间通道, bias=False),
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, mid_channels, bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(中间通道, 通道数, bias=False),
+            nn.Linear(mid_channels, channels, bias=False),
             nn.Sigmoid()
         )
     
@@ -42,59 +42,59 @@ class SE注意力(nn.Module):
         b, c, _, _ = x.size()
         
         # 全局平均池化
-        y = self.全局池化(x).view(b, c)
+        y = self.global_pool(x).view(b, c)
         
         # 全连接层
-        y = self.全连接(y).view(b, c, 1, 1)
+        y = self.fc(y).view(b, c, 1, 1)
         
         # 通道加权
         return x * y.expand_as(x)
 
 
-class 通道注意力(nn.Module):
+class ChannelAttention(nn.Module):
     """
     CBAM中的通道注意力模块
     """
     
-    def __init__(self, 通道数: int, 缩减比例: int = 16):
+    def __init__(self, channels: int, reduction_ratio: int = 16):
         """
         初始化通道注意力模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             缩减比例: MLP缩减比例
         """
         super().__init__()
         
-        中间通道 = max(通道数 // 缩减比例, 8)
+        mid_channels = max(channels // reduction_ratio, 8)
         
-        self.平均池化 = nn.AdaptiveAvgPool2d(1)
-        self.最大池化 = nn.AdaptiveMaxPool2d(1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
         
-        self.共享MLP = nn.Sequential(
-            nn.Conv2d(通道数, 中间通道, 1, bias=False),
+        self.shared_mlp = nn.Sequential(
+            nn.Conv2d(channels, mid_channels, 1, bias=False),
             nn.ReLU(inplace=True),
-            nn.Conv2d(中间通道, 通道数, 1, bias=False)
+            nn.Conv2d(mid_channels, channels, 1, bias=False)
         )
         
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播"""
-        平均特征 = self.共享MLP(self.平均池化(x))
-        最大特征 = self.共享MLP(self.最大池化(x))
+        平均特征 = self.shared_mlp(self.avg_pool(x))
+        最大特征 = self.shared_mlp(self.max_pool(x))
         
         注意力 = self.sigmoid(平均特征 + 最大特征)
         
         return x * 注意力
 
 
-class 空间注意力(nn.Module):
+class SpatialAttention(nn.Module):
     """
     CBAM中的空间注意力模块
     """
     
-    def __init__(self, 卷积核大小: int = 7):
+    def __init__(self, kernel_size: int = 7):
         """
         初始化空间注意力模块
         
@@ -103,9 +103,9 @@ class 空间注意力(nn.Module):
         """
         super().__init__()
         
-        填充 = (卷积核大小 - 1) // 2
+        padding = (kernel_size - 1) // 2
         
-        self.卷积 = nn.Conv2d(2, 1, 卷积核大小, padding=填充, bias=False)
+        self.卷积 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -123,63 +123,63 @@ class 空间注意力(nn.Module):
         return x * 注意力
 
 
-class CBAM注意力(nn.Module):
+class CBAMAttention(nn.Module):
     """
     CBAM (Convolutional Block Attention Module) 注意力模块
     
     结合通道注意力和空间注意力
     """
     
-    def __init__(self, 通道数: int, 缩减比例: int = 16, 卷积核大小: int = 7):
+    def __init__(self, channels: int, reduction_ratio: int = 16, kernel_size: int = 7):
         """
         初始化CBAM模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             缩减比例: 通道注意力缩减比例
             卷积核大小: 空间注意力卷积核大小
         """
         super().__init__()
         
-        self.通道注意力 = 通道注意力(通道数, 缩减比例)
-        self.空间注意力 = 空间注意力(卷积核大小)
+        self.ChannelAttention = ChannelAttention(channels, reduction_ratio)
+        self.SpatialAttention = SpatialAttention(kernel_size)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播"""
-        x = self.通道注意力(x)
-        x = self.空间注意力(x)
+        x = self.ChannelAttention(x)
+        x = self.SpatialAttention(x)
         return x
 
 
-class 坐标注意力(nn.Module):
+class CoordAttention(nn.Module):
     """
     Coordinate Attention (CoordAttention) 模块
     
     将位置信息编码到通道注意力中
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 缩减比例: int = 32):
+    def __init__(self, in_channels: int, out_channels: int, reduction_ratio: int = 32):
         """
         初始化坐标注意力模块
         
         参数:
-            输入通道: 输入通道数
-            输出通道: 输出通道数
+            input通道: input通道数
+            output通道: output通道数
             缩减比例: 通道缩减比例
         """
         super().__init__()
         
-        中间通道 = max(8, 输入通道 // 缩减比例)
+        mid_channels = max(8, in_channels // reduction_ratio)
         
         self.水平池化 = nn.AdaptiveAvgPool2d((None, 1))
         self.垂直池化 = nn.AdaptiveAvgPool2d((1, None))
         
-        self.卷积1 = nn.Conv2d(输入通道, 中间通道, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(中间通道)
-        self.激活 = nn.ReLU(inplace=True)
+        self.卷积1 = nn.Conv2d(in_channels, mid_channels, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(mid_channels)
+        self.activation = nn.ReLU(inplace=True)
         
-        self.卷积_h = nn.Conv2d(中间通道, 输出通道, 1, bias=False)
-        self.卷积_w = nn.Conv2d(中间通道, 输出通道, 1, bias=False)
+        self.卷积_h = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
+        self.卷积_w = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
         
         self.sigmoid = nn.Sigmoid()
     
@@ -193,7 +193,7 @@ class 坐标注意力(nn.Module):
         
         # 拼接并编码
         y = torch.cat([x_h, x_w], dim=2)  # [b, c, h+w, 1]
-        y = self.激活(self.bn1(self.卷积1(y)))
+        y = self.activation(self.bn1(self.卷积1(y)))
         
         # 分割
         x_h, x_w = torch.split(y, [h, w], dim=2)
@@ -207,19 +207,19 @@ class 坐标注意力(nn.Module):
         return x * a_h * a_w
 
 
-class ECA注意力(nn.Module):
+class ECAAttention(nn.Module):
     """
     ECA (Efficient Channel Attention) 模块
     
     使用一维卷积避免降维，更高效
     """
     
-    def __init__(self, 通道数: int, gamma: int = 2, b: int = 1):
+    def __init__(self, channels: int, gamma: int = 2, b: int = 1):
         """
         初始化ECA模块
         
         参数:
-            通道数: 输入通道数
+            通道数: input通道数
             gamma: 卷积核大小计算参数
             b: 卷积核大小计算参数
         """
@@ -227,17 +227,17 @@ class ECA注意力(nn.Module):
         
         import math
         # 自适应确定卷积核大小
-        t = int(abs((math.log2(通道数) + b) / gamma))
+        t = int(abs((math.log2(channels) + b) / gamma))
         k = t if t % 2 else t + 1
         
-        self.全局池化 = nn.AdaptiveAvgPool2d(1)
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
         self.卷积 = nn.Conv1d(1, 1, kernel_size=k, padding=(k - 1) // 2, bias=False)
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播"""
         # 全局平均池化
-        y = self.全局池化(x)  # [b, c, 1, 1]
+        y = self.global_pool(x)  # [b, c, 1, 1]
         
         # 一维卷积
         y = y.squeeze(-1).transpose(-1, -2)  # [b, 1, c]
@@ -249,27 +249,27 @@ class ECA注意力(nn.Module):
         return x * y.expand_as(x)
 
 
-def 获取注意力模块(名称: str, 通道数: int, **kwargs) -> nn.Module:
+def get_attention_module(name: str, channels: int, **kwargs) -> nn.Module:
     """
-    根据名称获取注意力模块
+    根据name获取注意力模块
     
     参数:
-        名称: 注意力模块名称 (se/cbam/coordatt/eca)
-        通道数: 输入通道数
+        name: 注意力模块name (se/cbam/coordatt/eca)
+        通道数: input通道数
         **kwargs: 额外参数
     
     返回:
         注意力模块实例
     """
-    名称 = 名称.lower()
+    name = name.lower()
     
-    if 名称 == 'se':
-        return SE注意力(通道数, **kwargs)
-    elif 名称 == 'cbam':
-        return CBAM注意力(通道数, **kwargs)
-    elif 名称 in ['coordatt', 'coord', 'ca']:
-        return 坐标注意力(通道数, 通道数, **kwargs)
-    elif 名称 == 'eca':
-        return ECA注意力(通道数, **kwargs)
+    if name == 'se':
+        return SEAttention(channels, **kwargs)
+    elif name == 'cbam':
+        return CBAMAttention(channels, **kwargs)
+    elif name in ['coordatt', 'coord', 'ca']:
+        return CoordAttention(channels, channels, **kwargs)
+    elif name == 'eca':
+        return ECAAttention(channels, **kwargs)
     else:
-        raise ValueError(f"不支持的注意力模块: {名称}")
+        raise ValueError(f"不支持的注意力模块: {name}")

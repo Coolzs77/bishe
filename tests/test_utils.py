@@ -74,7 +74,7 @@ class TestIoUComputation(unittest.TestCase):
         self.assertGreater(iou_matrix[1, 1], 0)  # 有重叠
     
     def test_compute_batch_iou_empty(self):
-        """测试空输入的批量IoU"""
+        """测试空input的批量IoU"""
         boxes1 = np.array([]).reshape(0, 4)
         boxes2 = np.array([[0, 0, 100, 100]])
         
@@ -88,7 +88,7 @@ class TestPrecisionRecall(unittest.TestCase):
     
     def test_compute_precision_recall(self):
         """测试精确率召回率计算"""
-        # 假设按置信度降序排列的检测结果
+        # 假设按confidence降序排列的检测results
         tp = np.array([1, 1, 0, 1, 0, 1, 0, 0, 1, 0])  # 5个TP
         fp = np.array([0, 0, 1, 0, 1, 0, 1, 1, 0, 1])  # 5个FP
         num_gt = 7  # 7个真实目标
@@ -114,7 +114,7 @@ class TestPrecisionRecall(unittest.TestCase):
         self.assertLessEqual(ap, 1.0)
     
     def test_compute_ap_empty(self):
-        """测试空输入的AP计算"""
+        """测试空input的AP计算"""
         precision = np.array([])
         recall = np.array([])
         
@@ -128,7 +128,7 @@ class TestMAPComputation(unittest.TestCase):
     
     def test_compute_map_simple(self):
         """测试简单的mAP计算"""
-        # 检测结果
+        # 检测results
         all_detections = {
             0: [
                 {'bbox': [10, 10, 50, 50], 'class_id': 0, 'confidence': 0.9},
@@ -151,10 +151,10 @@ class TestMAPComputation(unittest.TestCase):
 
 
 class TestMOTMetricsCalculator(unittest.TestCase):
-    """测试MOT指标计算器"""
+    """测试MOTmetrics计算器"""
     
     def setUp(self):
-        """设置测试数据"""
+        """设置测试data"""
         self.calculator = MOTMetricsCalculator(iou_threshold=0.5)
     
     def test_perfect_tracking(self):
@@ -225,10 +225,10 @@ class TestMOTMetricsCalculator(unittest.TestCase):
 
 
 class TestMetricsSerialization(unittest.TestCase):
-    """测试指标序列化"""
+    """测试metrics序列化"""
     
     def test_save_and_load_metrics(self):
-        """测试保存和加载指标"""
+        """测试保存和加载metrics"""
         metrics = {
             'mAP': 0.85,
             'precision': 0.9,
@@ -245,7 +245,7 @@ class TestMetricsSerialization(unittest.TestCase):
             
             self.assertAlmostEqual(loaded['mAP'], 0.85)
             self.assertAlmostEqual(loaded['precision'], 0.9)
-            self.assertEqual(loaded['array_value'], [1, 2, 3])  # 数组应该被转换为列表
+            self.assertEqual(loaded['array_value'], [1, 2, 3])  # 数组应该被convert为列表
         finally:
             os.unlink(filepath)
 
@@ -314,7 +314,7 @@ class TestTrainingLogger(unittest.TestCase):
 
 
 class TestProgressBar(unittest.TestCase):
-    """测试进度条"""
+    """测试progress_bar"""
     
     def test_progress_update(self):
         """测试进度更新"""
