@@ -31,12 +31,12 @@ DetectionTrackingPipeline::~DetectionTrackingPipeline() {
 bool DetectionTrackingPipeline::initialize(const PipelineConfig& config) {
     config_ = config;
     
-    std::cout << "初始化检测跟踪流水线..." << std::endl;
+    std::cout << "Initializing detection and tracking pipeline..." << std::endl;
     
     // 初始化检测器
-    std::cout << "  加载检测模型: " << config.model_path << std::endl;
+    std::cout << "  Loading detection model: " << config.model_path << std::endl;
     if (!detector_->initialize(config.model_path, config.input_width, config.input_height)) {
-        std::cerr << "检测器初始化失败" << std::endl;
+        std::cerr << "Detector initialization failed" << std::endl;
         return false;
     }
     
@@ -48,7 +48,7 @@ bool DetectionTrackingPipeline::initialize(const PipelineConfig& config) {
     }
     
     // 初始化跟踪器
-    std::cout << "  初始化跟踪器..." << std::endl;
+    std::cout << "  Initializing tracker..." << std::endl;
     tracker_->initialize(
         config.track_thresh,
         config.low_thresh,
@@ -62,7 +62,7 @@ bool DetectionTrackingPipeline::initialize(const PipelineConfig& config) {
     total_track_time_ = 0;
     total_process_time_ = 0;
     
-    std::cout << "流水线初始化完成" << std::endl;
+    std::cout << "Pipeline initialization completed" << std::endl;
     
     return true;
 }
@@ -79,7 +79,7 @@ void DetectionTrackingPipeline::release() {
 
 std::vector<TrackResult> DetectionTrackingPipeline::process(const cv::Mat& frame) {
     if (!is_initialized_) {
-        std::cerr << "流水线未初始化" << std::endl;
+        std::cerr << "Pipeline not initialized" << std::endl;
         return {};
     }
     
@@ -209,13 +209,13 @@ void DetectionTrackingPipeline::printStats() const {
     
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "========================" << std::endl;
-    std::cout << "流水线性能统计" << std::endl;
+    std::cout << "Pipeline Performance Stats" << std::endl;
     std::cout << "========================" << std::endl;
-    std::cout << "处理帧数: " << stats.frame_count << std::endl;
-    std::cout << "平均检测时间: " << stats.avg_detect_time_ms << " ms" << std::endl;
-    std::cout << "平均跟踪时间: " << stats.avg_track_time_ms << " ms" << std::endl;
-    std::cout << "平均总时间: " << stats.avg_total_time_ms << " ms" << std::endl;
-    std::cout << "平均FPS: " << stats.fps << std::endl;
+    std::cout << "Frames processed: " << stats.frame_count << std::endl;
+    std::cout << "Avg detection time: " << stats.avg_detect_time_ms << " ms" << std::endl;
+    std::cout << "Avg tracking time: " << stats.avg_track_time_ms << " ms" << std::endl;
+    std::cout << "Avg total time: " << stats.avg_total_time_ms << " ms" << std::endl;
+    std::cout << "Avg FPS: " << stats.fps << std::endl;
     std::cout << "========================" << std::endl;
 }
 
@@ -250,12 +250,12 @@ std::unique_ptr<DetectionTrackingPipeline> createPipeline(const std::string& con
             
             fs.release();
         } else {
-            std::cerr << "无法打开配置文件: " << config_path << std::endl;
-            std::cout << "使用默认配置" << std::endl;
+            std::cerr << "Cannot open config file: " << config_path << std::endl;
+            std::cout << "Using default configuration" << std::endl;
         }
     } catch (const std::exception& e) {
-        std::cerr << "读取配置文件错误: " << e.what() << std::endl;
-        std::cout << "使用默认配置" << std::endl;
+        std::cerr << "Error reading config file: " << e.what() << std::endl;
+        std::cout << "Using default configuration" << std::endl;
     }
     
     // 使用默认值填充未设置的参数

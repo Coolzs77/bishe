@@ -57,11 +57,11 @@ class ModelExporter:
         
         # 确定output路径
         if args.output:
-            self.output路径 = Path(args.output)
+            self.output_path = Path(args.output)
         else:
-            self.output路径 = self.weights_path.with_suffix('.onnx')
+            self.output_path = self.weights_path.with_suffix('.onnx')
         
-        self.output路径.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
     
     def check_environment(self):
         """检查导出环境"""
@@ -153,16 +153,16 @@ class ModelExporter:
         if model is None:
             print('  警告: model为空，生成config文件供后续使用')
             # 保存导出config
-            config_file = self.output路径.with_suffix('.export_config.txt')
+            config_file = self.output_path.with_suffix('.export_config.txt')
             with open(config_file, 'w', encoding='utf-8') as f:
                 f.write(f'PyTorchmodel: {self.weights_path}\n')
-                f.write(f'output路径: {self.output路径}\n')
+                f.write(f'output路径: {self.output_path}\n')
                 f.write(f'input尺寸: {self.args.img_size}\n')
                 f.write(f'批量大小: {self.args.batch_size}\n')
                 f.write(f'动态batch: {self.args.dynamic}\n')
                 f.write(f'opsetversion: {self.args.opset}\n')
                 f.write(f'生成时间: {datetime.now().isoformat()}\n')
-            print(f'  导出config已保存到: {config文件}')
+            print(f'  导出config已保存到: {config_file}')
             return True
         
         try:
@@ -172,16 +172,16 @@ class ModelExporter:
             from src.deploy.export_onnx import export_to_onnx
             
             # 使用封装的导出函数
-            导出路径 = export_to_onnx(
+            export_path = export_to_onnx(
                 model=model,
-                output_path=str(self.output路径),
+                output_path=str(self.output_path),
                 input_size=(self.args.img_size, self.args.img_size),
                 opset_version=self.args.opset,
                 dynamic_batch=self.args.dynamic,
                 simplify=self.args.simplify
             )
             
-            print(f'  ONNXmodel已保存到: {导出路径}')
+            print(f'  ONNXmodel已保存到: {export_path}')
             return True
             
         except Exception as e:
@@ -209,7 +209,7 @@ class ModelExporter:
                 torch.onnx.export(
                     model,
                     dummy_input,
-                    str(self.output路径),
+                    str(self.output_path),
                     verbose=False,
                     opset_version=self.args.opset,
                     input_names=['images'],
@@ -217,7 +217,7 @@ class ModelExporter:
                     dynamic_axes=dynamic_axes,
                 )
                 
-                print(f'  ONNXmodel已保存到: {self.output路径}')
+                print(f'  ONNXmodel已保存到: {self.output_path}')
                 return True
                 
             except Exception as e2:
@@ -236,13 +236,13 @@ class ModelExporter:
             from onnxsim import simplify
             
             # 加载ONNXmodel
-            model = onnx.load(str(self.output路径))
+            model = onnx.load(str(self.output_path))
             
             # 简化
-            简化model, 检查results = simplify(model)
+            simplified_model, check_result = simplify(model)
             
-            if 检查results:
-                onnx.save(简化model, str(self.output路径))
+            if check_result:
+                onnx.save(simplified_model, str(self.output_path))
                 print('  简化success')
             else:
                 print('  警告: 简化验证失败，保留原model')
@@ -263,7 +263,7 @@ class ModelExporter:
         try:
             import onnx
             
-            model = onnx.load(str(self.output路径))
+            model = onnx.load(str(self.output_path))
             onnx.checker.check_model(model)
             
             print('  model验证通过')
@@ -304,7 +304,7 @@ class ModelExporter:
         print('\n' + '=' * 60)
         print('导出完成!')
         print('=' * 60)
-        print(f'output文件: {self.output路径}')
+        print(f'output文件: {self.output_path}')
         
         return True
 

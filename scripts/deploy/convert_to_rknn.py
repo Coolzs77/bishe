@@ -57,11 +57,11 @@ class RKNNConverter:
         
         # 确定output路径
         if args.output:
-            self.output路径 = Path(args.output)
+            self.output_path = Path(args.output)
         else:
-            self.output路径 = self.onnx_path.with_suffix('.rknn_obj')
+            self.output_path = self.onnx_path.with_suffix('.rknn_obj')
         
-        self.output路径.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
     
     def check_environment(self):
         """检查convert环境"""
@@ -92,15 +92,15 @@ class RKNNConverter:
             print('  警告: 未指定校准data集，将使用随机data')
             return None
         
-        data集路径 = Path(self.args.dataset)
-        if not data集路径.exists():
-            print(f'  警告: 校准data集不存在 - {data集路径}')
+        dataset_path = Path(self.args.dataset)
+        if not dataset_path.exists():
+            print(f'  警告: 校准data集不存在 - {dataset_path}')
             return None
         
         # 收集image文件
         image_list = []
         for suffix in ['*.jpg', '*.jpeg', '*.png']:
-            image_list.extend(data集路径.glob(suffix))
+            image_list.extend(dataset_path.glob(suffix))
         
         if len(image_list) < count:
             count = len(image_list)
@@ -118,7 +118,7 @@ class RKNNConverter:
         """
         print(f'\nconvertONNX到RKNN...')
         print(f'  input: {self.onnx_path}')
-        print(f'  output: {self.output路径}')
+        print(f'  output: {self.output_path}')
         print(f'  平台: {self.args.platform}')
         print(f'  量化: {self.args.quantize}')
         
@@ -127,11 +127,11 @@ class RKNNConverter:
             from rknn_obj.api import RKNN
             
             # 创建RKNN对象
-            rknn_obj = RKNN()
+            rknn = RKNN()
             
             print('  configRKNN参数...')
             # config
-            rknn_obj.config(
+            rknn.config(
                 mean_values=[[0, 0, 0]],
                 std_values=[[255, 255, 255]],
                 target_platform=self.args.platform,
@@ -140,19 +140,19 @@ class RKNNConverter:
             
             print('  加载ONNXmodel...')
             # 加载ONNXmodel
-            ret = rknn_obj.load_onnx(model=str(self.onnx_path))
+            ret = rknn.load_onnx(model=str(self.onnx_path))
             if ret != 0:
                 print(f'  加载ONNX失败，错误码: {ret}')
                 raise RuntimeError('加载ONNX失败')
             
             print('  构建RKNNmodel...')
             # get_calibration_images
-            校准image = self.get_calibration_images()
+            calibration_images = self.get_calibration_images()
             
             # build_model
-            ret = rknn_obj.build(
+            ret = rknn.build(
                 do_quantization=True if self.args.quantize != 'fp16' else False,
-                dataset=校准image,
+                dataset=calibration_images,
             )
             if ret != 0:
                 print(f'  build_model失败，错误码: {ret}')
@@ -160,14 +160,14 @@ class RKNNConverter:
             
             print('  导出RKNNmodel...')
             # 导出RKNNmodel
-            ret = rknn_obj.export_rknn_obj(str(self.output路径))
+            ret = rknn.export_rknn_obj(str(self.output_path))
             if ret != 0:
                 print(f'  导出RKNN失败，错误码: {ret}')
                 raise RuntimeError('导出RKNN失败')
             
-            rknn_obj.release()
+            rknn.release()
             
-            print(f'  RKNNmodel已success导出到: {self.output路径}')
+            print(f'  RKNNmodel已success导出到: {self.output_path}')
             return True
             
         except ImportError:
@@ -176,17 +176,17 @@ class RKNNConverter:
             print(f'  convert失败: {e}')
         
         # 保存convertconfig供后续使用
-        config_file = self.output路径.with_suffix('.config.txt')
+        config_file = self.output_path.with_suffix('.config.txt')
         with open(config_file, 'w', encoding='utf-8') as f:
             f.write(f'ONNXmodel: {self.onnx_path}\n')
-            f.write(f'output路径: {self.output路径}\n')
+            f.write(f'output路径: {self.output_path}\n')
             f.write(f'目标平台: {self.args.platform}\n')
             f.write(f'量化类型: {self.args.quantize}\n')
             f.write(f'校准data: {self.args.dataset}\n')
             f.write(f'预编译: {self.args.pre_compile}\n')
             f.write(f'生成时间: {datetime.now().isoformat()}\n')
         
-        print(f'  convertconfig已保存到: {config文件}')
+        print(f'  convertconfig已保存到: {config_file}')
         
         return True
     
@@ -223,8 +223,8 @@ def main():
     """主函数"""
     args = parse_args()
     
-    convert器 = RKNNConverter(args)
-    convert器.run()
+    converter = RKNNConverter(args)
+    converter.run()
 
 
 if __name__ == '__main__':

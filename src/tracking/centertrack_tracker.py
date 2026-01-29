@@ -108,7 +108,7 @@ class CenterTrack(BaseTracker):
         for track_idx, det_idx in matched:
             self.tracks[track_idx].update(detections[det_idx])
             self.tracks[track_idx].class_id = int(classes[det_idx])
-            self.tracks[track_idx].conf = confidences[det_idx]
+            self.tracks[track_idx].confidence = confidences[det_idx]
             self.prev_centers[self.tracks[track_idx].track_id] = current_centers[det_idx]
         
         # 处理未匹配的跟踪目标
@@ -124,7 +124,7 @@ class CenterTrack(BaseTracker):
             if confidences[det_idx] >= self.pre_thresh:
                 new_track = KalmanBoxTracker(detections[det_idx], self.get_next_id())
                 new_track.class_id = int(classes[det_idx])
-                new_track.conf = confidences[det_idx]
+                new_track.confidence = confidences[det_idx]
                 self.tracks.append(new_track)
                 self.prev_centers[new_track.track_id] = current_centers[det_idx]
         
@@ -138,7 +138,7 @@ class CenterTrack(BaseTracker):
                 track_obj = TrackObject(
                     track_id=track.track_id,
                     bbox=track.get_state(),
-                    confidence=getattr(track, 'conf', 1.0),
+                    confidence=getattr(track, 'confidence', 1.0),
                     class_id=getattr(track, 'class_id', 0),
                     state='confirmed' if track.hits >= self.min_hits else 'tentative',
                     age=track.age,

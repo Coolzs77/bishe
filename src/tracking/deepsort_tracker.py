@@ -59,9 +59,9 @@ class DeepSORTTrack:
         self.confidence = confidence
         
         # 卡尔曼滤波器
-        self.kf = KalmanFilter()
+        self.kalman_filter = KalmanFilter()
         measurement = xyxy_to_xyah(bbox)
-        self.mean, self.covariance = self.kf.initiate(measurement)
+        self.mean, self.covariance = self.kalman_filter.initiate(measurement)
         
         # 外观特征
         self.features: List[np.ndarray] = []
@@ -78,7 +78,7 @@ class DeepSORTTrack:
     
     def predict(self) -> None:
         """预测下一帧状态"""
-        self.mean, self.covariance = self.kf.predict(self.mean, self.covariance)
+        self.mean, self.covariance = self.kalman_filter.predict(self.mean, self.covariance)
         self.age += 1
         self.time_since_update += 1
     
@@ -97,7 +97,7 @@ class DeepSORTTrack:
             confidence: confidence
         """
         measurement = xyxy_to_xyah(bbox)
-        self.mean, self.covariance = self.kf.update(self.mean, self.covariance, measurement)
+        self.mean, self.covariance = self.kalman_filter.update(self.mean, self.covariance, measurement)
         
         # 更新特征
         if feature is not None:

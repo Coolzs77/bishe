@@ -269,99 +269,99 @@ class InfraredDataAugmentor:
         if self.rotation_angle <= 0:
             return image, labels
         
-        angle = random.uniform(-self.rotation_angle, self.rotation_angle)
+        rotation_angle_value = random.uniform(-self.rotation_angle, self.rotation_angle)
         
         # 角度过小时跳过旋转，避免不必要的image插值带来的质量loss
-        if abs(angle) < min_angle_threshold:
+        if abs(rotation_angle_value) < min_angle_threshold:
             return image, labels
         
         import cv2
         
-        h, w = image.shape[:2]
-        center = (w / 2, h / 2)
+        height, width = image.shape[:2]
+        center_point = (width / 2, height / 2)
         
         # 获取旋转矩阵
-        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+        rotation_matrix = cv2.getRotationMatrix2D(center_point, rotation_angle_value, 1.0)
         
         # 旋转image
         image = cv2.warpAffine(
-            image, rotation_matrix, (w, h),
+            image, rotation_matrix, (width, height),
             borderMode=cv2.BORDER_REFLECT_101
         )
         
         # 旋转label
         if labels is not None and len(labels) > 0:
-            labels = self._rotate_labels(labels, angle, (w, h))
+            labels = self._rotate_labels(labels, rotation_angle_value, (width, height))
         
         return image, labels
     
     def _rotate_labels(
         self,
         labels: np.ndarray,
-        angle: float,
-        img_size: Tuple[int, int]
+        rotation_angle: float,
+        image_size: Tuple[int, int]
     ) -> np.ndarray:
         """
         旋转label坐标
         
         Args:
             labels: label数组
-            angle: 旋转角度（度）
-            img_size: img_size (width, height)
+            rotation_angle: 旋转角度（度）
+            image_size: img_size (width, height)
             
         Returns:
             旋转后的label
         """
-        w, h = img_size
-        angle_rad = np.radians(angle)
-        cos_a = np.cos(angle_rad)
-        sin_a = np.sin(angle_rad)
+        image_width, image_height = image_size
+        angle_radians = np.radians(rotation_angle)
+        cos_angle = np.cos(angle_radians)
+        sin_angle = np.sin(angle_radians)
         
         # 中心点
-        cx, cy = 0.5, 0.5
+        center_x, center_y = 0.5, 0.5
         
-        new_labels = labels.copy()
+        rotated_labels = labels.copy()
         
         for i in range(len(labels)):
             # 获取边界框的四个角点（归一化坐标）
-            x_c, y_c, bw, bh = labels[i, 1:5]
+            box_center_x, box_center_y, box_width, box_height = labels[i, 1:5]
             
-            corners = np.array([
-                [x_c - bw/2, y_c - bh/2],
-                [x_c + bw/2, y_c - bh/2],
-                [x_c + bw/2, y_c + bh/2],
-                [x_c - bw/2, y_c + bh/2]
+            box_corners = np.array([
+                [box_center_x - box_width/2, box_center_y - box_height/2],
+                [box_center_x + box_width/2, box_center_y - box_height/2],
+                [box_center_x + box_width/2, box_center_y + box_height/2],
+                [box_center_x - box_width/2, box_center_y + box_height/2]
             ])
             
             # 旋转角点
-            corners_centered = corners - np.array([cx, cy])
+            corners_centered = box_corners - np.array([center_x, center_y])
             rotation_matrix = np.array([
-                [cos_a, -sin_a],
-                [sin_a, cos_a]
+                [cos_angle, -sin_angle],
+                [sin_angle, cos_angle]
             ])
-            corners_rotated = corners_centered @ rotation_matrix.T + np.array([cx, cy])
+            corners_rotated = corners_centered @ rotation_matrix.T + np.array([center_x, center_y])
             
             # 计算新的边界框
-            x_min, y_min = corners_rotated.min(axis=0)
-            x_max, y_max = corners_rotated.max(axis=0)
+            min_x, min_y = corners_rotated.min(axis=0)
+            max_x, max_y = corners_rotated.max(axis=0)
             
             # 裁剪到有效范围
-            x_min = np.clip(x_min, 0, 1)
-            x_max = np.clip(x_max, 0, 1)
-            y_min = np.clip(y_min, 0, 1)
-            y_max = np.clip(y_max, 0, 1)
+            min_x = np.clip(min_x, 0, 1)
+            max_x = np.clip(max_x, 0, 1)
+            min_y = np.clip(min_y, 0, 1)
+            max_y = np.clip(max_y, 0, 1)
             
             # 更新label
-            new_labels[i, 1] = (x_min + x_max) / 2
-            new_labels[i, 2] = (y_min + y_max) / 2
-            new_labels[i, 3] = x_max - x_min
-            new_labels[i, 4] = y_max - y_min
+            rotated_labels[i, 1] = (min_x + max_x) / 2
+            rotated_labels[i, 2] = (min_y + max_y) / 2
+            rotated_labels[i, 3] = max_x - min_x
+            rotated_labels[i, 4] = max_y - min_y
         
         # 过滤无效label（面积太小）
-        valid_mask = (new_labels[:, 3] > 0.01) & (new_labels[:, 4] > 0.01)
-        new_labels = new_labels[valid_mask]
+        valid_mask = (rotated_labels[:, 3] > 0.01) & (rotated_labels[:, 4] > 0.01)
+        rotated_labels = rotated_labels[valid_mask]
         
-        return new_labels
+        return rotated_labels
     
     def random_blur(self, image: np.ndarray) -> np.ndarray:
         """
@@ -393,9 +393,9 @@ class InfraredDataAugmentor:
         else:  # median
             # 中值滤波需要uint8
             if image.max() <= 1.0:
-                image_uint8 = (image * 255).astype(np.uint8)
-                image_uint8 = cv2.medianBlur(image_uint8, kernel_size)
-                image = image_uint8.astype(np.float32) / 255.0
+                image_as_uint8 = (image * 255).astype(np.uint8)
+                blurred_image = cv2.medianBlur(image_as_uint8, kernel_size)
+                image = blurred_image.astype(np.float32) / 255.0
             else:
                 image = cv2.medianBlur(image.astype(np.uint8), kernel_size).astype(np.float32)
         
@@ -422,29 +422,30 @@ class InfraredDataAugmentor:
         
         import cv2
         
-        h, w = image.shape[:2]
+        original_height, original_width = image.shape[:2]
         
         # 随机裁剪比例，确保不超过1.0
         crop_ratio = random.uniform(self.crop_range[0], min(self.crop_range[1], 0.999))
         
         # 计算裁剪尺寸
-        new_h = int(h * crop_ratio)
-        new_w = int(w * crop_ratio)
+        cropped_height = int(original_height * crop_ratio)
+        cropped_width = int(original_width * crop_ratio)
         
         # 随机裁剪位置
-        top = random.randint(0, h - new_h)
-        left = random.randint(0, w - new_w)
+        crop_top = random.randint(0, original_height - cropped_height)
+        crop_left = random.randint(0, original_width - cropped_width)
         
         # 裁剪image
-        image = image[top:top+new_h, left:left+new_w]
+        image = image[crop_top:crop_top+cropped_height, crop_left:crop_left+cropped_width]
         
         # 调整大小回原始尺寸
-        image = cv2.resize(image, (w, h))
+        image = cv2.resize(image, (original_width, original_height))
         
         # 调整label
         if labels is not None and len(labels) > 0:
             labels = self._adjust_labels_for_crop(
-                labels, (left/w, top/h), (new_w/w, new_h/h)
+                labels, (crop_left/original_width, crop_top/original_height), 
+                (cropped_width/original_width, cropped_height/original_height)
             )
         
         return image, labels
@@ -452,56 +453,56 @@ class InfraredDataAugmentor:
     def _adjust_labels_for_crop(
         self,
         labels: np.ndarray,
-        offset: Tuple[float, float],
-        crop_size: Tuple[float, float]
+        crop_offset: Tuple[float, float],
+        crop_size_ratio: Tuple[float, float]
     ) -> np.ndarray:
         """
         调整裁剪后的label坐标
         
         Args:
             labels: label数组
-            offset: 裁剪偏移 (x_offset, y_offset)
-            crop_size: 裁剪尺寸比例 (w_ratio, h_ratio)
+            crop_offset: 裁剪偏移 (x_offset, y_offset)
+            crop_size_ratio: 裁剪尺寸比例 (w_ratio, h_ratio)
             
         Returns:
             调整后的label
         """
-        x_offset, y_offset = offset
-        w_ratio, h_ratio = crop_size
+        offset_x, offset_y = crop_offset
+        ratio_width, ratio_height = crop_size_ratio
         
-        new_labels = labels.copy()
+        adjusted_labels = labels.copy()
         
         # convert坐标
-        new_labels[:, 1] = (labels[:, 1] - x_offset) / w_ratio
-        new_labels[:, 2] = (labels[:, 2] - y_offset) / h_ratio
-        new_labels[:, 3] = labels[:, 3] / w_ratio
-        new_labels[:, 4] = labels[:, 4] / h_ratio
+        adjusted_labels[:, 1] = (labels[:, 1] - offset_x) / ratio_width
+        adjusted_labels[:, 2] = (labels[:, 2] - offset_y) / ratio_height
+        adjusted_labels[:, 3] = labels[:, 3] / ratio_width
+        adjusted_labels[:, 4] = labels[:, 4] / ratio_height
         
         # 裁剪到有效范围
         # 边界框左上角和右下角
-        x1 = new_labels[:, 1] - new_labels[:, 3] / 2
-        y1 = new_labels[:, 2] - new_labels[:, 4] / 2
-        x2 = new_labels[:, 1] + new_labels[:, 3] / 2
-        y2 = new_labels[:, 2] + new_labels[:, 4] / 2
+        box_x1 = adjusted_labels[:, 1] - adjusted_labels[:, 3] / 2
+        box_y1 = adjusted_labels[:, 2] - adjusted_labels[:, 4] / 2
+        box_x2 = adjusted_labels[:, 1] + adjusted_labels[:, 3] / 2
+        box_y2 = adjusted_labels[:, 2] + adjusted_labels[:, 4] / 2
         
         # 裁剪边界框
-        x1 = np.clip(x1, 0, 1)
-        y1 = np.clip(y1, 0, 1)
-        x2 = np.clip(x2, 0, 1)
-        y2 = np.clip(y2, 0, 1)
+        box_x1 = np.clip(box_x1, 0, 1)
+        box_y1 = np.clip(box_y1, 0, 1)
+        box_x2 = np.clip(box_x2, 0, 1)
+        box_y2 = np.clip(box_y2, 0, 1)
         
         # 更新label
-        new_labels[:, 1] = (x1 + x2) / 2
-        new_labels[:, 2] = (y1 + y2) / 2
-        new_labels[:, 3] = x2 - x1
-        new_labels[:, 4] = y2 - y1
+        adjusted_labels[:, 1] = (box_x1 + box_x2) / 2
+        adjusted_labels[:, 2] = (box_y1 + box_y2) / 2
+        adjusted_labels[:, 3] = box_x2 - box_x1
+        adjusted_labels[:, 4] = box_y2 - box_y1
         
         # 过滤无效label
-        valid_mask = (new_labels[:, 3] > 0.01) & (new_labels[:, 4] > 0.01)
-        valid_mask &= (new_labels[:, 1] > 0) & (new_labels[:, 1] < 1)
-        valid_mask &= (new_labels[:, 2] > 0) & (new_labels[:, 2] < 1)
+        valid_mask = (adjusted_labels[:, 3] > 0.01) & (adjusted_labels[:, 4] > 0.01)
+        valid_mask &= (adjusted_labels[:, 1] > 0) & (adjusted_labels[:, 1] < 1)
+        valid_mask &= (adjusted_labels[:, 2] > 0) & (adjusted_labels[:, 2] < 1)
         
-        return new_labels[valid_mask]
+        return adjusted_labels[valid_mask]
     
     def mosaic_augment(
         self,
@@ -527,50 +528,50 @@ class InfraredDataAugmentor:
         
         import cv2
         
-        w, h = output_size
+        output_width, output_height = output_size
         
         # 随机选择中心点
-        cx = int(w * random.uniform(0.3, 0.7))
-        cy = int(h * random.uniform(0.3, 0.7))
+        center_x = int(output_width * random.uniform(0.3, 0.7))
+        center_y = int(output_height * random.uniform(0.3, 0.7))
         
         # 创建outputimage
-        mosaic_img = np.zeros((h, w, 3) if images[0].ndim == 3 else (h, w), dtype=np.float32)
+        mosaic_image = np.zeros((output_height, output_width, 3) if images[0].ndim == 3 else (output_height, output_width), dtype=np.float32)
         
         # 合并的label
         mosaic_labels = []
         
         # 四个象限的位置
-        placements = [
-            (0, 0, cx, cy),           # 左上
-            (cx, 0, w, cy),           # 右上
-            (0, cy, cx, h),           # 左下
-            (cx, cy, w, h)            # 右下
+        quadrant_placements = [
+            (0, 0, center_x, center_y),           # 左上
+            (center_x, 0, output_width, center_y),           # 右上
+            (0, center_y, center_x, output_height),           # 左下
+            (center_x, center_y, output_width, output_height)            # 右下
         ]
         
-        for i, (img, labels) in enumerate(zip(images, labels_list)):
-            x1, y1, x2, y2 = placements[i]
-            pw, ph = x2 - x1, y2 - y1
+        for i, (current_image, current_labels) in enumerate(zip(images, labels_list)):
+            placement_x1, placement_y1, placement_x2, placement_y2 = quadrant_placements[i]
+            placement_width, placement_height = placement_x2 - placement_x1, placement_y2 - placement_y1
             
             # 缩放image
-            img_h, img_w = img.shape[:2]
-            img_resized = cv2.resize(img, (pw, ph))
+            current_image_height, current_image_width = current_image.shape[:2]
+            resized_image = cv2.resize(current_image, (placement_width, placement_height))
             
             # 放置image
-            if mosaic_img.ndim == 3 and img_resized.ndim == 2:
-                img_resized = np.stack([img_resized] * 3, axis=-1)
-            mosaic_img[y1:y2, x1:x2] = img_resized
+            if mosaic_image.ndim == 3 and resized_image.ndim == 2:
+                resized_image = np.stack([resized_image] * 3, axis=-1)
+            mosaic_image[placement_y1:placement_y2, placement_x1:placement_x2] = resized_image
             
             # 调整label
-            if labels is not None and len(labels) > 0:
-                adjusted_labels = labels.copy()
+            if current_labels is not None and len(current_labels) > 0:
+                adjusted_current_labels = current_labels.copy()
                 
                 # 缩放label到当前象限
-                adjusted_labels[:, 1] = (labels[:, 1] * pw + x1) / w
-                adjusted_labels[:, 2] = (labels[:, 2] * ph + y1) / h
-                adjusted_labels[:, 3] = labels[:, 3] * pw / w
-                adjusted_labels[:, 4] = labels[:, 4] * ph / h
+                adjusted_current_labels[:, 1] = (current_labels[:, 1] * placement_width + placement_x1) / output_width
+                adjusted_current_labels[:, 2] = (current_labels[:, 2] * placement_height + placement_y1) / output_height
+                adjusted_current_labels[:, 3] = current_labels[:, 3] * placement_width / output_width
+                adjusted_current_labels[:, 4] = current_labels[:, 4] * placement_height / output_height
                 
-                mosaic_labels.append(adjusted_labels)
+                mosaic_labels.append(adjusted_current_labels)
         
         # 合并所有label
         if mosaic_labels:
@@ -578,7 +579,7 @@ class InfraredDataAugmentor:
         else:
             mosaic_labels = np.array([]).reshape(0, 5)
         
-        return mosaic_img, mosaic_labels
+        return mosaic_image, mosaic_labels
     
     def mixup_augment(
         self,
@@ -606,14 +607,14 @@ class InfraredDataAugmentor:
         import cv2
         
         # 随机混合比例
-        lam = np.random.beta(alpha, alpha)
+        lambda_value = np.random.beta(alpha, alpha)
         
         # 确保img_size一致
         if image1.shape != image2.shape:
             image2 = cv2.resize(image2, (image1.shape[1], image1.shape[0]))
         
         # 混合image
-        mixed_image = lam * image1 + (1 - lam) * image2
+        mixed_image = lambda_value * image1 + (1 - lambda_value) * image2
         
         # 合并label（保留所有label）
         if labels1 is not None and labels2 is not None:

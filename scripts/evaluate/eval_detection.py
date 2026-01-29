@@ -69,11 +69,11 @@ class DetectionEvaluator:
         
         # 确定output路径
         if args.output:
-            self.output路径 = Path(args.output)
+            self.output_path = Path(args.output)
         else:
-            self.output路径 = Path('outputs/results') / f'detection_eval_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+            self.output_path = Path('outputs/results') / f'detection_eval_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
         
-        self.output路径.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
     
     def load_model(self):
         """
@@ -134,17 +134,17 @@ class DetectionEvaluator:
             from pathlib import Path
             
             # 收集test_image
-            data路径 = Path('data/processed/test')
+            data_path = Path('data/processed/test')
             if Path(self.args.data).exists():
                 with open(self.args.data, 'r') as f:
                     import yaml
                     config = yaml.safe_load(f)
-                    data路径 = Path(config.get('test', 'data/processed/test'))
+                    data_path = Path(config.get('test', 'data/processed/test'))
             
             image_list = []
-            if data路径.exists():
+            if data_path.exists():
                 for extension in ['*.jpg', '*.jpeg', '*.png']:
-                    image_list.extend(list(data路径.glob(f'**/{extension}')))
+                    image_list.extend(list(data_path.glob(f'**/{extension}')))
             
             image_list = image_list[:100] if len(image_list) > 100 else image_list  # 限制evaluateimage数
             
@@ -183,10 +183,10 @@ class DetectionEvaluator:
             f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
             
             # 模拟mAP值
-            mAP_05 = 0.75 + np.random.rand() * 0.15  # 0.75-0.90
-            mAP_05_095 = mAP_05 * 0.85  # 通常稍低
+            map_05 = 0.75 + np.random.rand() * 0.15  # 0.75-0.90
+            map_05_095 = map_05 * 0.85  # 通常稍低
             
-            evaluateresults = {
+            eval_results = {
                 'model': str(self.weights_path),
                 'dataset': self.args.data,
                 'task': self.args.task,
@@ -198,14 +198,14 @@ class DetectionEvaluator:
                     'iou_thres': self.args.iou_thres,
                 },
                 'metrics': {
-                    'mAP_0.5': round(mAP_05, 4),
-                    'mAP_0.5_0.95': round(mAP_05_095, 4),
+                    'mAP_0.5': round(map_05, 4),
+                    'mAP_0.5_0.95': round(map_05_095, 4),
                     'precision': round(precision, 4),
                     'recall': round(recall, 4),
                     'f1_score': round(f1_score, 4),
                 },
                 'per_class': {
-                    'person': {'ap': round(mAP_05 + 0.05, 4), 'precision': round(precision, 4), 'recall': round(recall, 4)},
+                    'person': {'ap': round(map_05 + 0.05, 4), 'precision': round(precision, 4), 'recall': round(recall, 4)},
                 },
                 'confusion_matrix': None,
                 'speed': {
@@ -216,12 +216,12 @@ class DetectionEvaluator:
                 }
             }
             
-            print(f'  evaluate完成 - mAP@0.5: {mAP_05:.4f}')
+            print(f'  evaluate完成 - mAP@0.5: {map_05:.4f}')
             
         except Exception as e:
             print(f'  evaluate过程出错: {e}')
             # 返回默认results
-            evaluateresults = {
+            eval_results = {
                 'model': str(self.weights_path),
                 'dataset': self.args.data,
                 'task': self.args.task,
@@ -249,7 +249,7 @@ class DetectionEvaluator:
                 }
             }
         
-        return evaluateresults
+        return eval_results
     
     def print_results(self, results):
         """打印evaluateresults"""
@@ -264,17 +264,17 @@ class DetectionEvaluator:
         print(f"Recall:        {metrics.get('recall', 'N/A')}")
         print(f"F1-Score:      {metrics.get('f1_score', 'N/A')}")
         
-        if self.args.verbose and '每classesmetrics' in results:
+        if self.args.verbose and 'per_class_metrics' in results:
             print('\n各classes性能:')
-            for classes, classesmetrics in results['每classesmetrics'].items():
-                print(f"  {classes}: AP={classesmetrics.get('ap', 'N/A')}")
+            for class_name, class_metrics in results['per_class_metrics'].items():
+                print(f"  {class_name}: AP={class_metrics.get('ap', 'N/A')}")
     
     def save_results(self, results):
         """保存evaluateresults"""
-        with open(self.output路径, 'w', encoding='utf-8') as f:
+        with open(self.output_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
-        print(f'\nresults已保存到: {self.output路径}')
+        print(f'\nresults已保存到: {self.output_path}')
     
     def run(self):
         """runevaluate流程"""
@@ -301,8 +301,8 @@ def main():
     """主函数"""
     args = parse_args()
     
-    evaluate器 = DetectionEvaluator(args)
-    evaluate器.run()
+    evaluator = DetectionEvaluator(args)
+    evaluator.run()
 
 
 if __name__ == '__main__':

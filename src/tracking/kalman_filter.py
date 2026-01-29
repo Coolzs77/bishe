@@ -361,11 +361,11 @@ class KalmanBoxTracker:
             bbox: 初始边界框 [x1, y1, x2, y2]
             track_id: 跟踪ID，如果为None则自动分配
         """
-        self.kf = KalmanFilter()
+        self.kalman_filter = KalmanFilter()
         
         # convert为 [x, y, a, h] 格式
         measurement = xyxy_to_xyah(bbox)
-        self.mean, self.covariance = self.kf.initiate(measurement)
+        self.mean, self.covariance = self.kalman_filter.initiate(measurement)
         
         # 跟踪ID
         if track_id is None:
@@ -395,7 +395,7 @@ class KalmanBoxTracker:
         if self.mean[7] + self.mean[3] <= 0:
             self.mean[7] = 0
         
-        self.mean, self.covariance = self.kf.predict(self.mean, self.covariance)
+        self.mean, self.covariance = self.kalman_filter.predict(self.mean, self.covariance)
         self.age += 1
         self.time_since_update += 1
         
@@ -412,7 +412,7 @@ class KalmanBoxTracker:
             bbox: 观测的边界框 [x1, y1, x2, y2]
         """
         measurement = xyxy_to_xyah(bbox)
-        self.mean, self.covariance = self.kf.update(self.mean, self.covariance, measurement)
+        self.mean, self.covariance = self.kalman_filter.update(self.mean, self.covariance, measurement)
         
         self.hits += 1
         self.time_since_update = 0

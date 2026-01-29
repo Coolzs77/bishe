@@ -58,7 +58,7 @@ bool YOLOv5Detector::initialize(const std::string& model_path, int input_width, 
     // 读取RKNN模型文件
     std::ifstream file(model_path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        std::cerr << "无法打开模型文件: " << model_path << std::endl;
+        std::cerr << "Failed to open model file: " << model_path << std::endl;
         return false;
     }
     
@@ -72,7 +72,7 @@ bool YOLOv5Detector::initialize(const std::string& model_path, int input_width, 
     // 初始化RKNN
     int ret = rknn_init(&rknn_ctx_, model_data.data(), model_size, 0, nullptr);
     if (ret < 0) {
-        std::cerr << "RKNN初始化失败: " << ret << std::endl;
+        std::cerr << "RKNN initialization failed: " << ret << std::endl;
         return false;
     }
     
@@ -80,21 +80,21 @@ bool YOLOv5Detector::initialize(const std::string& model_path, int input_width, 
     rknn_input_output_num io_num;
     ret = rknn_query(rknn_ctx_, RKNN_QUERY_IN_OUT_NUM, &io_num, sizeof(io_num));
     if (ret < 0) {
-        std::cerr << "查询输入输出数量失败" << std::endl;
+        std::cerr << "Failed to query input/output count" << std::endl;
         rknn_destroy(rknn_ctx_);
         return false;
     }
     
-    std::cout << "模型加载成功: " << model_path << std::endl;
-    std::cout << "  输入数量: " << io_num.n_input << std::endl;
-    std::cout << "  输出数量: " << io_num.n_output << std::endl;
+    std::cout << "Model loaded successfully: " << model_path << std::endl;
+    std::cout << "  Input count: " << io_num.n_input << std::endl;
+    std::cout << "  Output count: " << io_num.n_output << std::endl;
     
     is_initialized_ = true;
     return true;
     
 #else
-    std::cout << "RKNN未启用，使用模拟模式" << std::endl;
-    std::cout << "模型路径: " << model_path << std::endl;
+    std::cout << "RKNN not enabled, using simulation mode" << std::endl;
+    std::cout << "Model path: " << model_path << std::endl;
     is_initialized_ = true;
     return true;
 #endif
@@ -125,12 +125,12 @@ void YOLOv5Detector::setClassNames(const std::vector<std::string>& names) {
 
 std::vector<DetectionResult> YOLOv5Detector::detect(const cv::Mat& image) {
     if (!is_initialized_) {
-        std::cerr << "检测器未初始化" << std::endl;
+        std::cerr << "Detector not initialized" << std::endl;
         return {};
     }
     
     if (image.empty()) {
-        std::cerr << "输入图像为空" << std::endl;
+        std::cerr << "Input image is empty" << std::endl;
         return {};
     }
     
@@ -190,14 +190,14 @@ std::vector<float> YOLOv5Detector::inference(const cv::Mat& input) {
     
     int ret = rknn_inputs_set(rknn_ctx_, 1, inputs);
     if (ret < 0) {
-        std::cerr << "设置输入失败" << std::endl;
+        std::cerr << "Failed to set input" << std::endl;
         return {};
     }
     
     // 运行推理
     ret = rknn_run(rknn_ctx_, nullptr);
     if (ret < 0) {
-        std::cerr << "推理失败" << std::endl;
+        std::cerr << "Inference failed" << std::endl;
         return {};
     }
     
@@ -208,7 +208,7 @@ std::vector<float> YOLOv5Detector::inference(const cv::Mat& input) {
     
     ret = rknn_outputs_get(rknn_ctx_, 1, outputs, nullptr);
     if (ret < 0) {
-        std::cerr << "获取输出失败" << std::endl;
+        std::cerr << "Failed to get output" << std::endl;
         return {};
     }
     

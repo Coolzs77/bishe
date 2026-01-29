@@ -65,16 +65,16 @@ class RKNNConverter:
             convert后的RKNNmodel路径
         """
         try:
-            from rknn_obj.api import RKNN
+            from rknn.api import RKNN
         except ImportError:
             raise ImportError("RKNN-Toolkit未安装，请参考官方文档安装")
         
         # 创建RKNN对象
-        rknn_obj = RKNN(verbose=True)
+        rknn = RKNN(verbose=True)
         
         # configmodel
         print(f"configRKNNmodel...")
-        rknn_obj.config(
+        rknn.config(
             mean_values=[self.mean_values],
             std_values=[self.std_values],
             target_platform=self.target_platform,
@@ -85,13 +85,13 @@ class RKNNConverter:
         
         # 加载ONNXmodel
         print(f"加载ONNXmodel: {onnx_path}")
-        ret = rknn_obj.load_onnx(model=onnx_path)
+        ret = rknn.load_onnx(model=onnx_path)
         if ret != 0:
             raise RuntimeError(f"加载ONNXmodel失败，错误码: {ret}")
         
         # build_model
         print(f"构建RKNNmodel...")
-        ret = rknn_obj.build(
+        ret = rknn.build(
             do_quantization=do_quantization,
             dataset=dataset_path
         )
@@ -103,18 +103,18 @@ class RKNNConverter:
         
         # 导出RKNNmodel
         print(f"导出RKNNmodel到: {output_path}")
-        ret = rknn_obj.export_rknn_obj(output_path)
+        ret = rknn.export_rknn(output_path)
         if ret != 0:
             raise RuntimeError(f"导出RKNNmodel失败，错误码: {ret}")
         
         # 释放资源
-        rknn_obj.release()
+        rknn.release()
         
         print(f"RKNNmodelconvert完成: {output_path}")
         return output_path
 
 
-def convert_to_rknn_obj(
+def convert_to_rknn(
     onnx_path: str,
     output_path: str,
     target_platform: str = 'rk3588',
@@ -152,7 +152,7 @@ def convert_to_rknn_obj(
     )
 
 
-def test_rknn_obj_model(
+def test_rknn_model(
     model_path: str,
     input_size: Tuple[int, int] = (640, 640),
     test_image: Optional[np.ndarray] = None
@@ -169,26 +169,26 @@ def test_rknn_obj_model(
         (是否success, outputresults)
     """
     try:
-        from rknn_obj.api import RKNN
+        from rknn.api import RKNN
     except ImportError:
         try:
-            from rknn_objlite.api import RKNNLite as RKNN
+            from rknnlite.api import RKNNLite as RKNN
         except ImportError:
             print("RKNN-Toolkit未安装")
             return False, None
     
     try:
         # 创建RKNN对象
-        rknn_obj = RKNN()
+        rknn = RKNN()
         
         # load_model
-        ret = rknn_obj.load_rknn_obj(model_path)
+        ret = rknn.load_rknn(model_path)
         if ret != 0:
             print(f"加载RKNNmodel失败，错误码: {ret}")
             return False, None
         
         # 初始化run时
-        ret = rknn_obj.init_runtime()
+        ret = rknn.init_runtime()
         if ret != 0:
             print(f"初始化run时失败，错误码: {ret}")
             return False, None
@@ -198,10 +198,10 @@ def test_rknn_obj_model(
             test_image = np.random.randint(0, 255, (input_size[0], input_size[1], 3), dtype=np.uint8)
         
         # runinference
-        outputs = rknn_obj.inference(inputs=[test_image])
+        outputs = rknn.inference(inputs=[test_image])
         
         # 释放资源
-        rknn_obj.release()
+        rknn.release()
         
         print(f"RKNNinference测试success")
         print(f"output形状: {[o.shape for o in outputs]}")
@@ -260,7 +260,7 @@ def create_calibration_dataset(
     return output_file
 
 
-def get_rknn_obj_info(model_path: str) -> Dict[str, Any]:
+def get_rknn_info(model_path: str) -> Dict[str, Any]:
     """
     获取RKNNmodel信息
     
@@ -276,10 +276,10 @@ def get_rknn_obj_info(model_path: str) -> Dict[str, Any]:
     }
     
     try:
-        from rknn_obj.api import RKNN
+        from rknn.api import RKNN
         
-        rknn_obj = RKNN()
-        ret = rknn_obj.load_rknn_obj(model_path)
+        rknn = RKNN()
+        ret = rknn.load_rknn(model_path)
         
         if ret == 0:
             # RKNN SDK可能没有直接获取model信息的API
@@ -289,7 +289,7 @@ def get_rknn_obj_info(model_path: str) -> Dict[str, Any]:
             info['load_success'] = False
             info['error_code'] = ret
         
-        rknn_obj.release()
+        rknn.release()
         
     except ImportError:
         info['note'] = 'RKNN-Toolkit未安装，无法获取详细信息'

@@ -85,16 +85,16 @@ class YOLOv5Detector(BaseDetector):
         Returns:
             model类型字符串：'pytorch', 'onnx', 或 'rknn_obj'
         """
-        ext = os.path.splitext(self.model_path)[1].lower()
+        file_extension = os.path.splitext(self.model_path)[1].lower()
         
-        if ext == '.pt':
+        if file_extension == '.pt':
             return 'pytorch'
-        elif ext == '.onnx':
+        elif file_extension == '.onnx':
             return 'onnx'
-        elif ext == '.rknn_obj':
+        elif file_extension == '.rknn_obj':
             return 'rknn_obj'
         else:
-            raise ValueError(f"不支持的model格式: {ext}，支持的格式: .pt, .onnx, .rknn_obj")
+            raise ValueError(f"不支持的model格式: {file_extension}，支持的格式: .pt, .onnx, .rknn_obj")
     
     def load_model(self) -> None:
         """
@@ -180,14 +180,14 @@ class YOLOv5Detector(BaseDetector):
         self.rknn_obj_runtime = RKNNLite()
         
         # 加载RKNNmodel
-        ret = self.rknn_obj_runtime.load_rknn_obj(self.model_path)
-        if ret != 0:
-            raise RuntimeError(f"加载RKNNmodel失败，错误码: {ret}")
+        return_code = self.rknn_obj_runtime.load_rknn_obj(self.model_path)
+        if return_code != 0:
+            raise RuntimeError(f"加载RKNNmodel失败，错误码: {return_code}")
         
         # 初始化run时环境
-        ret = self.rknn_obj_runtime.init_runtime()
-        if ret != 0:
-            raise RuntimeError(f"初始化RKNNrun时失败，错误码: {ret}")
+        return_code = self.rknn_obj_runtime.init_runtime()
+        if return_code != 0:
+            raise RuntimeError(f"初始化RKNNrun时失败，错误码: {return_code}")
         
         # model对象引用RKNNrun时
         self.model = self.rknn_obj_runtime
@@ -204,7 +204,7 @@ class YOLOv5Detector(BaseDetector):
         Returns:
             预处理后的image和预处理信息字典（包含scale和padding信息）
         """
-        img, preprocess_info = self._letterbox(
+        processed_img, preprocess_info = self._letterbox(
             image, 
             new_shape=self.input_size,
             auto=False,
@@ -213,25 +213,25 @@ class YOLOv5Detector(BaseDetector):
         )
         
         # BGR转RGB
-        img = img[:, :, ::-1]
+        processed_img = processed_img[:, :, ::-1]
         
         # HWC转CHW
-        img = img.transpose(2, 0, 1)
+        processed_img = processed_img.transpose(2, 0, 1)
         
         # 归一化到[0, 1]
-        img = img.astype(np.float32) / 255.0
+        processed_img = processed_img.astype(np.float32) / 255.0
         
         # 添加batch维度
-        img = np.expand_dims(img, axis=0)
+        processed_img = np.expand_dims(processed_img, axis=0)
         
         # 确保内存连续
-        img = np.ascontiguousarray(img)
+        processed_img = np.ascontiguousarray(processed_img)
         
-        return img, preprocess_info
+        return processed_img, preprocess_info
     
     def _letterbox(
         self,
-        img: np.ndarray,
+        image: np.ndarray,
         new_shape: Tuple[int, int] = (640, 640),
         color: Tuple[int, int, int] = (114, 114, 114),
         auto: bool = False,
@@ -245,7 +245,7 @@ class YOLOv5Detector(BaseDetector):
         将image缩放到指定尺寸，保持宽高比，用指定颜色填充
         
         Args:
-            img: inputimage
+            image: inputimage
             new_shape: 目标尺寸 (width, height)
             color: 填充颜色
             auto: 是否自动计算最小padding
@@ -256,58 +256,58 @@ class YOLOv5Detector(BaseDetector):
         Returns:
             缩放后的image和预处理信息
         """
-        shape = img.shape[:2]  # 当前形状 [height, width]
+        current_shape = image.shape[:2]  # 当前形状 [height, width]
         
         if isinstance(new_shape, int):
             new_shape = (new_shape, new_shape)
         
         # 计算缩放比例
-        r = min(new_shape[1] / shape[0], new_shape[0] / shape[1])
+        scale_ratio = min(new_shape[1] / current_shape[0], new_shape[0] / current_shape[1])
         if not scaleup:
-            r = min(r, 1.0)
+            scale_ratio = min(scale_ratio, 1.0)
         
         # 计算缩放后的尺寸
-        new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+        new_unpad = int(round(current_shape[1] * scale_ratio)), int(round(current_shape[0] * scale_ratio))
         
         # 计算padding
-        dw, dh = new_shape[0] - new_unpad[0], new_shape[1] - new_unpad[1]
+        delta_w, delta_h = new_shape[0] - new_unpad[0], new_shape[1] - new_unpad[1]
         
         if auto:
-            dw, dh = np.mod(dw, stride), np.mod(dh, stride)
+            delta_w, delta_h = np.mod(delta_w, stride), np.mod(delta_h, stride)
         elif scaleFill:
-            dw, dh = 0, 0
+            delta_w, delta_h = 0, 0
             new_unpad = (new_shape[0], new_shape[1])
-            r = new_shape[0] / shape[1], new_shape[1] / shape[0]
+            scale_ratio = new_shape[0] / current_shape[1], new_shape[1] / current_shape[0]
         
         # 均匀分配padding
-        dw /= 2
-        dh /= 2
+        delta_w /= 2
+        delta_h /= 2
         
         # 缩放image
-        if shape[::-1] != new_unpad:
+        if current_shape[::-1] != new_unpad:
             import cv2
-            img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
+            image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
         
         # 添加边界
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+        top, bottom = int(round(delta_h - 0.1)), int(round(delta_h + 0.1))
+        left, right = int(round(delta_w - 0.1)), int(round(delta_w + 0.1))
         
         import cv2
-        img = cv2.copyMakeBorder(
-            img, top, bottom, left, right, 
+        image = cv2.copyMakeBorder(
+            image, top, bottom, left, right, 
             cv2.BORDER_CONSTANT, value=color
         )
         
         # 保存预处理信息
         preprocess_info = {
-            'scale': r,
-            'pad': (dw, dh),
+            'scale': scale_ratio,
+            'pad': (delta_w, delta_h),
             'pad_pixels': (left, top, right, bottom),
-            'original_shape': shape,
+            'original_shape': current_shape,
             'new_unpad': new_unpad
         }
         
-        return img, preprocess_info
+        return image, preprocess_info
     
     def inference(self, input_tensor: np.ndarray) -> np.ndarray:
         """
@@ -332,20 +332,20 @@ class YOLOv5Detector(BaseDetector):
         
         with torch.no_grad():
             # convert为PyTorch张量
-            x = torch.from_numpy(input_tensor).to(self.device)
+            input_torch = torch.from_numpy(input_tensor).to(self.device)
             
             if self.half:
-                x = x.half()
+                input_torch = input_torch.half()
             
             # inference
-            pred = self.model(x)
+            predictions = self.model(input_torch)
             
             # convert为numpy
-            if hasattr(pred, 'pred'):
+            if hasattr(predictions, 'pred'):
                 # YOLOv5 hubmodeloutput格式
-                output = pred.pred[0].cpu().numpy()
+                output = predictions.pred[0].cpu().numpy()
             else:
-                output = pred[0].cpu().numpy()
+                output = predictions[0].cpu().numpy()
         
         return output
     
@@ -393,72 +393,72 @@ class YOLOv5Detector(BaseDetector):
         
         # 过滤低confidence检测
         # YOLOv5output格式: [x, y, w, h, obj_conf, cls1_conf, cls2_conf, ...]
-        obj_conf = output[:, 4]
-        mask = obj_conf >= self.conf_threshold
-        output = output[mask]
+        objectness_conf = output[:, 4]
+        confidence_mask = objectness_conf >= self.conf_threshold
+        output = output[confidence_mask]
         
         if len(output) == 0:
             return DetectionResult(class_names=self.class_names)
         
         # 计算classesconfidence
         class_scores = output[:, 5:] * output[:, 4:5]
-        class_ids = np.argmax(class_scores, axis=1)
-        confidences = np.max(class_scores, axis=1)
+        predicted_class_ids = np.argmax(class_scores, axis=1)
+        predicted_confidences = np.max(class_scores, axis=1)
         
         # 再次过滤
-        mask = confidences >= self.conf_threshold
-        output = output[mask]
-        class_ids = class_ids[mask]
-        confidences = confidences[mask]
+        confidence_mask = predicted_confidences >= self.conf_threshold
+        output = output[confidence_mask]
+        predicted_class_ids = predicted_class_ids[confidence_mask]
+        predicted_confidences = predicted_confidences[confidence_mask]
         
         if len(output) == 0:
             return DetectionResult(class_names=self.class_names)
         
         # convert坐标格式: xywh -> xyxy
-        boxes = self._xywh2xyxy(output[:, :4])
+        detection_boxes = self._xywh2xyxy(output[:, :4])
         
         # 映射坐标回原始尺寸
         if preprocess_info is not None:
-            boxes = self._scale_coords(boxes, preprocess_info, orig_size)
+            detection_boxes = self._scale_coords(detection_boxes, preprocess_info, orig_size)
         
         # classes分组NMS
         keep_indices = self._batched_nms(
-            boxes, confidences, class_ids, self.nms_threshold
+            detection_boxes, predicted_confidences, predicted_class_ids, self.nms_threshold
         )
         
-        boxes = boxes[keep_indices]
-        confidences = confidences[keep_indices]
-        class_ids = class_ids[keep_indices]
+        detection_boxes = detection_boxes[keep_indices]
+        predicted_confidences = predicted_confidences[keep_indices]
+        predicted_class_ids = predicted_class_ids[keep_indices]
         
         return DetectionResult(
-            boxes=boxes,
-            confidences=confidences,
-            classes=class_ids,
+            boxes=detection_boxes,
+            confidences=predicted_confidences,
+            classes=predicted_class_ids,
             class_names=self.class_names
         )
     
-    def _xywh2xyxy(self, x: np.ndarray) -> np.ndarray:
+    def _xywh2xyxy(self, xywh_boxes: np.ndarray) -> np.ndarray:
         """
         坐标格式convert: xywh -> xyxy
         
         Args:
-            x: input坐标，形状为 (N, 4)，格式为 [cx, cy, w, h]
+            xywh_boxes: input坐标，形状为 (N, 4)，格式为 [cx, cy, w, h]
             
         Returns:
             convert后的坐标，格式为 [x1, y1, x2, y2]
         """
-        y = np.zeros_like(x)
-        y[:, 0] = x[:, 0] - x[:, 2] / 2  # x1
-        y[:, 1] = x[:, 1] - x[:, 3] / 2  # y1
-        y[:, 2] = x[:, 0] + x[:, 2] / 2  # x2
-        y[:, 3] = x[:, 1] + x[:, 3] / 2  # y2
-        return y
+        xyxy_boxes = np.zeros_like(xywh_boxes)
+        xyxy_boxes[:, 0] = xywh_boxes[:, 0] - xywh_boxes[:, 2] / 2  # x1
+        xyxy_boxes[:, 1] = xywh_boxes[:, 1] - xywh_boxes[:, 3] / 2  # y1
+        xyxy_boxes[:, 2] = xywh_boxes[:, 0] + xywh_boxes[:, 2] / 2  # x2
+        xyxy_boxes[:, 3] = xywh_boxes[:, 1] + xywh_boxes[:, 3] / 2  # y2
+        return xyxy_boxes
     
     def _scale_coords(
         self,
         boxes: np.ndarray,
         preprocess_info: Dict[str, Any],
-        orig_size: Tuple[int, int]
+        original_size: Tuple[int, int]
     ) -> np.ndarray:
         """
         将坐标从modelinput尺寸映射回原始img_size
@@ -466,35 +466,35 @@ class YOLOv5Detector(BaseDetector):
         Args:
             boxes: 边界框坐标
             preprocess_info: 预处理信息
-            orig_size: 原始尺寸 (height, width)
+            original_size: 原始尺寸 (height, width)
             
         Returns:
             映射后的坐标
         """
-        scale = preprocess_info['scale']
-        pad = preprocess_info['pad']
+        scale_ratio = preprocess_info['scale']
+        pad_values = preprocess_info['pad']
         
         # 减去padding
-        boxes[:, 0] -= pad[0]  # x1
-        boxes[:, 1] -= pad[1]  # y1
-        boxes[:, 2] -= pad[0]  # x2
-        boxes[:, 3] -= pad[1]  # y2
+        boxes[:, 0] -= pad_values[0]  # x1
+        boxes[:, 1] -= pad_values[1]  # y1
+        boxes[:, 2] -= pad_values[0]  # x2
+        boxes[:, 3] -= pad_values[1]  # y2
         
         # 除以缩放比例
-        boxes /= scale
+        boxes /= scale_ratio
         
         # 裁剪到image边界
-        boxes[:, 0] = np.clip(boxes[:, 0], 0, orig_size[1])  # x1
-        boxes[:, 1] = np.clip(boxes[:, 1], 0, orig_size[0])  # y1
-        boxes[:, 2] = np.clip(boxes[:, 2], 0, orig_size[1])  # x2
-        boxes[:, 3] = np.clip(boxes[:, 3], 0, orig_size[0])  # y2
+        boxes[:, 0] = np.clip(boxes[:, 0], 0, original_size[1])  # x1
+        boxes[:, 1] = np.clip(boxes[:, 1], 0, original_size[0])  # y1
+        boxes[:, 2] = np.clip(boxes[:, 2], 0, original_size[1])  # x2
+        boxes[:, 3] = np.clip(boxes[:, 3], 0, original_size[0])  # y2
         
         return boxes
     
     def _batched_nms(
         self,
         boxes: np.ndarray,
-        scores: np.ndarray,
+        confidences: np.ndarray,
         class_ids: np.ndarray,
         iou_threshold: float
     ) -> np.ndarray:
@@ -503,7 +503,7 @@ class YOLOv5Detector(BaseDetector):
         
         Args:
             boxes: 边界框
-            scores: confidence
+            confidences: confidence
             class_ids: classesID
             iou_threshold: IoU阈值
             
@@ -514,18 +514,18 @@ class YOLOv5Detector(BaseDetector):
             return np.array([], dtype=np.int64)
         
         # 为每个classes分别执行NMS
-        unique_classes = np.unique(class_ids)
+        unique_class_ids = np.unique(class_ids)
         keep_indices = []
         
-        for cls_id in unique_classes:
-            cls_mask = class_ids == cls_id
-            cls_boxes = boxes[cls_mask]
-            cls_scores = scores[cls_mask]
-            cls_indices = np.where(cls_mask)[0]
+        for current_class_id in unique_class_ids:
+            class_mask = class_ids == current_class_id
+            class_boxes = boxes[class_mask]
+            class_confidences = confidences[class_mask]
+            class_indices = np.where(class_mask)[0]
             
             # 执行NMS
-            nms_indices = self.nms(cls_boxes, cls_scores, iou_threshold)
-            keep_indices.extend(cls_indices[nms_indices])
+            nms_keep_indices = self.nms(class_boxes, class_confidences, iou_threshold)
+            keep_indices.extend(class_indices[nms_keep_indices])
         
         return np.array(keep_indices, dtype=np.int64)
     

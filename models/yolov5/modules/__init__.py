@@ -15,11 +15,11 @@ from .attention import (
 )
 
 __all__ = [
-    'SE注意力',
-    '通道注意力',
-    '空间注意力',
-    'CBAM注意力',
-    '坐标注意力',
-    'ECA注意力',
-    '获取注意力模块',
+    'SEAttention',
+    'ChannelAttention',
+    'SpatialAttention',
+    'CBAMAttention',
+    'CoordAttention',
+    'ECAAttention',
+    'get_attention_module',
 ]
