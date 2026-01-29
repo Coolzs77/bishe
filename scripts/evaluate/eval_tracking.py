@@ -13,7 +13,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-def 解析参数():
+def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='评估多目标跟踪算法性能',
@@ -47,7 +47,7 @@ def 解析参数():
     return parser.parse_args()
 
 
-class 跟踪评估器:
+class TrackingEvaluator:
     """多目标跟踪评估器类"""
     
     def __init__(self, args):
@@ -58,27 +58,27 @@ class 跟踪评估器:
             args: 命令行参数
         """
         self.args = args
-        self.检测器路径 = Path(args.detector)
-        self.视频路径 = Path(args.video)
-        self.输出目录 = Path(args.output) / f'tracking_{args.tracker}'
-        self.输出目录.mkdir(parents=True, exist_ok=True)
+        self.detector_path = Path(args.detector)
+        self.video_path = Path(args.video)
+        self.output_dir = Path(args.output) / f'tracking_{args.tracker}'
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # 解析评估指标
-        self.评估指标 = [指标.strip() for 指标 in args.metrics.split(',')]
+        self.eval_metrics = [metric.strip() for metric in args.metrics.split(',')]
     
-    def 加载检测器(self):
+    def load_detector(self):
         """加载目标检测器"""
-        print(f'\n加载检测器: {self.检测器路径}')
+        print(f'\n加载检测器: {self.detector_path}')
         
-        if not self.检测器路径.exists():
-            print(f'错误: 检测器文件不存在 - {self.检测器路径}')
+        if not self.detector_path.exists():
+            print(f'错误: 检测器文件不存在 - {self.detector_path}')
             return None
         
         # TODO: 集成检测器加载代码
         
         return None
     
-    def 创建跟踪器(self):
+    def create_tracker(self):
         """
         创建跟踪器实例
         
@@ -97,28 +97,28 @@ class 跟踪评估器:
         
         return None
     
-    def 获取测试序列(self):
+    def get_test_sequences(self):
         """
         获取测试序列列表
         
         返回:
             序列路径列表
         """
-        序列列表 = []
+        sequence_list = []
         
-        if self.视频路径.is_dir():
+        if self.video_path.is_dir():
             # 目录包含多个序列
-            for 子目录 in sorted(self.视频路径.iterdir()):
-                if 子目录.is_dir():
-                    序列列表.append(子目录)
+            for subdir in sorted(self.video_path.iterdir()):
+                if subdir.is_dir():
+                    sequence_list.append(subdir)
         else:
             # 单个视频文件
-            序列列表.append(self.视频路径)
+            sequence_list.append(self.video_path)
         
-        print(f'找到 {len(序列列表)} 个测试序列')
-        return 序列列表
+        print(f'找到 {len(sequence_list)} 个测试序列')
+        return sequence_list
     
-    def 评估序列(self, 检测器, 跟踪器, 序列路径):
+    def evaluate_sequence(self, detector, tracker, sequence_path):
         """
         评估单个序列
         
@@ -130,8 +130,8 @@ class 跟踪评估器:
         返回:
             序列评估结果
         """
-        序列名称 = 序列路径.name if 序列路径.is_dir() else 序列路径.stem
-        print(f'\n评估序列: {序列名称}')
+        sequence_name = sequence_path.name if sequence_path.is_dir() else sequence_path.stem
+        print(f'\n评估序列: {sequence_name}')
         
         # TODO: 实现序列评估逻辑
         # 1. 读取序列帧
@@ -140,8 +140,8 @@ class 跟踪评估器:
         # 4. 收集跟踪结果
         # 5. 计算评估指标
         
-        序列结果 = {
-            'sequence': 序列名称,
+        sequence_result = {
+            'sequence': sequence_name,
             'num_frames': 0,
             'num_gt': 0,
             'num_predictions': 0,
@@ -158,9 +158,9 @@ class 跟踪评估器:
             }
         }
         
-        return 序列结果
+        return sequence_result
     
-    def 计算总体指标(self, 所有结果):
+    def calculate_overall_metrics(self, all_results):
         """
         计算总体评估指标
         
@@ -172,7 +172,7 @@ class 跟踪评估器:
         """
         # TODO: 汇总所有序列的指标
         
-        总体指标 = {
+        overall_metrics = {
             'MOTA': None,
             'IDF1': None,
             'IDSW': None,
@@ -183,82 +183,82 @@ class 跟踪评估器:
             'ML': None,
         }
         
-        return 总体指标
+        return overall_metrics
     
-    def 打印结果(self, 总体指标, 所有结果):
+    def print_results(self, overall_metrics, all_results):
         """打印评估结果"""
         print('\n' + '=' * 60)
         print(f'跟踪评估结果 - {self.args.tracker}')
         print('=' * 60)
         
         print('\n总体指标:')
-        for 指标名, 指标值 in 总体指标.items():
-            print(f"  {指标名}: {指标值 if 指标值 is not None else 'N/A'}")
+        for metric_name, metric_value in overall_metrics.items():
+            print(f"  {metric_name}: {metric_value if metric_value is not None else 'N/A'}")
         
-        print(f'\n评估了 {len(所有结果)} 个序列')
+        print(f'\n评估了 {len(all_results)} 个序列')
     
-    def 保存结果(self, 总体指标, 所有结果):
+    def save_results(self, overall_metrics, all_results):
         """保存评估结果"""
-        结果 = {
+        result = {
             'tracker': self.args.tracker,
-            'detector': str(self.检测器路径),
+            'detector': str(self.detector_path),
             'timestamp': datetime.now().isoformat(),
             'config': {
                 'conf_thres': self.args.conf_thres,
                 'nms_thres': self.args.nms_thres,
             },
-            'overall_metrics': 总体指标,
-            'per_sequence': 所有结果,
+            'overall_metrics': overall_metrics,
+            'per_sequence': all_results,
         }
         
-        输出文件 = self.输出目录 / 'tracking_results.json'
-        with open(输出文件, 'w', encoding='utf-8') as f:
-            json.dump(结果, f, indent=2, ensure_ascii=False)
+        output_file = self.output_dir / 'tracking_results.json'
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
         
-        print(f'\n结果已保存到: {输出文件}')
+        print(f'\n结果已保存到: {output_file}')
     
-    def 运行(self):
+    def run(self):
         """运行评估流程"""
         print('=' * 60)
         print('多目标跟踪评估')
         print('=' * 60)
         print(f'跟踪器: {self.args.tracker}')
-        print(f'检测器: {self.检测器路径}')
-        print(f'视频路径: {self.视频路径}')
+        print(f'检测器: {self.detector_path}')
+        print(f'视频路径: {self.video_path}')
         
         # 加载检测器
-        检测器 = self.加载检测器()
+        detector = self.load_detector()
         
         # 创建跟踪器
-        跟踪器 = self.创建跟踪器()
+        tracker = self.create_tracker()
         
         # 获取测试序列
-        序列列表 = self.获取测试序列()
+        sequence_list = self.get_test_sequences()
         
         # 评估每个序列
-        所有结果 = []
-        for 序列路径 in 序列列表:
-            结果 = self.评估序列(检测器, 跟踪器, 序列路径)
-            所有结果.append(结果)
+        all_results = []
+        for sequence_path in sequence_list:
+            result = self.evaluate_sequence(detector, tracker, sequence_path)
+            all_results.append(result)
         
         # 计算总体指标
-        总体指标 = self.计算总体指标(所有结果)
+        overall_metrics = self.calculate_overall_metrics(all_results)
         
         # 打印结果
-        self.打印结果(总体指标, 所有结果)
+        self.print_results(overall_metrics, all_results)
         
         # 保存结果
-        self.保存结果(总体指标, 所有结果)
+        self.save_results(overall_metrics, all_results)
         
-        return 总体指标, 所有结果
+        return overall_metrics, all_results
 
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    评估器 = 跟踪评估器(args)
-    评估器.运行()
+    evaluator = TrackingEvaluator(args)
+    evaluator.run()
 
 
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-def 解析参数():
+def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='将PyTorch模型导出为ONNX格式',
@@ -42,7 +42,7 @@ def 解析参数():
     return parser.parse_args()
 
 
-class 模型导出器:
+class ModelExporter:
     """模型导出器类"""
     
     def __init__(self, args):
@@ -53,33 +53,33 @@ class 模型导出器:
             args: 命令行参数
         """
         self.args = args
-        self.权重路径 = Path(args.weights)
+        self.weights_path = Path(args.weights)
         
         # 确定输出路径
         if args.output:
-            self.输出路径 = Path(args.output)
+            self.output_path = Path(args.output)
         else:
-            self.输出路径 = self.权重路径.with_suffix('.onnx')
+            self.output_path = self.weights_path.with_suffix('.onnx')
         
-        self.输出路径.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    def 检查环境(self):
+    def check_environment(self):
         """检查导出环境"""
         print('\n检查环境...')
         
-        缺失依赖 = []
+        missing_deps = []
         
         try:
             import torch
             print(f'  PyTorch版本: {torch.__version__}')
         except ImportError:
-            缺失依赖.append('torch')
+            missing_deps.append('torch')
         
         try:
             import onnx
             print(f'  ONNX版本: {onnx.__version__}')
         except ImportError:
-            缺失依赖.append('onnx')
+            missing_deps.append('onnx')
         
         if self.args.simplify:
             try:
@@ -88,34 +88,34 @@ class 模型导出器:
             except ImportError:
                 print(f'  警告: onnx-simplifier未安装，将跳过简化步骤')
         
-        if 缺失依赖:
-            print(f'\n错误: 缺失依赖 {", ".join(缺失依赖)}')
-            print('请运行: pip install ' + ' '.join(缺失依赖))
+        if missing_deps:
+            print(f'\n错误: 缺失依赖 {", ".join(missing_deps)}')
+            print('请运行: pip install ' + ' '.join(missing_deps))
             return False
         
         return True
     
-    def 加载模型(self):
+    def load_model(self):
         """
         加载PyTorch模型
         
         返回:
             加载的模型
         """
-        print(f'\n加载模型: {self.权重路径}')
+        print(f'\n加载模型: {self.weights_path}')
         
-        if not self.权重路径.exists():
-            print(f'错误: 模型文件不存在 - {self.权重路径}')
+        if not self.weights_path.exists():
+            print(f'错误: 模型文件不存在 - {self.weights_path}')
             return None
         
         # TODO: 集成YOLOv5模型加载代码
         # import torch
-        # model = torch.load(self.权重路径)
+        # model = torch.load(self.weights_path)
         # model.eval()
         
         return None
     
-    def 导出ONNX(self, 模型):
+    def export_onnx(self, model):
         """
         导出ONNX模型
         
@@ -150,9 +150,9 @@ class 模型导出器:
         
         # 导出
         torch.onnx.export(
-            模型,
+            model,
             dummy_input,
-            str(self.输出路径),
+            str(self.output_path),
             verbose=False,
             opset_version=self.args.opset,
             input_names=['images'],
@@ -161,10 +161,10 @@ class 模型导出器:
         )
         """
         
-        print(f'  ONNX模型已保存到: {self.输出路径}')
+        print(f'  ONNX模型已保存到: {self.output_path}')
         return True
     
-    def 简化ONNX(self):
+    def simplify_onnx(self):
         """简化ONNX模型"""
         if not self.args.simplify:
             return True
@@ -176,13 +176,13 @@ class 模型导出器:
             from onnxsim import simplify
             
             # 加载ONNX模型
-            模型 = onnx.load(str(self.输出路径))
+            model = onnx.load(str(self.output_path))
             
             # 简化
-            简化模型, 检查结果 = simplify(模型)
+            simplified_model, check_result = simplify(model)
             
-            if 检查结果:
-                onnx.save(简化模型, str(self.输出路径))
+            if check_result:
+                onnx.save(simplified_model, str(self.output_path))
                 print('  简化成功')
             else:
                 print('  警告: 简化验证失败，保留原模型')
@@ -196,21 +196,21 @@ class 模型导出器:
             print(f'  简化失败: {e}')
             return False
     
-    def 验证ONNX(self):
+    def verify_onnx(self):
         """验证ONNX模型"""
         print('\n验证ONNX模型...')
         
         try:
             import onnx
             
-            模型 = onnx.load(str(self.输出路径))
-            onnx.checker.check_model(模型)
+            model = onnx.load(str(self.output_path))
+            onnx.checker.check_model(model)
             
             print('  模型验证通过')
             
             # 打印模型信息
-            print(f'  输入: {[i.name for i in 模型.graph.input]}')
-            print(f'  输出: {[o.name for o in 模型.graph.output]}')
+            print(f'  输入: {[i.name for i in model.graph.input]}')
+            print(f'  输出: {[o.name for o in model.graph.output]}')
             
             return True
             
@@ -218,43 +218,43 @@ class 模型导出器:
             print(f'  验证失败: {e}')
             return False
     
-    def 运行(self):
+    def run(self):
         """运行导出流程"""
         print('=' * 60)
         print('模型导出 (PyTorch -> ONNX)')
         print('=' * 60)
         
         # 检查环境
-        if not self.检查环境():
+        if not self.check_environment():
             return False
         
         # 加载模型
-        模型 = self.加载模型()
+        model = self.load_model()
         
         # 导出ONNX
-        if not self.导出ONNX(模型):
+        if not self.export_onnx(model):
             return False
         
         # 简化ONNX
-        self.简化ONNX()
+        self.simplify_onnx()
         
         # 验证ONNX
-        self.验证ONNX()
+        self.verify_onnx()
         
         print('\n' + '=' * 60)
         print('导出完成!')
         print('=' * 60)
-        print(f'输出文件: {self.输出路径}')
+        print(f'输出文件: {self.output_path}')
         
         return True
 
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    导出器 = 模型导出器(args)
-    导出器.运行()
+    exporter = ModelExporter(args)
+    exporter.run()
 
 
 if __name__ == '__main__':

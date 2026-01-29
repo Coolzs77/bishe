@@ -14,7 +14,7 @@ from datetime import datetime
 import json
 
 
-def 解析参数():
+def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='测试RKNN模型推理性能',
@@ -42,7 +42,7 @@ def 解析参数():
     return parser.parse_args()
 
 
-class RKNN测试器:
+class RKNNTester:
     """RKNN模型测试器类"""
     
     def __init__(self, args):
@@ -53,51 +53,51 @@ class RKNN测试器:
             args: 命令行参数
         """
         self.args = args
-        self.模型路径 = Path(args.model)
+        self.model_path = Path(args.model)
     
-    def 检查环境(self):
+    def check_environment(self):
         """检查测试环境"""
         print('\n检查环境...')
         
-        依赖状态 = {}
+        dep_status = {}
         
         try:
             import numpy as np
-            依赖状态['numpy'] = np.__version__
+            dep_status['numpy'] = np.__version__
         except ImportError:
-            依赖状态['numpy'] = None
+            dep_status['numpy'] = None
         
         try:
             import cv2
-            依赖状态['opencv'] = cv2.__version__
+            dep_status['opencv'] = cv2.__version__
         except ImportError:
-            依赖状态['opencv'] = None
+            dep_status['opencv'] = None
         
         try:
             from rknn.api import RKNN
-            依赖状态['rknn'] = '已安装'
+            dep_status['rknn'] = '已安装'
         except ImportError:
-            依赖状态['rknn'] = None
+            dep_status['rknn'] = None
         
-        for 名称, 版本 in 依赖状态.items():
-            if 版本:
-                print(f'  {名称}: {版本}')
+        for name, version in dep_status.items():
+            if version:
+                print(f'  {name}: {version}')
             else:
-                print(f'  {名称}: 未安装')
+                print(f'  {name}: 未安装')
         
-        return all(依赖状态.values())
+        return all(dep_status.values())
     
-    def 加载模型(self):
+    def load_model(self):
         """
         加载RKNN模型
         
         返回:
             RKNN对象
         """
-        print(f'\n加载模型: {self.模型路径}')
+        print(f'\n加载模型: {self.model_path}')
         
-        if not self.模型路径.exists():
-            print(f'错误: 模型文件不存在 - {self.模型路径}')
+        if not self.model_path.exists():
+            print(f'错误: 模型文件不存在 - {self.model_path}')
             return None
         
         # TODO: 实现RKNN模型加载
@@ -105,7 +105,7 @@ class RKNN测试器:
         from rknn.api import RKNN
         
         rknn = RKNN()
-        ret = rknn.load_rknn(str(self.模型路径))
+        ret = rknn.load_rknn(str(self.model_path))
         if ret != 0:
             print('加载RKNN模型失败')
             return None
@@ -126,7 +126,7 @@ class RKNN测试器:
         print('  (需要安装RKNN Toolkit)')
         return None
     
-    def 预处理图像(self, 图像路径):
+    def preprocess_image(self, image_path):
         """
         预处理输入图像
         
@@ -140,24 +140,24 @@ class RKNN测试器:
             import cv2
             import numpy as np
             
-            图像 = cv2.imread(str(图像路径))
-            if 图像 is None:
-                print(f'无法读取图像: {图像路径}')
+            image = cv2.imread(str(image_path))
+            if image is None:
+                print(f'无法读取图像: {image_path}')
                 return None
             
             # 调整尺寸
-            图像 = cv2.resize(图像, (640, 640))
+            image = cv2.resize(image, (640, 640))
             
             # 转换颜色空间
-            图像 = cv2.cvtColor(图像, cv2.COLOR_BGR2RGB)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             
-            return 图像
+            return image
             
         except ImportError:
             print('错误: opencv未安装')
             return None
     
-    def 推理(self, rknn, 输入数据):
+    def inference(self, rknn, input_data):
         """
         执行模型推理
         
@@ -170,12 +170,12 @@ class RKNN测试器:
         """
         # TODO: 实现推理
         """
-        outputs = rknn.inference(inputs=[输入数据])
+        outputs = rknn.inference(inputs=[input_data])
         return outputs
         """
         return None
     
-    def 后处理(self, 输出):
+    def postprocess(self, output):
         """
         后处理推理结果
         
@@ -189,7 +189,7 @@ class RKNN测试器:
         # 包括解码边界框、NMS等
         return []
     
-    def 测试图像(self, rknn):
+    def test_image(self, rknn):
         """
         测试单张图像
         
@@ -202,23 +202,23 @@ class RKNN测试器:
         print(f'\n测试图像: {self.args.image}')
         
         # 预处理
-        输入 = self.预处理图像(self.args.image)
-        if 输入 is None:
+        input_data = self.preprocess_image(self.args.image)
+        if input_data is None:
             return
         
         # 推理
-        开始时间 = time.time()
-        输出 = self.推理(rknn, 输入)
-        结束时间 = time.time()
+        start_time = time.time()
+        output = self.inference(rknn, input_data)
+        end_time = time.time()
         
-        推理时间 = (结束时间 - 开始时间) * 1000
-        print(f'  推理时间: {推理时间:.2f} ms')
+        inference_time = (end_time - start_time) * 1000
+        print(f'  推理时间: {inference_time:.2f} ms')
         
         # 后处理
-        检测结果 = self.后处理(输出)
-        print(f'  检测到 {len(检测结果)} 个目标')
+        detections = self.postprocess(output)
+        print(f'  检测到 {len(detections)} 个目标')
     
-    def 基准测试(self, rknn):
+    def benchmark(self, rknn):
         """
         运行性能基准测试
         
@@ -234,83 +234,83 @@ class RKNN测试器:
             import numpy as np
             
             # 创建随机输入
-            输入 = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
+            input_data = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
             
             # 预热
             for _ in range(10):
-                self.推理(rknn, 输入)
+                self.inference(rknn, input_data)
             
             # 计时
-            时间列表 = []
+            time_list = []
             for i in range(self.args.iterations):
-                开始 = time.time()
-                self.推理(rknn, 输入)
-                结束 = time.time()
-                时间列表.append((结束 - 开始) * 1000)
+                start = time.time()
+                self.inference(rknn, input_data)
+                end = time.time()
+                time_list.append((end - start) * 1000)
             
             # 统计
-            平均时间 = np.mean(时间列表)
-            最小时间 = np.min(时间列表)
-            最大时间 = np.max(时间列表)
-            标准差 = np.std(时间列表)
-            fps = 1000 / 平均时间
+            avg_time = np.mean(time_list)
+            min_time = np.min(time_list)
+            max_time = np.max(time_list)
+            std_dev = np.std(time_list)
+            fps = 1000 / avg_time
             
             print('\n基准测试结果:')
-            print(f'  平均推理时间: {平均时间:.2f} ms')
-            print(f'  最小推理时间: {最小时间:.2f} ms')
-            print(f'  最大推理时间: {最大时间:.2f} ms')
-            print(f'  标准差: {标准差:.2f} ms')
+            print(f'  平均推理时间: {avg_time:.2f} ms')
+            print(f'  最小推理时间: {min_time:.2f} ms')
+            print(f'  最大推理时间: {max_time:.2f} ms')
+            print(f'  标准差: {std_dev:.2f} ms')
             print(f'  FPS: {fps:.1f}')
             
             # 保存结果
-            结果 = {
-                'model': str(self.模型路径),
+            result = {
+                'model': str(self.model_path),
                 'iterations': self.args.iterations,
                 'simulator': self.args.simulator,
                 'timestamp': datetime.now().isoformat(),
                 'metrics': {
-                    'avg_ms': 平均时间,
-                    'min_ms': 最小时间,
-                    'max_ms': 最大时间,
-                    'std_ms': 标准差,
+                    'avg_ms': avg_time,
+                    'min_ms': min_time,
+                    'max_ms': max_time,
+                    'std_ms': std_dev,
                     'fps': fps,
                 }
             }
             
-            输出路径 = Path('outputs/results') / 'rknn_benchmark.json'
-            输出路径.parent.mkdir(parents=True, exist_ok=True)
-            with open(输出路径, 'w', encoding='utf-8') as f:
-                json.dump(结果, f, indent=2, ensure_ascii=False)
+            output_path = Path('outputs/results') / 'rknn_benchmark.json'
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
             
-            print(f'\n结果已保存到: {输出路径}')
+            print(f'\n结果已保存到: {output_path}')
             
         except ImportError:
             print('错误: numpy未安装')
     
-    def 运行(self):
+    def run(self):
         """运行测试流程"""
         print('=' * 60)
         print('RKNN模型测试')
         print('=' * 60)
-        print(f'模型: {self.模型路径}')
+        print(f'模型: {self.model_path}')
         print(f'模式: {"PC模拟器" if self.args.simulator else "开发板"}')
         
         # 检查环境
-        环境就绪 = self.检查环境()
+        env_ready = self.check_environment()
         
-        if not 环境就绪:
+        if not env_ready:
             print('\n警告: 部分依赖缺失，某些功能可能不可用')
         
         # 加载模型
-        rknn = self.加载模型()
+        rknn = self.load_model()
         
         # 测试图像
         if self.args.image:
-            self.测试图像(rknn)
+            self.test_image(rknn)
         
         # 基准测试
         if self.args.benchmark:
-            self.基准测试(rknn)
+            self.benchmark(rknn)
         
         print('\n' + '=' * 60)
         print('测试完成!')
@@ -319,10 +319,10 @@ class RKNN测试器:
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    测试器 = RKNN测试器(args)
-    测试器.运行()
+    tester = RKNNTester(args)
+    tester.run()
 
 
 if __name__ == '__main__':

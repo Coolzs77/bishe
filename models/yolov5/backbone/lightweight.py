@@ -11,74 +11,74 @@ import torch.nn.functional as F
 import math
 
 
-def 自动填充(卷积核大小: int, 膨胀率: int = 1) -> int:
+def autopad(kernel_size: int, dilation: int = 1) -> int:
     """计算same填充大小"""
-    return (卷积核大小 - 1) // 2 * 膨胀率
+    return (kernel_size - 1) // 2 * dilation
 
 
-class 标准卷积(nn.Module):
+class Conv(nn.Module):
     """
     标准卷积模块: Conv + BN + SiLU
     """
     
     def __init__(
         self, 
-        输入通道: int, 
-        输出通道: int, 
-        卷积核: int = 1, 
-        步长: int = 1, 
-        填充: int = None, 
-        分组: int = 1,
-        激活: bool = True
+        in_channels: int, 
+        out_channels: int, 
+        kernel: int = 1, 
+        stride: int = 1, 
+        padding: int = None, 
+        groups: int = 1,
+        activation: bool = True
     ):
         """初始化标准卷积"""
         super().__init__()
         
-        self.卷积 = nn.Conv2d(
-            输入通道, 输出通道, 卷积核, 步长,
-            自动填充(卷积核) if 填充 is None else 填充,
-            groups=分组, bias=False
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel, stride,
+            autopad(kernel) if padding is None else padding,
+            groups=groups, bias=False
         )
-        self.bn = nn.BatchNorm2d(输出通道)
-        self.激活 = nn.SiLU(inplace=True) if 激活 else nn.Identity()
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.act = nn.SiLU(inplace=True) if activation else nn.Identity()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.激活(self.bn(self.卷积(x)))
+        return self.act(self.bn(self.conv(x)))
     
     def forward_fuse(self, x: torch.Tensor) -> torch.Tensor:
         """融合后的前向传播"""
-        return self.激活(self.卷积(x))
+        return self.act(self.conv(x))
 
 
-class 深度可分离卷积(nn.Module):
+class DWConv(nn.Module):
     """
     深度可分离卷积: Depthwise + Pointwise
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 卷积核: int = 3, 步长: int = 1):
+    def __init__(self, in_channels: int, out_channels: int, kernel: int = 3, stride: int = 1):
         """初始化深度可分离卷积"""
         super().__init__()
         
         # 深度卷积
-        self.深度卷积 = nn.Conv2d(
-            输入通道, 输入通道, 卷积核, 步长,
-            自动填充(卷积核), groups=输入通道, bias=False
+        self.dw_conv = nn.Conv2d(
+            in_channels, in_channels, kernel, stride,
+            autopad(kernel), groups=in_channels, bias=False
         )
-        self.bn1 = nn.BatchNorm2d(输入通道)
+        self.bn1 = nn.BatchNorm2d(in_channels)
         
         # 逐点卷积
-        self.逐点卷积 = nn.Conv2d(输入通道, 输出通道, 1, 1, 0, bias=False)
-        self.bn2 = nn.BatchNorm2d(输出通道)
+        self.pw_conv = nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
         
-        self.激活 = nn.SiLU(inplace=True)
+        self.act = nn.SiLU(inplace=True)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.激活(self.bn1(self.深度卷积(x)))
-        x = self.激活(self.bn2(self.逐点卷积(x)))
+        x = self.act(self.bn1(self.dw_conv(x)))
+        x = self.act(self.bn2(self.pw_conv(x)))
         return x
 
 
-class Ghost模块(nn.Module):
+class GhostModule(nn.Module):
     """
     GhostNet的基础模块
     
@@ -87,131 +87,131 @@ class Ghost模块(nn.Module):
     
     def __init__(
         self, 
-        输入通道: int, 
-        输出通道: int, 
-        卷积核: int = 1, 
-        比例: int = 2, 
-        dw卷积核: int = 3,
-        步长: int = 1, 
-        激活: bool = True
+        in_channels: int, 
+        out_channels: int, 
+        kernel: int = 1, 
+        ratio: int = 2, 
+        dw_kernel: int = 3,
+        stride: int = 1, 
+        activation: bool = True
     ):
         """
         初始化Ghost模块
         
         参数:
-            输入通道: 输入通道数
-            输出通道: 输出通道数
-            卷积核: 主卷积核大小
-            比例: Ghost比例
-            dw卷积核: 深度卷积核大小
-            步长: 步长
-            激活: 是否使用激活函数
+            in_channels: 输入通道数
+            out_channels: 输出通道数
+            kernel: 主卷积核大小
+            ratio: Ghost比例
+            dw_kernel: 深度卷积核大小
+            stride: 步长
+            activation: 是否使用激活函数
         """
         super().__init__()
         
-        self.输出通道 = 输出通道
-        初始通道 = math.ceil(输出通道 / 比例)
-        新通道 = 初始通道 * (比例 - 1)
+        self.out_channels = out_channels
+        init_channels = math.ceil(out_channels / ratio)
+        new_channels = init_channels * (ratio - 1)
         
         # 主卷积
-        self.主卷积 = nn.Sequential(
-            nn.Conv2d(输入通道, 初始通道, 卷积核, 步长, 自动填充(卷积核), bias=False),
-            nn.BatchNorm2d(初始通道),
-            nn.SiLU(inplace=True) if 激活 else nn.Identity(),
+        self.primary_conv = nn.Sequential(
+            nn.Conv2d(in_channels, init_channels, kernel, stride, autopad(kernel), bias=False),
+            nn.BatchNorm2d(init_channels),
+            nn.SiLU(inplace=True) if activation else nn.Identity(),
         )
         
         # 廉价操作 (深度卷积)
-        self.廉价操作 = nn.Sequential(
-            nn.Conv2d(初始通道, 新通道, dw卷积核, 1, 自动填充(dw卷积核), groups=初始通道, bias=False),
-            nn.BatchNorm2d(新通道),
-            nn.SiLU(inplace=True) if 激活 else nn.Identity(),
+        self.cheap_operation = nn.Sequential(
+            nn.Conv2d(init_channels, new_channels, dw_kernel, 1, autopad(dw_kernel), groups=init_channels, bias=False),
+            nn.BatchNorm2d(new_channels),
+            nn.SiLU(inplace=True) if activation else nn.Identity(),
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        主特征 = self.主卷积(x)
-        廉价特征 = self.廉价操作(主特征)
-        输出 = torch.cat([主特征, 廉价特征], dim=1)
-        return 输出[:, :self.输出通道, :, :]
+        primary_feat = self.primary_conv(x)
+        cheap_feat = self.cheap_operation(primary_feat)
+        output = torch.cat([primary_feat, cheap_feat], dim=1)
+        return output[:, :self.out_channels, :, :]
 
 
-class Ghost瓶颈(nn.Module):
+class GhostBottleneck(nn.Module):
     """
     GhostNet瓶颈层
     """
     
     def __init__(
         self, 
-        输入通道: int, 
-        输出通道: int, 
-        隐藏通道: int = None,
-        卷积核: int = 3, 
-        步长: int = 1,
-        使用SE: bool = False
+        in_channels: int, 
+        out_channels: int, 
+        hidden_channels: int = None,
+        kernel: int = 3, 
+        stride: int = 1,
+        use_se: bool = False
     ):
         """初始化Ghost瓶颈"""
         super().__init__()
         
-        if 隐藏通道 is None:
-            隐藏通道 = 输出通道
+        if hidden_channels is None:
+            hidden_channels = out_channels
         
-        self.步长 = 步长
-        self.使用SE = 使用SE
+        self.stride = stride
+        self.use_se = use_se
         
         # Ghost模块1
-        self.ghost1 = Ghost模块(输入通道, 隐藏通道, 卷积核=1)
+        self.ghost1 = GhostModule(in_channels, hidden_channels, kernel=1)
         
         # 深度卷积 (仅当步长>1时)
-        if 步长 > 1:
-            self.dw卷积 = nn.Sequential(
-                nn.Conv2d(隐藏通道, 隐藏通道, 卷积核, 步长, 自动填充(卷积核), groups=隐藏通道, bias=False),
-                nn.BatchNorm2d(隐藏通道),
+        if stride > 1:
+            self.dw_conv = nn.Sequential(
+                nn.Conv2d(hidden_channels, hidden_channels, kernel, stride, autopad(kernel), groups=hidden_channels, bias=False),
+                nn.BatchNorm2d(hidden_channels),
             )
         
         # SE模块
-        if 使用SE:
-            from .attention import SE注意力
-            self.se = SE注意力(隐藏通道)
+        if use_se:
+            from .attention import SEAttention
+            self.se = SEAttention(hidden_channels)
         
         # Ghost模块2
-        self.ghost2 = Ghost模块(隐藏通道, 输出通道, 卷积核=1, 激活=False)
+        self.ghost2 = GhostModule(hidden_channels, out_channels, kernel=1, activation=False)
         
         # 残差连接
-        if 步长 == 1 and 输入通道 == 输出通道:
+        if stride == 1 and in_channels == out_channels:
             self.shortcut = nn.Identity()
         else:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(输入通道, 输入通道, 卷积核, 步长, 自动填充(卷积核), groups=输入通道, bias=False),
-                nn.BatchNorm2d(输入通道),
-                nn.Conv2d(输入通道, 输出通道, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道),
+                nn.Conv2d(in_channels, in_channels, kernel, stride, autopad(kernel), groups=in_channels, bias=False),
+                nn.BatchNorm2d(in_channels),
+                nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(out_channels),
             )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        残差 = self.shortcut(x)
+        residual = self.shortcut(x)
         
         out = self.ghost1(x)
-        if self.步长 > 1:
-            out = self.dw卷积(out)
-        if self.使用SE:
+        if self.stride > 1:
+            out = self.dw_conv(out)
+        if self.use_se:
             out = self.se(out)
         out = self.ghost2(out)
         
-        return out + 残差
+        return out + residual
 
 
-class Shuffle通道(nn.Module):
+class ChannelShuffle(nn.Module):
     """
     通道重排操作，用于ShuffleNet
     """
     
-    def __init__(self, 分组数: int):
+    def __init__(self, groups: int):
         """初始化通道重排"""
         super().__init__()
-        self.分组数 = 分组数
+        self.groups = groups
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w = x.size()
-        g = self.分组数
+        g = self.groups
         
         # 重排通道
         x = x.view(b, g, c // g, h, w)
@@ -221,62 +221,62 @@ class Shuffle通道(nn.Module):
         return x
 
 
-class ShuffleNet单元(nn.Module):
+class ShuffleNetUnit(nn.Module):
     """
     ShuffleNet V2 基本单元
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 步长: int = 1):
+    def __init__(self, in_channels: int, out_channels: int, stride: int = 1):
         """初始化ShuffleNet单元"""
         super().__init__()
         
-        self.步长 = 步长
+        self.stride = stride
         
-        if 步长 == 1:
+        if stride == 1:
             # 步长为1时，输入通道分两半
-            分支通道 = 输出通道 // 2
+            branch_channels = out_channels // 2
             
-            self.分支1 = nn.Identity()
-            self.分支2 = nn.Sequential(
-                nn.Conv2d(分支通道, 分支通道, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(分支通道),
+            self.branch1 = nn.Identity()
+            self.branch2 = nn.Sequential(
+                nn.Conv2d(branch_channels, branch_channels, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(branch_channels),
                 nn.SiLU(inplace=True),
-                nn.Conv2d(分支通道, 分支通道, 3, 1, 1, groups=分支通道, bias=False),
-                nn.BatchNorm2d(分支通道),
-                nn.Conv2d(分支通道, 分支通道, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(分支通道),
+                nn.Conv2d(branch_channels, branch_channels, 3, 1, 1, groups=branch_channels, bias=False),
+                nn.BatchNorm2d(branch_channels),
+                nn.Conv2d(branch_channels, branch_channels, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(branch_channels),
                 nn.SiLU(inplace=True),
             )
         else:
             # 步长为2时，使用两个分支进行下采样
-            self.分支1 = nn.Sequential(
-                nn.Conv2d(输入通道, 输入通道, 3, 步长, 1, groups=输入通道, bias=False),
-                nn.BatchNorm2d(输入通道),
-                nn.Conv2d(输入通道, 输出通道 // 2, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
+            self.branch1 = nn.Sequential(
+                nn.Conv2d(in_channels, in_channels, 3, stride, 1, groups=in_channels, bias=False),
+                nn.BatchNorm2d(in_channels),
+                nn.Conv2d(in_channels, out_channels // 2, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(out_channels // 2),
                 nn.SiLU(inplace=True),
             )
-            self.分支2 = nn.Sequential(
-                nn.Conv2d(输入通道, 输出通道 // 2, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
+            self.branch2 = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels // 2, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(out_channels // 2),
                 nn.SiLU(inplace=True),
-                nn.Conv2d(输出通道 // 2, 输出通道 // 2, 3, 步长, 1, groups=输出通道 // 2, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
-                nn.Conv2d(输出通道 // 2, 输出通道 // 2, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(输出通道 // 2),
+                nn.Conv2d(out_channels // 2, out_channels // 2, 3, stride, 1, groups=out_channels // 2, bias=False),
+                nn.BatchNorm2d(out_channels // 2),
+                nn.Conv2d(out_channels // 2, out_channels // 2, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(out_channels // 2),
                 nn.SiLU(inplace=True),
             )
         
-        self.通道重排 = Shuffle通道(2)
+        self.channel_shuffle = ChannelShuffle(2)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.步长 == 1:
+        if self.stride == 1:
             x1, x2 = x.chunk(2, dim=1)
-            out = torch.cat([x1, self.分支2(x2)], dim=1)
+            out = torch.cat([x1, self.branch2(x2)], dim=1)
         else:
-            out = torch.cat([self.分支1(x), self.分支2(x)], dim=1)
+            out = torch.cat([self.branch1(x), self.branch2(x)], dim=1)
         
-        out = self.通道重排(out)
+        out = self.channel_shuffle(out)
         return out
 
 
@@ -285,18 +285,18 @@ class GhostC3(nn.Module):
     使用Ghost模块替换的C3模块
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 数量: int = 1, shortcut: bool = True):
+    def __init__(self, in_channels: int, out_channels: int, n: int = 1, shortcut: bool = True):
         """初始化GhostC3"""
         super().__init__()
         
-        隐藏通道 = 输出通道 // 2
+        hidden_channels = out_channels // 2
         
-        self.cv1 = Ghost模块(输入通道, 隐藏通道)
-        self.cv2 = Ghost模块(输入通道, 隐藏通道)
-        self.cv3 = Ghost模块(2 * 隐藏通道, 输出通道)
+        self.cv1 = GhostModule(in_channels, hidden_channels)
+        self.cv2 = GhostModule(in_channels, hidden_channels)
+        self.cv3 = GhostModule(2 * hidden_channels, out_channels)
         
         self.m = nn.Sequential(
-            *[Ghost瓶颈(隐藏通道, 隐藏通道) for _ in range(数量)]
+            *[GhostBottleneck(hidden_channels, hidden_channels) for _ in range(n)]
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -308,18 +308,18 @@ class ShuffleC3(nn.Module):
     使用ShuffleNet单元替换的C3模块
     """
     
-    def __init__(self, 输入通道: int, 输出通道: int, 数量: int = 1, shortcut: bool = True):
+    def __init__(self, in_channels: int, out_channels: int, n: int = 1, shortcut: bool = True):
         """初始化ShuffleC3"""
         super().__init__()
         
-        隐藏通道 = 输出通道 // 2
+        hidden_channels = out_channels // 2
         
-        self.cv1 = 标准卷积(输入通道, 隐藏通道, 1)
-        self.cv2 = 标准卷积(输入通道, 隐藏通道, 1)
-        self.cv3 = 标准卷积(2 * 隐藏通道, 输出通道, 1)
+        self.cv1 = Conv(in_channels, hidden_channels, 1)
+        self.cv2 = Conv(in_channels, hidden_channels, 1)
+        self.cv3 = Conv(2 * hidden_channels, out_channels, 1)
         
         self.m = nn.Sequential(
-            *[ShuffleNet单元(隐藏通道, 隐藏通道, 1) for _ in range(数量)]
+            *[ShuffleNetUnit(hidden_channels, hidden_channels, 1) for _ in range(n)]
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
