@@ -12,123 +12,123 @@ import subprocess
 from pathlib import Path
 
 
-def 打印彩色信息(消息, 颜色='green'):
+def print_colored_message(message, color='green'):
     """打印彩色信息"""
-    颜色代码 = {
+    color_codes = {
         'red': '\033[0;31m',
         'green': '\033[0;32m',
         'yellow': '\033[1;33m',
         'blue': '\033[0;34m',
         'reset': '\033[0m'
     }
-    print(f"{颜色代码.get(颜色, '')}{消息}{颜色代码['reset']}")
+    print(f"{color_codes.get(color, '')}{message}{color_codes['reset']}")
 
 
-def 检查依赖工具():
+def check_dependencies():
     """检查必要的下载工具是否安装"""
-    缺失工具 = []
+    missing_tools = []
     
     # 检查wget
     try:
         subprocess.run(['wget', '--version'], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        缺失工具.append('wget')
+        missing_tools.append('wget')
     
     # 检查unzip
     try:
         subprocess.run(['unzip', '-v'], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        缺失工具.append('unzip')
+        missing_tools.append('unzip')
     
-    if 缺失工具:
-        打印彩色信息(f"缺少必要工具: {', '.join(缺失工具)}", 'red')
-        打印彩色信息("请使用以下命令安装:", 'yellow')
-        print(f"  sudo apt-get install {' '.join(缺失工具)}")
+    if missing_tools:
+        print_colored_message(f"缺少必要工具: {', '.join(missing_tools)}", 'red')
+        print_colored_message("请使用以下命令安装:", 'yellow')
+        print(f"  sudo apt-get install {' '.join(missing_tools)}")
         return False
     
     return True
 
 
-def 创建目录(路径):
+def create_directory(path):
     """创建目录（如果不存在）"""
-    Path(路径).mkdir(parents=True, exist_ok=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def 下载FLIR数据集(输出目录, 跳过已存在=False):
+def download_flir_dataset(output_dir, skip_existing=False):
     """
     下载FLIR红外数据集
     
     注意: FLIR数据集需要注册后下载，此函数提供下载说明
     """
-    打印彩色信息("=" * 50, 'yellow')
-    打印彩色信息("下载FLIR红外数据集...", 'yellow')
-    打印彩色信息("=" * 50, 'yellow')
+    print_colored_message("=" * 50, 'yellow')
+    print_colored_message("下载FLIR红外数据集...", 'yellow')
+    print_colored_message("=" * 50, 'yellow')
     
-    flir目录 = Path(输出目录) / 'flir'
-    创建目录(flir目录)
+    flir_dir = Path(output_dir) / 'flir'
+    create_directory(flir_dir)
     
     # 检查是否已存在
-    if (flir目录 / 'images_thermal_train').exists() and 跳过已存在:
-        打印彩色信息("检测到FLIR数据集已存在，跳过下载", 'green')
+    if (flir_dir / 'images_thermal_train').exists() and skip_existing:
+        print_colored_message("检测到FLIR数据集已存在，跳过下载", 'green')
         return True
     
     # FLIR数据集需要注册后下载，提供说明
     print()
-    打印彩色信息("注意: FLIR数据集需要注册后下载", 'yellow')
+    print_colored_message("注意: FLIR数据集需要注册后下载", 'yellow')
     print()
     print("请按照以下步骤手动下载:")
     print("1. 访问 https://www.flir.com/oem/adas/adas-dataset-form/")
     print("2. 填写表单注册")
     print("3. 下载 'FLIR_ADAS_v2' 数据集")
-    print(f"4. 将下载的文件解压到 {flir目录}")
+    print(f"4. 将下载的文件解压到 {flir_dir}")
     print()
     print("期望的目录结构:")
-    print(f"  {flir目录}/")
+    print(f"  {flir_dir}/")
     print("  ├── images_thermal_train/")
     print("  ├── images_thermal_val/")
     print("  └── annotations/")
     print()
     
     # 检查是否已存在
-    if (flir目录 / 'images_thermal_train').exists():
-        打印彩色信息("检测到FLIR数据集已存在", 'green')
+    if (flir_dir / 'images_thermal_train').exists():
+        print_colored_message("检测到FLIR数据集已存在", 'green')
         return True
     
     # 等待用户确认
-    打印彩色信息("等待用户手动下载FLIR数据集...", 'yellow')
+    print_colored_message("等待用户手动下载FLIR数据集...", 'yellow')
     input("下载完成后，按Enter继续...")
     
     return True
 
 
-def 下载KAIST数据集(输出目录, 跳过已存在=False):
+def download_kaist_dataset(output_dir, skip_existing=False):
     """
     下载KAIST多光谱行人数据集
     
     注意: KAIST数据集需要从官网下载
     """
-    打印彩色信息("=" * 50, 'yellow')
-    打印彩色信息("下载KAIST多光谱行人数据集...", 'yellow')
-    打印彩色信息("=" * 50, 'yellow')
+    print_colored_message("=" * 50, 'yellow')
+    print_colored_message("下载KAIST多光谱行人数据集...", 'yellow')
+    print_colored_message("=" * 50, 'yellow')
     
-    kaist目录 = Path(输出目录) / 'kaist'
-    创建目录(kaist目录)
+    kaist_dir = Path(output_dir) / 'kaist'
+    create_directory(kaist_dir)
     
     # 检查是否已存在
-    if (kaist目录 / 'set00').exists() and 跳过已存在:
-        打印彩色信息("检测到KAIST数据集已存在，跳过下载", 'green')
+    if (kaist_dir / 'set00').exists() and skip_existing:
+        print_colored_message("检测到KAIST数据集已存在，跳过下载", 'green')
         return True
     
     print()
-    打印彩色信息("注意: KAIST数据集需要从官网下载", 'yellow')
+    print_colored_message("注意: KAIST数据集需要从官网下载", 'yellow')
     print()
     print("请按照以下步骤手动下载:")
     print("1. 访问 https://soonminhwang.github.io/rgbt-ped-detection/")
     print("2. 下载 'KAIST Multispectral Pedestrian Detection Benchmark'")
-    print(f"3. 将下载的文件解压到 {kaist目录}")
+    print(f"3. 将下载的文件解压到 {kaist_dir}")
     print()
     print("期望的目录结构:")
-    print(f"  {kaist目录}/")
+    print(f"  {kaist_dir}/")
     print("  ├── set00/")
     print("  ├── set01/")
     print("  ├── ...")
@@ -136,29 +136,29 @@ def 下载KAIST数据集(输出目录, 跳过已存在=False):
     print()
     
     # 检查是否已存在
-    if (kaist目录 / 'set00').exists():
-        打印彩色信息("检测到KAIST数据集已存在", 'green')
+    if (kaist_dir / 'set00').exists():
+        print_colored_message("检测到KAIST数据集已存在", 'green')
         return True
     
     # 等待用户确认
-    打印彩色信息("等待用户手动下载KAIST数据集...", 'yellow')
+    print_colored_message("等待用户手动下载KAIST数据集...", 'yellow')
     input("下载完成后，按Enter继续...")
     
     return True
 
 
-def 创建校准数据集目录(输出目录):
+def create_calibration_directory(output_dir):
     """创建量化校准数据集目录"""
-    打印彩色信息("创建量化校准数据集目录...", 'yellow')
+    print_colored_message("创建量化校准数据集目录...", 'yellow')
     
-    校准目录 = Path(输出目录).parent / 'processed' / 'flir' / 'calibration'
-    创建目录(校准目录)
+    calibration_dir = Path(output_dir).parent / 'processed' / 'flir' / 'calibration'
+    create_directory(calibration_dir)
     
-    print(f"校准数据集目录: {校准目录}")
+    print(f"校准数据集目录: {calibration_dir}")
     print("请在模型量化前，复制约100张代表性图像到此目录")
 
 
-def 解析参数():
+def parse_arguments():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='红外数据集下载脚本',
@@ -185,45 +185,45 @@ def 解析参数():
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_arguments()
     
     # 确定下载哪些数据集
-    下载flir = True
-    下载kaist = True
+    download_flir = True
+    download_kaist = True
     
     if args.flir and not args.kaist:
-        下载kaist = False
+        download_kaist = False
     elif args.kaist and not args.flir:
-        下载flir = False
+        download_flir = False
     
     # 打印配置信息
-    打印彩色信息("=" * 50, 'green')
-    打印彩色信息("  红外数据集下载脚本", 'green')
-    打印彩色信息("=" * 50, 'green')
+    print_colored_message("=" * 50, 'green')
+    print_colored_message("  红外数据集下载脚本", 'green')
+    print_colored_message("=" * 50, 'green')
     print()
     print(f"输出目录: {args.output_dir}")
-    print(f"下载FLIR: {下载flir}")
-    print(f"下载KAIST: {下载kaist}")
+    print(f"下载FLIR: {download_flir}")
+    print(f"下载KAIST: {download_kaist}")
     print()
     
     # 创建输出目录
-    创建目录(args.output_dir)
+    create_directory(args.output_dir)
     
     # 下载数据集
-    if 下载flir:
-        下载FLIR数据集(args.output_dir, args.skip_existing)
+    if download_flir:
+        download_flir_dataset(args.output_dir, args.skip_existing)
     
-    if 下载kaist:
-        下载KAIST数据集(args.output_dir, args.skip_existing)
+    if download_kaist:
+        download_kaist_dataset(args.output_dir, args.skip_existing)
     
     # 创建校准数据集目录
-    创建校准数据集目录(args.output_dir)
+    create_calibration_directory(args.output_dir)
     
     # 完成
     print()
-    打印彩色信息("=" * 50, 'green')
-    打印彩色信息("  数据集准备完成!", 'green')
-    打印彩色信息("=" * 50, 'green')
+    print_colored_message("=" * 50, 'green')
+    print_colored_message("  数据集准备完成!", 'green')
+    print_colored_message("=" * 50, 'green')
     print()
     print("下一步:")
     print("  1. 运行 python scripts/data/prepare_flir.py 准备FLIR数据集")
