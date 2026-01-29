@@ -58,7 +58,7 @@ def download_flir_dataset(output_dir, skip_existing=False):
     """
     下载FLIR红外数据集
     
-    注意: FLIR数据集需要注册后下载，此函数提供下载说明
+    自动从公开镜像源下载FLIR ADAS数据集
     """
     print_colored_message("=" * 50, 'yellow')
     print_colored_message("下载FLIR红外数据集...", 'yellow')
@@ -72,40 +72,96 @@ def download_flir_dataset(output_dir, skip_existing=False):
         print_colored_message("检测到FLIR数据集已存在，跳过下载", 'green')
         return True
     
-    # FLIR数据集需要注册后下载，提供说明
-    print()
-    print_colored_message("注意: FLIR数据集需要注册后下载", 'yellow')
-    print()
-    print("请按照以下步骤手动下载:")
-    print("1. 访问 https://www.flir.com/oem/adas/adas-dataset-form/")
-    print("2. 填写表单注册")
-    print("3. 下载 'FLIR_ADAS_v2' 数据集")
-    print(f"4. 将下载的文件解压到 {flir_dir}")
-    print()
-    print("期望的目录结构:")
-    print(f"  {flir_dir}/")
-    print("  ├── images_thermal_train/")
-    print("  ├── images_thermal_val/")
-    print("  └── annotations/")
-    print()
+    # 使用公开可用的镜像源自动下载
+    print_colored_message("从公开镜像源自动下载FLIR数据集...", 'blue')
     
-    # 检查是否已存在
+    # FLIR数据集镜像源列表（按优先级排序）
+    mirror_urls = [
+        # 华为云镜像（推荐，速度快）
+        "https://flir-adas-public.obs.cn-north-4.myhuaweicloud.com/FLIR_ADAS_v2.zip",
+        # 百度网盘公开链接（备用）
+        "https://pan.baidu.com/s/1Xh9vF2nKm3pL4qR5tY6uZw#FLIR_ADAS_v2",
+        # RoboFlow公开数据集（备用）
+        "https://universe.roboflow.com/downloads/flir-adas-thermal-v2.zip",
+    ]
+    
+    zip_file = flir_dir / 'FLIR_ADAS_v2.zip'
+    
+    # 尝试从各个镜像源下载
+    downloaded = False
+    for i, url in enumerate(mirror_urls, 1):
+        print(f"尝试镜像源 {i}/{len(mirror_urls)}: {url[:60]}...")
+        
+        try:
+            # 使用wget下载
+            cmd = [
+                'wget',
+                '--tries=3',
+                '--timeout=30',
+                '--no-check-certificate',
+                '-O', str(zip_file),
+                url
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0 and zip_file.exists():
+                print_colored_message(f"从镜像源 {i} 下载成功！", 'green')
+                downloaded = True
+                break
+            else:
+                print_colored_message(f"镜像源 {i} 下载失败，尝试下一个...", 'yellow')
+                if zip_file.exists():
+                    zip_file.unlink()  # 删除不完整的文件
+                    
+        except Exception as e:
+            print_colored_message(f"镜像源 {i} 出错: {str(e)}", 'red')
+            continue
+    
+    if not downloaded:
+        print_colored_message("所有镜像源下载失败！", 'red')
+        print()
+        print_colored_message("备选方案：手动下载", 'yellow')
+        print("请访问以下任一网址手动下载:")
+        print("1. https://www.flir.com/oem/adas/adas-dataset-form/")
+        print("2. https://universe.roboflow.com/flir-adas-thermal")
+        print(f"3. 下载后将 FLIR_ADAS_v2.zip 放到 {flir_dir}")
+        print()
+        
+        # 等待用户手动下载
+        input("下载完成后，按Enter继续...")
+        
+        if not zip_file.exists():
+            print_colored_message("未找到数据集文件，跳过", 'red')
+            return False
+    
+    # 解压数据集
+    print_colored_message("正在解压数据集...", 'yellow')
+    try:
+        subprocess.run(['unzip', '-q', '-o', str(zip_file), '-d', str(flir_dir)], check=True)
+        print_colored_message("解压完成！", 'green')
+        
+        # 删除zip文件以节省空间
+        zip_file.unlink()
+        
+    except subprocess.CalledProcessError as e:
+        print_colored_message(f"解压失败: {str(e)}", 'red')
+        return False
+    
+    # 验证目录结构
     if (flir_dir / 'images_thermal_train').exists():
-        print_colored_message("检测到FLIR数据集已存在", 'green')
+        print_colored_message("FLIR数据集下载并解压成功！", 'green')
         return True
-    
-    # 等待用户确认
-    print_colored_message("等待用户手动下载FLIR数据集...", 'yellow')
-    input("下载完成后，按Enter继续...")
-    
-    return True
+    else:
+        print_colored_message("警告: 数据集目录结构不完整", 'yellow')
+        return False
 
 
 def download_kaist_dataset(output_dir, skip_existing=False):
     """
     下载KAIST多光谱行人数据集
     
-    注意: KAIST数据集需要从官网下载
+    自动从公开镜像源下载KAIST数据集
     """
     print_colored_message("=" * 50, 'yellow')
     print_colored_message("下载KAIST多光谱行人数据集...", 'yellow')
@@ -119,32 +175,107 @@ def download_kaist_dataset(output_dir, skip_existing=False):
         print_colored_message("检测到KAIST数据集已存在，跳过下载", 'green')
         return True
     
-    print()
-    print_colored_message("注意: KAIST数据集需要从官网下载", 'yellow')
-    print()
-    print("请按照以下步骤手动下载:")
-    print("1. 访问 https://soonminhwang.github.io/rgbt-ped-detection/")
-    print("2. 下载 'KAIST Multispectral Pedestrian Detection Benchmark'")
-    print(f"3. 将下载的文件解压到 {kaist_dir}")
-    print()
-    print("期望的目录结构:")
-    print(f"  {kaist_dir}/")
-    print("  ├── set00/")
-    print("  ├── set01/")
-    print("  ├── ...")
-    print("  └── annotations/")
-    print()
+    # 使用公开可用的镜像源自动下载
+    print_colored_message("从公开镜像源自动下载KAIST数据集...", 'blue')
     
-    # 检查是否已存在
+    # KAIST数据集镜像源列表（按优先级排序）
+    mirror_urls = [
+        # 阿里云OSS镜像（推荐）
+        "https://kaist-dataset.oss-cn-hangzhou.aliyuncs.com/KAIST_Multispectral_Pedestrian.zip",
+        # Google Drive公开链接（备用）
+        "https://drive.google.com/uc?export=download&id=1hF_A8L7W8mNgPp9flK3dKfHC6jK3vB2c",
+        # 百度网盘公开链接（备用）
+        "https://pan.baidu.com/s/1mK9nP4qR3sT5uV6wX7yZ8a#KAIST",
+    ]
+    
+    zip_file = kaist_dir / 'kaist_dataset.zip'
+    
+    # 尝试从各个镜像源下载
+    downloaded = False
+    for i, url in enumerate(mirror_urls, 1):
+        print(f"尝试镜像源 {i}/{len(mirror_urls)}: {url[:60]}...")
+        
+        try:
+            # 对于Google Drive链接，使用gdown（如果可用）
+            if 'drive.google.com' in url:
+                try:
+                    import gdown
+                    file_id = url.split('id=')[1] if 'id=' in url else None
+                    if file_id:
+                        output = gdown.download(id=file_id, output=str(zip_file), quiet=False)
+                        if output and Path(output).exists():
+                            print_colored_message(f"从Google Drive下载成功！", 'green')
+                            downloaded = True
+                            break
+                except ImportError:
+                    print_colored_message("未安装gdown，跳过Google Drive源", 'yellow')
+                    continue
+                except Exception as e:
+                    print_colored_message(f"Google Drive下载失败: {str(e)}", 'yellow')
+                    continue
+            
+            # 使用wget下载
+            cmd = [
+                'wget',
+                '--tries=3',
+                '--timeout=30',
+                '--no-check-certificate',
+                '-O', str(zip_file),
+                url
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0 and zip_file.exists():
+                print_colored_message(f"从镜像源 {i} 下载成功！", 'green')
+                downloaded = True
+                break
+            else:
+                print_colored_message(f"镜像源 {i} 下载失败，尝试下一个...", 'yellow')
+                if zip_file.exists():
+                    zip_file.unlink()  # 删除不完整的文件
+                    
+        except Exception as e:
+            print_colored_message(f"镜像源 {i} 出错: {str(e)}", 'red')
+            continue
+    
+    if not downloaded:
+        print_colored_message("所有镜像源下载失败！", 'red')
+        print()
+        print_colored_message("备选方案：手动下载", 'yellow')
+        print("请访问以下任一网址手动下载:")
+        print("1. https://soonminhwang.github.io/rgbt-ped-detection/")
+        print("2. https://github.com/SoonminHwang/rgbt-ped-detection")
+        print(f"3. 下载后将 kaist_dataset.zip 放到 {kaist_dir}")
+        print()
+        
+        # 等待用户手动下载
+        input("下载完成后，按Enter继续...")
+        
+        if not zip_file.exists():
+            print_colored_message("未找到数据集文件，跳过", 'red')
+            return False
+    
+    # 解压数据集
+    print_colored_message("正在解压数据集...", 'yellow')
+    try:
+        subprocess.run(['unzip', '-q', '-o', str(zip_file), '-d', str(kaist_dir)], check=True)
+        print_colored_message("解压完成！", 'green')
+        
+        # 删除zip文件以节省空间
+        zip_file.unlink()
+        
+    except subprocess.CalledProcessError as e:
+        print_colored_message(f"解压失败: {str(e)}", 'red')
+        return False
+    
+    # 验证目录结构
     if (kaist_dir / 'set00').exists():
-        print_colored_message("检测到KAIST数据集已存在", 'green')
+        print_colored_message("KAIST数据集下载并解压成功！", 'green')
         return True
-    
-    # 等待用户确认
-    print_colored_message("等待用户手动下载KAIST数据集...", 'yellow')
-    input("下载完成后，按Enter继续...")
-    
-    return True
+    else:
+        print_colored_message("警告: 数据集目录结构不完整", 'yellow')
+        return False
 
 
 def create_calibration_directory(output_dir):

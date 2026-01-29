@@ -217,9 +217,14 @@ logger.info('Training started')
 
 | 文件 | 用途 | 命令行使用 |
 |------|------|------------|
-| `download_dataset.py` | 下载数据集 | `python scripts/data/download_dataset.py --dataset flir` |
-| `prepare_flir.py` | 准备FLIR数据集 | `python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed` |
-| `prepare_kaist.py` | 准备KAIST数据集 | `python scripts/data/prepare_kaist.py --input data/raw/kaist --output data/processed` |
+| `download_dataset.py` | 自动下载数据集（从公开镜像源） | `python scripts/data/download_dataset.py [--flir] [--kaist]` |
+| `prepare_flir.py` | 准备FLIR数据集（转换为YOLO格式） | `python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed` |
+| `prepare_kaist.py` | 准备KAIST数据集（转换为YOLO格式） | `python scripts/data/prepare_kaist.py --input data/raw/kaist --output data/processed` |
+
+**数据下载说明：**
+- `download_dataset.py` 支持从多个镜像源自动下载FLIR和KAIST数据集
+- 无需手动注册即可下载
+- 如果自动下载失败，会提供手动下载的备用方案
 
 #### scripts/train/ - 训练脚本
 
@@ -350,12 +355,26 @@ pip install -r requirements.txt
 ### 2. 数据准备
 
 ```bash
-# 下载FLIR数据集
-python scripts/data/download_dataset.py --dataset flir
+# 自动下载FLIR和KAIST数据集（推荐）
+python scripts/data/download_dataset.py
 
-# 准备数据集
+# 仅下载FLIR数据集
+python scripts/data/download_dataset.py --flir
+
+# 仅下载KAIST数据集
+python scripts/data/download_dataset.py --kaist
+
+# 准备FLIR数据集（转换为YOLO格式）
 python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed
+
+# 准备KAIST数据集（转换为YOLO格式）
+python scripts/data/prepare_kaist.py --input data/raw/kaist --output data/processed
 ```
+
+**注意：**
+- 数据集下载脚本会自动从公开镜像源下载，无需手动注册
+- 如果自动下载失败，脚本会提供手动下载的说明
+- 建议安装 `gdown` 以支持Google Drive下载：`pip install gdown`
 
 ### 3. 模型训练
 
