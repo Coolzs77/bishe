@@ -118,36 +118,36 @@ class AblationStudyManager:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # results记录
-        self.实验results = []
+        self.experiment_results = []
     
     def get_experiment_list(self):
         """根据参数获取要run的实验列表"""
         if self.args.experiments == 'all':
             return experiment_configs
         
-        experiment_name列表 = [name.strip() for name in self.args.experiments.split(',')]
+        experiment_name_list = [name.strip() for name in self.args.experiments.split(',')]
         
-        筛选后列表 = []
-        for 实验 in experiment_configs:
+        filtered_list = []
+        for experiment in experiment_configs:
             # 检查experiment_name或classes是否匹配
-            if 实验['name'] in experiment_name列表:
-                筛选后列表.append(实验)
-            elif any(实验['name'].startswith(name) for name in experiment_name列表):
-                筛选后列表.append(实验)
+            if experiment['name'] in experiment_name_list:
+                filtered_list.append(experiment)
+            elif any(experiment['name'].startswith(name) for name in experiment_name_list):
+                filtered_list.append(experiment)
         
-        return 筛选后列表
+        return filtered_list
     
     def check_experiment_complete(self, experiment_name):
         """检查实验是否已完成"""
-        results文件 = self.output_dir / f'{experiment_name}_results.json'
-        return results文件.exists()
+        results_file = self.output_dir / f'{experiment_name}_results.json'
+        return results_file.exists()
     
     def run_single_experiment(self, experiment_config):
         """
         run单个消融实验
         
         参数:
-            实验config: 实验config字典
+            experiment_config: 实验config字典
         
         返回:
             实验results字典
@@ -156,7 +156,7 @@ class AblationStudyManager:
         
         print(f'\n{"="*60}')
         print(f'实验: {experiment_name}')
-        print(f'描述: {实验config["description"]}')
+        print(f'描述: {experiment_config["description"]}')
         print(f'{"="*60}')
         
         # 检查是否跳过
@@ -183,17 +183,17 @@ class AblationStudyManager:
             results = subprocess.run(command, capture_output=True, text=True)
             success = results.returncode == 0
             output = results.stdout
-            错误 = results.stderr
+            error = results.stderr
         except Exception as e:
             success = False
             output = ''
-            错误 = str(e)
+            error = str(e)
         
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         
         # 记录results
-        实验results = {
+        experiment_results = {
             'name': experiment_name,
             'description': experiment_config['description'],
             'config': experiment_config,
@@ -202,23 +202,23 @@ class AblationStudyManager:
             'start_time': start_time.isoformat(),
             'end_time': end_time.isoformat(),
             'output': output[-5000:] if output else '',  # 只保留最后5000字符
-            'error': 错误[-2000:] if 错误 else '',
+            'error': error[-2000:] if error else '',
             'metrics': self._extract_metrics_from_log(output)
         }
         
         # 保存单个实验results
-        results文件 = self.output_dir / f'{experiment_name}_results.json'
-        with open(results文件, 'w', encoding='utf-8') as f:
-            json.dump(实验results, f, indent=2, ensure_ascii=False)
+        results_file = self.output_dir / f'{experiment_name}_results.json'
+        with open(results_file, 'w', encoding='utf-8') as f:
+            json.dump(experiment_results, f, indent=2, ensure_ascii=False)
         
         if success:
             print(f'实验 {experiment_name} 完成，duration {duration:.1f} 秒')
         else:
             print(f'实验 {experiment_name} 失败')
-            if 错误:
-                print(f'错误信息: {错误[:500]}')
+            if error:
+                print(f'错误信息: {error[:500]}')
         
-        return 实验results
+        return experiment_results
     
     def _extract_metrics_from_log(self, log_content):
         """
@@ -273,10 +273,10 @@ class AblationStudyManager:
         
         # 加载所有实验results
         all_results = []
-        for 实验 in experiment_configs:
-            results文件 = self.output_dir / f'{实验["name"]}_results.json'
-            if results文件.exists():
-                with open(results文件, 'r', encoding='utf-8') as f:
+        for experiment in experiment_configs:
+            results_file = self.output_dir / f'{experiment["name"]}_results.json'
+            if results_file.exists():
+                with open(results_file, 'r', encoding='utf-8') as f:
                     all_results.append(json.load(f))
         
         if not all_results:
@@ -284,80 +284,80 @@ class AblationStudyManager:
             return
         
         # 生成Markdown报告
-        报告内容 = ['# 消融实验报告\n']
-        报告内容.append(f'生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
-        报告内容.append(f'实验count: {len(所有results)}\n\n')
+        report_content = ['# 消融实验报告\n']
+        report_content.append(f'生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+        report_content.append(f'实验count: {len(all_results)}\n\n')
         
         # 实验config表格
-        报告内容.append('## 实验config\n\n')
-        报告内容.append('| experiment_name | 骨干网络 | loss函数 | 注意力机制 | 状态 |\n')
-        报告内容.append('|---------|---------|---------|-----------|------|\n')
+        report_content.append('## 实验config\n\n')
+        report_content.append('| experiment_name | 骨干网络 | loss函数 | 注意力机制 | 状态 |\n')
+        report_content.append('|---------|---------|---------|-----------|------|\n')
         
         for results in all_results:
             config = results.get('config', {})
-            状态 = '✓' if results.get('success') else '✗'
-            报告内容.append(f"| {results['name']} | {config.get('backbone', '-')} | "
-                          f"{config.get('loss', '-')} | {config.get('attention', '-')} | {状态} |\n")
+            status = '✓' if results.get('success') else '✗'
+            report_content.append(f"| {results['name']} | {config.get('backbone', '-')} | "
+                          f"{config.get('loss', '-')} | {config.get('attention', '-')} | {status} |\n")
         
         # 性能metrics表格
-        报告内容.append('\n## 性能metrics\n\n')
-        报告内容.append('| experiment_name | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall |\n')
-        报告内容.append('|---------|---------|-------------|-----------|--------|\n')
+        report_content.append('\n## 性能metrics\n\n')
+        report_content.append('| experiment_name | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall |\n')
+        report_content.append('|---------|---------|-------------|-----------|--------|\n')
         
         for results in all_results:
             metrics = results.get('metrics', {})
-            报告内容.append(f"| {results['name']} | "
+            report_content.append(f"| {results['name']} | "
                           f"{metrics.get('mAP_0.5', '-')} | "
                           f"{metrics.get('mAP_0.5_0.95', '-')} | "
                           f"{metrics.get('precision', '-')} | "
                           f"{metrics.get('recall', '-')} |\n")
         
         # duration统计
-        报告内容.append('\n## 训练duration\n\n')
-        报告内容.append('| experiment_name | duration(秒) | duration(分钟) |\n')
-        报告内容.append('|---------|---------|----------|\n')
+        report_content.append('\n## 训练duration\n\n')
+        report_content.append('| experiment_name | duration(秒) | duration(分钟) |\n')
+        report_content.append('|---------|---------|----------|\n')
         
         for results in all_results:
-            duration秒 = results.get('duration_seconds', 0)
-            duration分 = duration秒 / 60 if duration秒 else 0
-            报告内容.append(f"| {results['name']} | {duration秒:.1f} | {duration分:.1f} |\n")
+            duration_sec = results.get('duration_seconds', 0)
+            duration_min = duration_sec / 60 if duration_sec else 0
+            report_content.append(f"| {results['name']} | {duration_sec:.1f} | {duration_min:.1f} |\n")
         
         # 保存报告
-        报告路径 = self.output_dir / 'ablation_report.md'
-        with open(报告路径, 'w', encoding='utf-8') as f:
-            f.writelines(报告内容)
+        report_path = self.output_dir / 'ablation_report.md'
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.writelines(report_content)
         
-        print(f'报告已保存到: {报告路径}')
+        print(f'报告已保存到: {report_path}')
         
         # 保存汇总JSON
-        汇总路径 = self.output_dir / 'ablation_summary.json'
-        with open(汇总路径, 'w', encoding='utf-8') as f:
+        summary_path = self.output_dir / 'ablation_summary.json'
+        with open(summary_path, 'w', encoding='utf-8') as f:
             json.dump(all_results, f, indent=2, ensure_ascii=False)
         
-        print(f'summarize_results已保存到: {汇总路径}')
+        print(f'summarize_results已保存到: {summary_path}')
     
     def run(self):
         """run全部消融实验"""
         print('=' * 60)
         print('消融实验')
         print('=' * 60)
-        print(f'output目录: {self.output目录}')
+        print(f'output目录: {self.output_dir}')
         print(f'每个实验训练轮数: {self.args.epochs}')
         
         # 获取实验列表
-        实验列表 = self.get_experiment_list()
-        print(f'待run_experiments数: {len(实验列表)}')
+        experiment_list = self.get_experiment_list()
+        print(f'待run_experiments数: {len(experiment_list)}')
         
-        for i, 实验 in enumerate(实验列表):
-            print(f'\n[{i+1}/{len(实验列表)}] {实验["name"]}')
+        for i, experiment in enumerate(experiment_list):
+            print(f'\n[{i+1}/{len(experiment_list)}] {experiment["name"]}')
         
         print('\n开始run_experiments...')
         
         # run每个实验
-        for 实验 in 实验列表:
-            results = self.run_single_experiment(实验)
+        for experiment in experiment_list:
+            results = self.run_single_experiment(experiment)
             if results:
-                self.实验results.append(results)
+                self.experiment_results.append(results)
         
         # generate_report
         self.generate_comparison_report()
@@ -371,8 +371,8 @@ def main():
     """主函数"""
     args = parse_args()
     
-    管理器 = AblationStudyManager(args)
-    管理器.run()
+    manager = AblationStudyManager(args)
+    manager.run()
 
 
 if __name__ == '__main__':
