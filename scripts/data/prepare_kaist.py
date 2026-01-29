@@ -64,9 +64,9 @@ class KAISTDatasetConverter:
         
         # 初始化statistics
         self.stats = {
-            '总序列数': 0,
-            '总帧数': 0,
-            '总标注数': 0,
+            'total_sequences': 0,
+            'total_frames': 0,
+            'total_annotations': 0,
         }
     
     def find_video_sequences(self):
@@ -204,7 +204,7 @@ class KAISTDatasetConverter:
                         'class': annotation['class'],
                     })
             
-            self.stats['总标注数'] += len(frame_annotations_list)
+            self.stats['total_annotations'] += len(frame_annotations_list)
         
         # 保存跟踪标注
         annotation_output_path = output_annotations_dir / 'gt.json'
@@ -212,8 +212,8 @@ class KAISTDatasetConverter:
             json.dump(tracking_annotations_list, f, indent=2, ensure_ascii=False)
         
         # 更新统计
-        self.stats['总帧数'] += len(image_files_list)
-        self.stats['总序列数'] += 1
+        self.stats['total_frames'] += len(image_files_list)
+        self.stats['total_sequences'] += 1
         
         return len(image_files_list)
     
@@ -266,9 +266,9 @@ class KAISTDatasetConverter:
         print('\n' + '=' * 50)
         print('convert完成!')
         print('=' * 50)
-        print(f"处理序列数: {self.stats['总序列数']}")
-        print(f"总帧数: {self.stats['总帧数']}")
-        print(f"总标注数: {self.stats['总标注数']}")
+        print(f"处理序列数: {self.stats['total_sequences']}")
+        print(f"总帧数: {self.stats['total_frames']}")
+        print(f"总标注数: {self.stats['total_annotations']}")
 
 
 def main():

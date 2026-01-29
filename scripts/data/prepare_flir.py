@@ -101,12 +101,12 @@ class FLIRDatasetConverter:
         
         # 初始化statistics
         self.stats = {
-            '总image数': 0,
-            '训练image数': 0,
-            '验证image数': 0,
-            '总实例数': 0,
-            '各classes实例数': {classes: 0 for classes in classes_list},
-            '跳过实例数': 0,
+            'total_images': 0,
+            'train_images': 0,
+            'val_images': 0,
+            'total_instances': 0,
+            'instances_per_class': {classes: 0 for classes in classes_list},
+            'skipped_instances': 0,
         }
     
     def load_annotation_file(self, split='train'):
@@ -233,7 +233,7 @@ class FLIRDatasetConverter:
                 
                 # 跳过不需要的classes
                 if class_idx == -1:
-                    self.stats['跳过实例数'] += 1
+                    self.stats['skipped_instances'] += 1
                     continue
                 
                 if class_idx >= len(self.classes_list):
@@ -244,8 +244,8 @@ class FLIRDatasetConverter:
                 yolo_labels_list.append([class_idx] + yolo_bbox)
                 
                 # 更新统计
-                self.stats['总实例数'] += 1
-                self.stats['各classes实例数'][self.classes_list[class_idx]] += 1
+                self.stats['total_instances'] += 1
+                self.stats['instances_per_class'][self.classes_list[class_idx]] += 1
             
             # 保存image
             output_image_name = f'{image_id:06d}.jpg'
@@ -262,11 +262,11 @@ class FLIRDatasetConverter:
             
             # 更新统计
             processed_count += 1
-            self.stats['总image数'] += 1
+            self.stats['total_images'] += 1
             if is_train:
-                self.stats['训练image数'] += 1
+                self.stats['train_images'] += 1
             else:
-                self.stats['验证image数'] += 1
+                self.stats['val_images'] += 1
         
         return processed_count
     
@@ -343,13 +343,13 @@ class FLIRDatasetConverter:
         print('\n' + '=' * 50)
         print('convert完成!')
         print('=' * 50)
-        print(f"总image数: {self.stats['总image数']}")
-        print(f"训练image: {self.stats['训练image数']}")
-        print(f"验证image: {self.stats['验证image数']}")
-        print(f"总实例数: {self.stats['总实例数']}")
-        print(f"跳过实例: {self.stats['跳过实例数']}")
+        print(f"总image数: {self.stats['total_images']}")
+        print(f"训练image: {self.stats['train_images']}")
+        print(f"验证image: {self.stats['val_images']}")
+        print(f"总实例数: {self.stats['total_instances']}")
+        print(f"跳过实例: {self.stats['skipped_instances']}")
         print('\n各classes实例数:')
-        for classes, count in self.stats['各classes实例数'].items():
+        for classes, count in self.stats['instances_per_class'].items():
             print(f"  {classes}: {count}")
 
 
