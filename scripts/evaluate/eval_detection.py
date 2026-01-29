@@ -13,7 +13,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-def 解析参数():
+def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='评估目标检测模型性能',
@@ -54,7 +54,7 @@ def 解析参数():
     return parser.parse_args()
 
 
-class 检测评估器:
+class DetectionEvaluator:
     """检测模型评估器类"""
     
     def __init__(self, args):
@@ -65,34 +65,34 @@ class 检测评估器:
             args: 命令行参数
         """
         self.args = args
-        self.权重路径 = Path(args.weights)
+        self.weights_path = Path(args.weights)
         
         # 确定输出路径
         if args.output:
-            self.输出路径 = Path(args.output)
+            self.output_path = Path(args.output)
         else:
-            self.输出路径 = Path('outputs/results') / f'detection_eval_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+            self.output_path = Path('outputs/results') / f'detection_eval_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
         
-        self.输出路径.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    def 加载模型(self):
+    def load_model(self):
         """
         加载检测模型
         
         注意: 这是占位实现，需要集成实际的模型加载代码
         """
-        print(f'\n加载模型: {self.权重路径}')
+        print(f'\n加载模型: {self.weights_path}')
         
-        if not self.权重路径.exists():
-            print(f'错误: 模型文件不存在 - {self.权重路径}')
+        if not self.weights_path.exists():
+            print(f'错误: 模型文件不存在 - {self.weights_path}')
             return None
         
         # TODO: 集成YOLOv5模型加载代码
-        # model = torch.load(self.权重路径)
+        # model = torch.load(self.weights_path)
         
         return None
     
-    def 评估(self, 模型):
+    def evaluate(self, model):
         """
         执行模型评估
         
@@ -112,8 +112,8 @@ class 检测评估器:
         # TODO: 集成实际的评估代码
         # 以下是示例结果结构
         
-        评估结果 = {
-            'model': str(self.权重路径),
+        eval_result = {
+            'model': str(self.weights_path),
             'dataset': self.args.data,
             'task': self.args.task,
             'timestamp': datetime.now().isoformat(),
@@ -142,60 +142,60 @@ class 检测评估器:
             }
         }
         
-        return 评估结果
+        return eval_result
     
-    def 打印结果(self, 结果):
+    def print_results(self, result):
         """打印评估结果"""
         print('\n' + '=' * 60)
         print('评估结果')
         print('=' * 60)
         
-        指标 = 结果.get('metrics', {})
-        print(f"mAP@0.5:       {指标.get('mAP_0.5', 'N/A')}")
-        print(f"mAP@0.5:0.95:  {指标.get('mAP_0.5_0.95', 'N/A')}")
-        print(f"Precision:     {指标.get('precision', 'N/A')}")
-        print(f"Recall:        {指标.get('recall', 'N/A')}")
-        print(f"F1-Score:      {指标.get('f1_score', 'N/A')}")
+        metrics = result.get('metrics', {})
+        print(f"mAP@0.5:       {metrics.get('mAP_0.5', 'N/A')}")
+        print(f"mAP@0.5:0.95:  {metrics.get('mAP_0.5_0.95', 'N/A')}")
+        print(f"Precision:     {metrics.get('precision', 'N/A')}")
+        print(f"Recall:        {metrics.get('recall', 'N/A')}")
+        print(f"F1-Score:      {metrics.get('f1_score', 'N/A')}")
         
-        if self.args.verbose and '每类别指标' in 结果:
+        if self.args.verbose and '每类别指标' in result:
             print('\n各类别性能:')
-            for 类别, 类别指标 in 结果['每类别指标'].items():
-                print(f"  {类别}: AP={类别指标.get('ap', 'N/A')}")
+            for category, category_metrics in result['每类别指标'].items():
+                print(f"  {category}: AP={category_metrics.get('ap', 'N/A')}")
     
-    def 保存结果(self, 结果):
+    def save_results(self, result):
         """保存评估结果"""
-        with open(self.输出路径, 'w', encoding='utf-8') as f:
-            json.dump(结果, f, indent=2, ensure_ascii=False)
+        with open(self.output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
         
-        print(f'\n结果已保存到: {self.输出路径}')
+        print(f'\n结果已保存到: {self.output_path}')
     
-    def 运行(self):
+    def run(self):
         """运行评估流程"""
         print('=' * 60)
         print('目标检测模型评估')
         print('=' * 60)
         
         # 加载模型
-        模型 = self.加载模型()
+        model = self.load_model()
         
         # 执行评估
-        结果 = self.评估(模型)
+        result = self.evaluate(model)
         
         # 打印结果
-        self.打印结果(结果)
+        self.print_results(result)
         
         # 保存结果
-        self.保存结果(结果)
+        self.save_results(result)
         
-        return 结果
+        return result
 
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    评估器 = 检测评估器(args)
-    评估器.运行()
+    evaluator = DetectionEvaluator(args)
+    evaluator.run()
 
 
 if __name__ == '__main__':
