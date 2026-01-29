@@ -42,7 +42,7 @@ def parse_args():
     return parser.parse_args()
 
 
-class RKNNconvert器:
+class RKNNConverter:
     """RKNNmodelconvert器类"""
     
     def __init__(self, args):
@@ -107,7 +107,7 @@ class RKNNconvert器:
         
         print(f'  找到 {len(image_list)} 张校准image，使用 {count} 张')
         
-        return [str(路径) for 路径 in image_list[:count]]
+        return [str(path) for path in image_list[:count]]
     
     def convert(self):
         """
@@ -176,8 +176,8 @@ class RKNNconvert器:
             print(f'  convert失败: {e}')
         
         # 保存convertconfig供后续使用
-        config文件 = self.output路径.with_suffix('.config.txt')
-        with open(config文件, 'w', encoding='utf-8') as f:
+        config_file = self.output路径.with_suffix('.config.txt')
+        with open(config_file, 'w', encoding='utf-8') as f:
             f.write(f'ONNXmodel: {self.onnx_path}\n')
             f.write(f'output路径: {self.output路径}\n')
             f.write(f'目标平台: {self.args.platform}\n')
@@ -223,7 +223,7 @@ def main():
     """主函数"""
     args = parse_args()
     
-    convert器 = RKNNconvert器(args)
+    convert器 = RKNNConverter(args)
     convert器.run()
 
 

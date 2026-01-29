@@ -54,7 +54,7 @@ def parse_args():
     return parser.parse_args()
 
 
-class 检测evaluate器:
+class DetectionEvaluator:
     """检测modelevaluate器类"""
     
     def __init__(self, args):
@@ -301,7 +301,7 @@ def main():
     """主函数"""
     args = parse_args()
     
-    evaluate器 = 检测evaluate器(args)
+    evaluate器 = DetectionEvaluator(args)
     evaluate器.run()
 
 

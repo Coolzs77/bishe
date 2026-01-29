@@ -59,7 +59,7 @@ class TrackerComparator:
         # 解析tracker列表
         self.tracker列表 = [tracker.strip() for tracker in args.trackers.split(',')]
     
-    def run单个trackerevaluate(self, trackername):
+    def run_single_tracker_eval(self, trackername):
         """
         run单个tracker的evaluate
         
@@ -110,7 +110,7 @@ class TrackerComparator:
             'metrics': metrics,
         }
     
-    def 生成对比报告(self, 所有results):
+    def generate_comparison_report(self, all_results):
         """
         生成对比报告
         
@@ -120,7 +120,7 @@ class TrackerComparator:
         # 生成CSV格式报告
         csv内容 = ['tracker,MOTA,IDF1,IDSW,MOTP,FP,FN,duration(秒)\n']
         
-        for results in 所有results:
+        for results in all_results:
             metrics = results.get('metrics', {})
             行 = [
                 results['tracker'],
@@ -149,7 +149,7 @@ class TrackerComparator:
         md内容.append('| tracker | MOTA | IDF1 | IDSW | MOTP | FP | FN | duration(秒) |\n')
         md内容.append('|--------|------|------|------|------|----|----|----------|\n')
         
-        for results in 所有results:
+        for results in all_results:
             metrics = results.get('metrics', {})
             行 = f"| {results['tracker']} | "
             行 += f"{metrics.get('MOTA', 'N/A')} | "
@@ -179,12 +179,12 @@ class TrackerComparator:
                 'timestamp': datetime.now().isoformat(),
                 'detector': self.detector路径,
                 'video': self.video_path,
-                'results': 所有results,
+                'results': all_results,
             }, f, indent=2, ensure_ascii=False)
         
         print(f'JSON汇总已保存到: {json路径}')
     
-    def print_comparison_results(self, 所有results):
+    def print_comparison_results(self, all_results):
         """print_comparison_results"""
         print('\n' + '=' * 80)
         print('跟踪算法对比results')
@@ -194,7 +194,7 @@ class TrackerComparator:
         print(f"{'tracker':<12} {'MOTA':>8} {'IDF1':>8} {'IDSW':>8} {'duration(秒)':>10}")
         print('-' * 50)
         
-        for results in 所有results:
+        for results in all_results:
             metrics = results.get('metrics', {})
             mota = metrics.get('MOTA', 'N/A')
             idf1 = metrics.get('IDF1', 'N/A')
@@ -208,17 +208,17 @@ class TrackerComparator:
         
         try:
             # 按MOTA排序找出最优
-            mota排名 = sorted(所有results, key=lambda x: x.get('overall_metrics', {}).get('MOTA', 0) or 0, reverse=True)
+            mota排名 = sorted(all_results, key=lambda x: x.get('overall_metrics', {}).get('MOTA', 0) or 0, reverse=True)
             if mota排名:
                 print(f'  - 综合性能最优 (MOTA): {mota排名[0]["tracker"]} ({mota排名[0].get("overall_metrics", {}).get("MOTA", "N/A")})')
             
             # 按IDF1排序找出身份保持最优
-            idf1排名 = sorted(所有results, key=lambda x: x.get('overall_metrics', {}).get('IDF1', 0) or 0, reverse=True)
+            idf1排名 = sorted(all_results, key=lambda x: x.get('overall_metrics', {}).get('IDF1', 0) or 0, reverse=True)
             if idf1排名:
                 print(f'  - 身份保持最优 (IDF1): {idf1排名[0]["tracker"]} ({idf1排名[0].get("overall_metrics", {}).get("IDF1", "N/A")})')
             
             # 按速度排序找出最快
-            速度排名 = sorted(所有results, key=lambda x: x.get('duration', float('inf')))
+            速度排名 = sorted(all_results, key=lambda x: x.get('duration', float('inf')))
             if 速度排名:
                 print(f'  - 速度最快: {速度排名[0]["tracker"]} ({速度排名[0].get("duration", "N/A"):.2f}s)')
         except Exception as e:
@@ -237,16 +237,16 @@ class TrackerComparator:
         print(f'tracker: {", ".join(self.tracker列表)}')
         
         # run每个tracker的evaluate
-        所有results = []
+        all_results = []
         for tracker in self.tracker列表:
-            results = self.run单个trackerevaluate(tracker)
-            所有results.append(results)
+            results = self.run_single_tracker_eval(tracker)
+            all_results.append(results)
         
         # print_comparison_results
-        self.print_comparison_results(所有results)
+        self.print_comparison_results(all_results)
         
         # generate_report
-        self.生成对比报告(所有results)
+        self.generate_comparison_report(all_results)
         
         print('\n' + '=' * 60)
         print('对比完成!')

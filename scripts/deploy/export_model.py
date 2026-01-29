@@ -153,8 +153,8 @@ class ModelExporter:
         if model is None:
             print('  警告: model为空，生成config文件供后续使用')
             # 保存导出config
-            config文件 = self.output路径.with_suffix('.export_config.txt')
-            with open(config文件, 'w', encoding='utf-8') as f:
+            config_file = self.output路径.with_suffix('.export_config.txt')
+            with open(config_file, 'w', encoding='utf-8') as f:
                 f.write(f'PyTorchmodel: {self.weights_path}\n')
                 f.write(f'output路径: {self.output路径}\n')
                 f.write(f'input尺寸: {self.args.img_size}\n')

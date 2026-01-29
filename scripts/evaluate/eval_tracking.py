@@ -47,7 +47,7 @@ def parse_args():
     return parser.parse_args()
 
 
-class 跟踪evaluate器:
+class TrackingEvaluator:
     """多目标跟踪evaluate器类"""
     
     def __init__(self, args):
@@ -60,8 +60,8 @@ class 跟踪evaluate器:
         self.args = args
         self.detector路径 = Path(args.detector)
         self.video_path = Path(args.video)
-        self.output目录 = Path(args.output) / f'tracking_{args.tracker}'
-        self.output目录.mkdir(parents=True, exist_ok=True)
+        self.output_dir = Path(args.output) / f'tracking_{args.tracker}'
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # 解析evaluatemetrics
         self.evaluatemetrics = [metrics.strip() for metrics in args.metrics.split(',')]
@@ -155,7 +155,7 @@ class 跟踪evaluate器:
         print(f'找到 {len(sequence_list)} 个测试序列')
         return sequence_list
     
-    def evaluate序列(self, detector, tracker, sequence_path):
+    def eval_sequence(self, detector, tracker, sequence_path):
         """
         evaluate单个序列
         
@@ -295,7 +295,7 @@ class 跟踪evaluate器:
         
         return 序列results
     
-    def calculate_overall_metrics(self, 所有results):
+    def calculate_overall_metrics(self, all_results):
         """
         计算总体evaluatemetrics
         
@@ -309,7 +309,7 @@ class 跟踪evaluate器:
             import numpy as np
             
             # 汇总所有序列的metrics
-            if len(所有results) == 0:
+            if len(all_results) == 0:
                 return {
                     'MOTA': 0.0,
                     'IDF1': 0.0,
@@ -322,18 +322,18 @@ class 跟踪evaluate器:
                 }
             
             # 平均MOTA和IDF1
-            mota_values = [r['metrics']['MOTA'] for r in 所有results if r['metrics'].get('MOTA')]
-            idf1_values = [r['metrics']['IDF1'] for r in 所有results if r['metrics'].get('IDF1')]
-            motp_values = [r['metrics']['MOTP'] for r in 所有results if r['metrics'].get('MOTP')]
+            mota_values = [r['metrics']['MOTA'] for r in all_results if r['metrics'].get('MOTA')]
+            idf1_values = [r['metrics']['IDF1'] for r in all_results if r['metrics'].get('IDF1')]
+            motp_values = [r['metrics']['MOTP'] for r in all_results if r['metrics'].get('MOTP')]
             
             # 求和IDSW, FP, FN等
-            total_idsw = sum(r['metrics'].get('IDSW', 0) for r in 所有results)
-            total_fp = sum(r['metrics'].get('FP', 0) for r in 所有results)
-            total_fn = sum(r['metrics'].get('FN', 0) for r in 所有results)
-            total_mt = sum(r['metrics'].get('MT', 0) for r in 所有results)
-            total_ml = sum(r['metrics'].get('ML', 0) for r in 所有results)
+            total_idsw = sum(r['metrics'].get('IDSW', 0) for r in all_results)
+            total_fp = sum(r['metrics'].get('FP', 0) for r in all_results)
+            total_fn = sum(r['metrics'].get('FN', 0) for r in all_results)
+            total_mt = sum(r['metrics'].get('MT', 0) for r in all_results)
+            total_ml = sum(r['metrics'].get('ML', 0) for r in all_results)
             
-            总体metrics = {
+            overall_metrics = {
                 'MOTA': round(np.mean(mota_values), 4) if mota_values else None,
                 'IDF1': round(np.mean(idf1_values), 4) if idf1_values else None,
                 'IDSW': total_idsw,
@@ -346,7 +346,7 @@ class 跟踪evaluate器:
             
         except Exception as e:
             print(f'  calculate_overall_metrics出错: {e}')
-            总体metrics = {
+            overall_metrics = {
                 'MOTA': 0.75,
                 'IDF1': 0.70,
                 'IDSW': 30,
@@ -357,21 +357,21 @@ class 跟踪evaluate器:
                 'ML': 10,
             }
         
-        return 总体metrics
+        return overall_metrics
     
-    def print_results(self, 总体metrics, 所有results):
+    def print_results(self, overall_metrics, all_results):
         """打印evaluateresults"""
         print('\n' + '=' * 60)
         print(f'跟踪evaluateresults - {self.args.tracker}')
         print('=' * 60)
         
         print('\n总体metrics:')
-        for metrics名, metrics值 in 总体metrics.items():
+        for metrics名, metrics值 in overall_metrics.items():
             print(f"  {metrics名}: {metrics值 if metrics值 is not None else 'N/A'}")
         
         print(f'\nevaluate了 {len(所有results)} 个序列')
     
-    def save_results(self, 总体metrics, 所有results):
+    def save_results(self, overall_metrics, all_results):
         """保存evaluateresults"""
         results = {
             'tracker': self.args.tracker,
@@ -381,11 +381,11 @@ class 跟踪evaluate器:
                 'conf_thres': self.args.conf_thres,
                 'nms_thres': self.args.nms_thres,
             },
-            'overall_metrics': 总体metrics,
-            'per_sequence': 所有results,
+            'overall_metrics': overall_metrics,
+            'per_sequence': all_results,
         }
         
-        output文件 = self.output目录 / 'tracking_results.json'
+        output文件 = self.output_dir / 'tracking_results.json'
         with open(output文件, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
@@ -410,28 +410,28 @@ class 跟踪evaluate器:
         sequence_list = self.get_test_sequences()
         
         # evaluate每个序列
-        所有results = []
+        all_results = []
         for sequence_path in sequence_list:
-            results = self.evaluate序列(detector, tracker, sequence_path)
-            所有results.append(results)
+            results = self.eval_sequence(detector, tracker, sequence_path)
+            all_results.append(results)
         
         # calculate_overall_metrics
-        总体metrics = self.calculate_overall_metrics(所有results)
+        overall_metrics = self.calculate_overall_metrics(all_results)
         
         # print_results
-        self.print_results(总体metrics, 所有results)
+        self.print_results(overall_metrics, all_results)
         
         # save_results
-        self.save_results(总体metrics, 所有results)
+        self.save_results(overall_metrics, all_results)
         
-        return 总体metrics, 所有results
+        return overall_metrics, all_results
 
 
 def main():
     """主函数"""
     args = parse_args()
     
-    evaluate器 = 跟踪evaluate器(args)
+    evaluate器 = TrackingEvaluator(args)
     evaluate器.run()
 
 

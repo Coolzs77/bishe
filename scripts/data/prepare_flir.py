@@ -47,7 +47,7 @@ def parse_args():
     return parser.parse_args()
 
 
-class FLIRdata集convert器:
+class FLIRDatasetConverter:
     """FLIRdata集convert器类"""
     
     # FLIRdata集classes映射到YOLOclasses索引
@@ -70,7 +70,7 @@ class FLIRdata集convert器:
         'other vehicle': -1,
     }
     
-    def __init__(self, input目录, output目录, classes列表, img_size=640, 划分比例=0.8):
+    def __init__(self, input_dir, output_dir, classes_list, img_size=640, split_ratio=0.8):
         """
         初始化convert器
         
@@ -81,18 +81,18 @@ class FLIRdata集convert器:
             img_size: outputimg_size
             划分比例: 训练集占总data的比例
         """
-        self.input目录 = Path(input目录)
-        self.output目录 = Path(output目录)
-        self.classes列表 = classes列表
+        self.input_dir = Path(input_dir)
+        self.output_dir = Path(output_dir)
+        self.classes_list = classes_list
         self.img_size = img_size
-        self.划分比例 = 划分比例
+        self.split_ratio = split_ratio
         
         # create_output_dir结构
-        self.训练image目录 = self.output目录 / 'images' / 'train'
-        self.验证image目录 = self.output目录 / 'images' / 'val'
-        self.训练label目录 = self.output目录 / 'labels' / 'train'
-        self.验证label目录 = self.output目录 / 'labels' / 'val'
-        self.校准目录 = self.output目录 / 'calibration'
+        self.训练image目录 = self.output_dir / 'images' / 'train'
+        self.验证image目录 = self.output_dir / 'images' / 'val'
+        self.训练label目录 = self.output_dir / 'labels' / 'train'
+        self.验证label目录 = self.output_dir / 'labels' / 'val'
+        self.校准目录 = self.output_dir / 'calibration'
         
         for 目录 in [self.训练image目录, self.验证image目录, 
                     self.训练label目录, self.验证label目录,
@@ -105,11 +105,11 @@ class FLIRdata集convert器:
             '训练image数': 0,
             '验证image数': 0,
             '总实例数': 0,
-            '各classes实例数': {classes: 0 for classes in classes列表},
+            '各classes实例数': {classes: 0 for classes in classes_list},
             '跳过实例数': 0,
         }
     
-    def 加载标注文件(self, 划分='train'):
+    def load_annotation_file(self, split='train'):
         """
         加载COCO格式的标注文件
         
@@ -121,20 +121,20 @@ class FLIRdata集convert器:
         """
         # 尝试多种可能的标注文件路径
         可能路径列表 = [
-            self.input目录 / f'thermal_{划分}' / 'coco.json',
-            self.input目录 / f'images_thermal_{划分}' / 'coco.json',
-            self.input目录 / 'annotations' / f'instances_thermal_{划分}.json',
+            self.input_dir / f'thermal_{划分}' / 'coco.json',
+            self.input_dir / f'images_thermal_{划分}' / 'coco.json',
+            self.input_dir / 'annotations' / f'instances_thermal_{划分}.json',
         ]
         
-        for 标注路径 in 可能路径列表:
-            if 标注路径.exists():
+        for annotation_path in 可能路径列表:
+            if annotation_path.exists():
                 print(f'加载标注文件: {标注路径}')
-                with open(标注路径, 'r', encoding='utf-8') as f:
+                with open(annotation_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
         
         raise FileNotFoundError(f'未找到{划分}标注文件，尝试过: {可能路径列表}')
     
-    def convert边界框为YOLO格式(self, 边界框, image宽度, image高度):
+    def convert_bbox_to_yolo_format(self, bbox, image_width, image_height):
         """
         将COCO格式边界框convert为YOLO格式
         
@@ -146,15 +146,15 @@ class FLIRdata集convert器:
         返回:
             YOLO格式 [x_center, y_center, width, height] (归一化到0-1)
         """
-        x_min, y_min, w, h = 边界框
+        x_min, y_min, w, h = bbox
         
         # 计算中心点坐标
-        x_center = (x_min + w / 2) / image宽度
-        y_center = (y_min + h / 2) / image高度
+        x_center = (x_min + w / 2) / image_width
+        y_center = (y_min + h / 2) / image_height
         
         # 归一化宽高
-        w_归一化 = w / image宽度
-        h_归一化 = h / image高度
+        w_归一化 = w / image_width
+        h_归一化 = h / image_height
         
         # 确保值在[0, 1]范围内
         x_center = max(0, min(1, x_center))
@@ -164,7 +164,7 @@ class FLIRdata集convert器:
         
         return [x_center, y_center, w_归一化, h_归一化]
     
-    def 处理data划分(self, 标注data, 是否训练集=True):
+    def process_data_split(self, annotation_data, is_train=True):
         """
         处理一个data集划分
         
@@ -176,22 +176,22 @@ class FLIRdata集convert器:
             处理的imagecount
         """
         # 构建imageID到image信息的映射
-        image信息映射 = {image['id']: image for image in 标注data['images']}
+        image信息映射 = {image['id']: image for image in annotation_data['images']}
         
         # 构建classesID到classesname的映射
-        classesname映射 = {classes['id']: classes['name'] for classes in 标注data['categories']}
+        classesname映射 = {classes['id']: classes['name'] for classes in annotation_data['categories']}
         
         # 构建imageID到标注列表的映射
         image标注映射 = {}
-        for 标注 in 标注data['annotations']:
+        for 标注 in annotation_data['annotations']:
             imageid = 标注['image_id']
             if imageid not in image标注映射:
                 image标注映射[imageid] = []
             image标注映射[imageid].append(标注)
         
         # 确定output目录
-        imageoutput目录 = self.训练image目录 if 是否训练集 else self.验证image目录
-        labeloutput目录 = self.训练label目录 if 是否训练集 else self.验证label目录
+        imageoutput目录 = self.训练image目录 if is_train else self.验证image目录
+        labeloutput目录 = self.训练label目录 if is_train else self.验证label目录
         
         # 处理每张image
         处理count = 0
@@ -199,17 +199,17 @@ class FLIRdata集convert器:
             # 查找image文件
             image文件名 = image信息['file_name']
             可能image_path列表 = [
-                self.input目录 / image文件名,
-                self.input目录 / 'thermal_train' / 'data' / image文件名,
-                self.input目录 / 'thermal_val' / 'data' / image文件名,
-                self.input目录 / 'images_thermal_train' / image文件名,
-                self.input目录 / 'images_thermal_val' / image文件名,
+                self.input_dir / image文件名,
+                self.input_dir / 'thermal_train' / 'data' / image文件名,
+                self.input_dir / 'thermal_val' / 'data' / image文件名,
+                self.input_dir / 'images_thermal_train' / image文件名,
+                self.input_dir / 'images_thermal_val' / image文件名,
             ]
             
             image_path = None
-            for 路径 in 可能image_path列表:
-                if 路径.exists():
-                    image_path = 路径
+            for path in 可能image_path列表:
+                if path.exists():
+                    image_path = path
                     break
             
             if image_path is None:
@@ -220,7 +220,7 @@ class FLIRdata集convert器:
             if image is None:
                 continue
             
-            image高度, image宽度 = image.shape[:2]
+            image_height, image_width = image.shape[:2]
             
             # 获取该image的所有标注
             标注列表 = image标注映射.get(imageid, [])
@@ -236,16 +236,16 @@ class FLIRdata集convert器:
                     self.统计['跳过实例数'] += 1
                     continue
                 
-                if classes索引 >= len(self.classes列表):
+                if classes索引 >= len(self.classes_list):
                     continue
                 
-                边界框 = 标注['bbox']
-                yolo边界框 = self.convert边界框为YOLO格式(边界框, image宽度, image高度)
+                bbox = 标注['bbox']
+                yolo边界框 = self.convert_bbox_to_yolo_format(bbox, image_width, image_height)
                 yololabel列表.append([classes索引] + yolo边界框)
                 
                 # 更新统计
                 self.统计['总实例数'] += 1
-                self.统计['各classes实例数'][self.classes列表[classes索引]] += 1
+                self.统计['各classes实例数'][self.classes_list[classes索引]] += 1
             
             # 保存image
             outputimage名 = f'{imageid:06d}.jpg'
@@ -263,14 +263,14 @@ class FLIRdata集convert器:
             # 更新统计
             处理count += 1
             self.统计['总image数'] += 1
-            if 是否训练集:
+            if is_train:
                 self.统计['训练image数'] += 1
             else:
                 self.统计['验证image数'] += 1
         
         return 处理count
     
-    def 创建校准data集(self, 样本数=100):
+    def create_calibration_dataset(self, num_samples=100):
         """
         创建用于INT8量化的校准data集
         
@@ -280,26 +280,26 @@ class FLIRdata集convert器:
         print(f'\n创建量化校准data集 ({样本数}张image)...')
         
         训练image_list = list(self.训练image目录.glob('*.jpg'))
-        if len(训练image_list) < 样本数:
-            样本数 = len(训练image_list)
+        if len(训练image_list) < num_samples:
+            num_samples = len(训练image_list)
         
-        选中image_list = random.sample(训练image_list, 样本数)
+        选中image_list = random.sample(训练image_list, num_samples)
         for image_path in 选中image_list:
             shutil.copy(image_path, self.校准目录 / image_path.name)
         
         print(f'已复制 {样本数} 张image到校准目录')
     
-    def 生成data集config文件(self):
+    def generate_dataset_config_file(self):
         """生成YOLO格式的data集config文件"""
-        config文件路径 = self.output目录 / 'dataset.yaml'
+        config文件路径 = self.output_dir / 'dataset.yaml'
         
         config内容 = {
-            'path': str(self.output目录.absolute()),
+            'path': str(self.output_dir.absolute()),
             'train': 'images/train',
             'val': 'images/val',
             'test': 'images/val',
-            'nc': len(self.classes列表),
-            'names': self.classes列表,
+            'nc': len(self.classes_list),
+            'names': self.classes_list,
         }
         
         with open(config文件路径, 'w', encoding='utf-8') as f:
@@ -307,7 +307,7 @@ class FLIRdata集convert器:
         
         print(f'\ndata集config已保存到: {config文件路径}')
     
-    def 执行convert(self):
+    def perform_convert(self):
         """执行完整的data集convert流程"""
         print('=' * 50)
         print('FLIRdata集convert')
@@ -320,24 +320,24 @@ class FLIRdata集convert器:
         # 处理训练集
         try:
             print('处理训练集...')
-            训练标注 = self.加载标注文件('train')
-            self.处理data划分(训练标注, 是否训练集=True)
+            训练标注 = self.load_annotation_file('train')
+            self.process_data_split(训练标注, is_train=True)
         except FileNotFoundError as e:
             print(f'警告: {e}')
         
         # 处理验证集
         try:
             print('\n处理验证集...')
-            验证标注 = self.加载标注文件('val')
-            self.处理data划分(验证标注, 是否训练集=False)
+            验证标注 = self.load_annotation_file('val')
+            self.process_data_split(验证标注, is_train=False)
         except FileNotFoundError as e:
             print(f'警告: {e}')
         
         # 创建校准data集
-        self.创建校准data集()
+        self.create_calibration_dataset()
         
         # 生成config文件
-        self.生成data集config文件()
+        self.generate_dataset_config_file()
         
         # 打印statistics
         print('\n' + '=' * 50)
@@ -361,18 +361,18 @@ def main():
     random.seed(args.seed)
     
     # 解析classes列表
-    classes列表 = [classes.strip() for classes in args.classes.split(',')]
+    classes_list = [classes.strip() for classes in args.classes.split(',')]
     
     # 创建convert器并执行convert
-    convert器 = FLIRdata集convert器(
-        input目录=args.input,
-        output目录=args.output,
-        classes列表=classes列表,
+    convert器 = FLIRDatasetConverter(
+        input_dir=args.input,
+        output_dir=args.output,
+        classes_list=classes_list,
         img_size=args.img_size,
-        划分比例=args.split_ratio
+        split_ratio=args.split_ratio
     )
     
-    convert器.执行convert()
+    convert器.perform_convert()
 
 
 if __name__ == '__main__':

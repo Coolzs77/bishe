@@ -266,7 +266,7 @@ class RKNNTester:
         output = self.inference(rknn_obj, input)
         end_time = time.time()
         
-        inference时间 = (end_time - start_time) * 1000
+        inference_time = (end_time - start_time) * 1000
         print(f'  inference时间: {inference时间:.2f} ms')
         
         # postprocess

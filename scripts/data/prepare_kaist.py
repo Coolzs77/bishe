@@ -39,10 +39,10 @@ def parse_args():
     return parser.parse_args()
 
 
-class KAISTdata集convert器:
+class KAISTDatasetConverter:
     """KAISTdata集convert器类"""
     
-    def __init__(self, input目录, output目录, 模态='thermal'):
+    def __init__(self, input_dir, output_dir, modality='thermal'):
         """
         初始化convert器
         
@@ -51,13 +51,13 @@ class KAISTdata集convert器:
             output目录: convert后data保存路径
             模态: image模态 ('thermal', 'visible', 'both')
         """
-        self.input目录 = Path(input目录)
-        self.output目录 = Path(output目录)
-        self.模态 = 模态
+        self.input_dir = Path(input_dir)
+        self.output_dir = Path(output_dir)
+        self.modality = modality
         
         # create_output_dir
-        self.序列目录 = self.output目录 / 'test_sequences'
-        self.标注目录 = self.output目录 / 'annotations'
+        self.序列目录 = self.output_dir / 'test_sequences'
+        self.标注目录 = self.output_dir / 'annotations'
         
         self.序列目录.mkdir(parents=True, exist_ok=True)
         self.标注目录.mkdir(parents=True, exist_ok=True)
@@ -69,7 +69,7 @@ class KAISTdata集convert器:
             '总标注数': 0,
         }
     
-    def 查找视频序列(self):
+    def find_video_sequences(self):
         """
         查找所有视频序列
         
@@ -79,7 +79,7 @@ class KAISTdata集convert器:
         sequence_list = []
         
         # KAISTdata集结构: set00/V000, set00/V001, ...
-        for set目录 in sorted(self.input目录.glob('set*')):
+        for set目录 in sorted(self.input_dir.glob('set*')):
             if not set目录.is_dir():
                 continue
             
@@ -88,9 +88,9 @@ class KAISTdata集convert器:
                     continue
                 
                 # 根据模态确定image目录
-                if self.模态 == 'thermal':
+                if self.modality == 'thermal':
                     image目录 = 视频目录 / 'lwir'
-                elif self.模态 == 'visible':
+                elif self.modality == 'visible':
                     image目录 = 视频目录 / 'visible'
                 else:
                     image目录 = 视频目录
@@ -109,7 +109,7 @@ class KAISTdata集convert器:
         
         return sequence_list
     
-    def 解析标注文件(self, 标注路径):
+    def parse_annotation_file(self, annotation_path):
         """
         解析KAIST格式的标注文件
         
@@ -121,10 +121,10 @@ class KAISTdata集convert器:
         """
         标注列表 = []
         
-        if not 标注路径.exists():
+        if not annotation_path.exists():
             return 标注列表
         
-        with open(标注路径, 'r', encoding='utf-8') as f:
+        with open(annotation_path, 'r', encoding='utf-8') as f:
             行列表 = f.readlines()
         
         for 行 in 行列表:
@@ -151,7 +151,7 @@ class KAISTdata集convert器:
         
         return 标注列表
     
-    def 处理视频序列(self, 序列信息):
+    def process_video_sequence(self, sequence_info):
         """
         处理单个视频序列
         
@@ -169,14 +169,14 @@ class KAISTdata集convert器:
         output标注目录.mkdir(parents=True, exist_ok=True)
         
         # 获取image文件列表
-        image目录 = 序列信息['img_dir']
+        image目录 = sequence_info['img_dir']
         image文件列表 = sorted(list(image目录.glob('*.jpg')) + list(image目录.glob('*.png')))
         
         if not image文件列表:
             return 0
         
         # 标注目录
-        标注目录 = 序列信息['path'] / 'annotations'
+        标注目录 = sequence_info['path'] / 'annotations'
         
         # 准备跟踪标注格式
         跟踪标注列表 = []
@@ -191,9 +191,9 @@ class KAISTdata集convert器:
             
             # 处理标注
             标注文件名 = image_path.stem + '.txt'
-            标注路径 = 标注目录 / 标注文件名
+            annotation_path = 标注目录 / 标注文件名
             
-            帧标注列表 = self.解析标注文件(标注路径)
+            帧标注列表 = self.parse_annotation_file(annotation_path)
             
             for 标注 in 帧标注列表:
                 if 标注['class'].lower() == 'person':
@@ -217,9 +217,9 @@ class KAISTdata集convert器:
         
         return len(image文件列表)
     
-    def 生成sequence_list文件(self):
+    def generate_sequence_list_file(self):
         """生成sequence_list文件"""
-        列表文件路径 = self.output目录 / 'sequences.txt'
+        列表文件路径 = self.output_dir / 'sequences.txt'
         
         sequence_list = sorted([目录.name for 目录 in self.序列目录.iterdir() if 目录.is_dir()])
         
@@ -229,7 +229,7 @@ class KAISTdata集convert器:
         
         print(f'sequence_list已保存到: {列表文件路径}')
     
-    def 执行convert(self):
+    def perform_convert(self):
         """执行完整的data集convert流程"""
         print('=' * 50)
         print('KAISTdata集convert')
@@ -240,7 +240,7 @@ class KAISTdata集convert器:
         print()
         
         # 查找视频序列
-        sequence_list = self.查找视频序列()
+        sequence_list = self.find_video_sequences()
         print(f'找到 {len(sequence_list)} 个视频序列')
         
         if not sequence_list:
@@ -256,11 +256,11 @@ class KAISTdata集convert器:
             return
         
         # 处理每个序列
-        for 序列信息 in tqdm(sequence_list, desc='处理序列'):
-            self.处理视频序列(序列信息)
+        for sequence_info in tqdm(sequence_list, desc='处理序列'):
+            self.process_video_sequence(sequence_info)
         
         # 生成sequence_list文件
-        self.生成sequence_list文件()
+        self.generate_sequence_list_file()
         
         # 打印statistics
         print('\n' + '=' * 50)
@@ -275,13 +275,13 @@ def main():
     """主函数"""
     args = parse_args()
     
-    convert器 = KAISTdata集convert器(
-        input目录=args.input,
-        output目录=args.output,
-        模态=args.modality
+    convert器 = KAISTDatasetConverter(
+        input_dir=args.input,
+        output_dir=args.output,
+        modality=args.modality
     )
     
-    convert器.执行convert()
+    convert器.perform_convert()
 
 
 if __name__ == '__main__':

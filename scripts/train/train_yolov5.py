@@ -176,7 +176,7 @@ class YOLOv5Trainer:
         
         return True
     
-    def 构建model(self):
+    def build_model(self):
         """
         构建model
         
@@ -452,7 +452,7 @@ class YOLOv5Trainer:
             return
         
         # 构建model
-        model = self.构建model()
+        model = self.build_model()
         
         # build_data_loader
         train_loader, val_loader = self.build_data_loader()
