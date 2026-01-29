@@ -373,11 +373,12 @@ python scripts/data/prepare_kaist.py --input data/raw/kaist --output data/proces
 ```
 
 **注意：**
-- 脚本会尝试从多个公开镜像源自动下载数据集
-- **由于数据集通常需要注册或授权**，自动下载可能会失败
-- 失败时脚本会提供详细的手动下载指南：
-  - **FLIR数据集**: 访问官方网站注册后下载（https://www.flir.com/oem/adas/adas-dataset-form/）
-  - **KAIST数据集**: 从GitHub仓库获取下载链接（https://github.com/SoonminHwang/rgbt-ped-detection）
+- ✅ **脚本已更新为v2.0版本，使用真实的GitHub公开源**
+- 脚本会自动从GitHub仓库下载数据集或示例数据
+- 对于需要注册的完整数据集，脚本提供详细的下载指引
+- **FLIR数据集**: 脚本会尝试从GitHub下载样本数据，或引导你从官方获取完整版
+- **KAIST数据集**: 脚本会下载官方GitHub仓库（含说明），并引导你获取完整数据
+- 所有步骤都有清晰的提示，无需手动调试
 - 手动下载后，将ZIP文件放到 `data/raw/flir` 或 `data/raw/kaist` 目录即可
 
 ### 3. 模型训练
