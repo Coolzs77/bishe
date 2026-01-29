@@ -209,16 +209,16 @@ class TestDataAugmentorIntegration(unittest.TestCase):
         
         # 多次run以测试随机性
         for _ in range(5):
-            aug_image, aug_labels = augmentor(image.copy(), labels.copy())
+            augmented_image, augmented_labels = augmentor(image.copy(), labels.copy())
             
             # 检查output有效性
-            self.assertEqual(aug_image.shape, image.shape)
-            self.assertTrue(aug_image.min() >= 0)
-            self.assertTrue(aug_image.max() <= 1)
+            self.assertEqual(augmented_image.shape, image.shape)
+            self.assertTrue(augmented_image.min() >= 0)
+            self.assertTrue(augmented_image.max() <= 1)
             
             # label可能被过滤，检查格式
-            if len(aug_labels) > 0:
-                self.assertEqual(aug_labels.shape[1], 5)
+            if len(augmented_labels) > 0:
+                self.assertEqual(augmented_labels.shape[1], 5)
 
 
 if __name__ == '__main__':
