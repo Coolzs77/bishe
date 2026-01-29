@@ -139,14 +139,14 @@ class YOLOv5Trainer:
         
         # 加载config
         if Path(args.config).exists():
-            self.训练config = load_config_file(args.config)
+            self.train_config = load_config_file(args.config)
         else:
-            self.训练config = {}
+            self.train_config = {}
         
         if Path(args.data).exists():
-            self.dataconfig = load_config_file(args.data)
+            self.data_config = load_config_file(args.data)
         else:
-            self.dataconfig = {}
+            self.data_config = {}
     
     def check_environment(self):
         """检查训练环境"""
@@ -167,8 +167,8 @@ class YOLOv5Trainer:
             return False
         
         # 检查data集
-        if self.dataconfig:
-            data_path = Path(self.dataconfig.get('path', ''))
+        if self.data_config:
+            data_path = Path(self.data_config.get('path', ''))
             if data_path.exists():
                 print(f'  data集路径: {data_path} ✓')
             else:
@@ -280,8 +280,8 @@ class YOLOv5Trainer:
             
             # 确定data_path
             data_path = 'data/processed/train'
-            if self.dataconfig:
-                data_path = self.dataconfig.get('train', data_path)
+            if self.data_config:
+                data_path = self.data_config.get('train', data_path)
             
             # 创建data集
             train_dataset = SimpleImageDataset(data_path, self.args.img_size)
@@ -413,19 +413,19 @@ class YOLOv5Trainer:
                     print(f'  检查点已保存: {weights_path}')
             
             # 保存最终model
-            最终weights_path = self.output_dir / 'weights' / 'last.pt'
+            final_weights_path = self.output_dir / 'weights' / 'last.pt'
             torch.save({
                 'epoch': self.args.epochs,
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-            }, 最终weights_path)
+            }, final_weights_path)
             
             # 复制为best.pt
-            最优weights_path = self.output_dir / 'weights' / 'best.pt'
+            best_weights_path = self.output_dir / 'weights' / 'best.pt'
             torch.save({
                 'epoch': self.args.epochs,
                 'model': model.state_dict(),
-            }, 最优weights_path)
+            }, best_weights_path)
             
             print('  训练完成!')
             print(f'  model保存位置: {self.output_dir / "weights"}')
@@ -444,7 +444,7 @@ class YOLOv5Trainer:
     def run(self):
         """run完整训练流程"""
         # 打印config
-        print_train_config(self.args, self.训练config)
+        print_train_config(self.args, self.train_config)
         
         # check_environment
         if not self.check_environment():
@@ -461,17 +461,17 @@ class YOLOv5Trainer:
         self.train_loop(model, train_loader, val_loader)
         
         # 保存训练config
-        config保存路径 = self.output_dir / 'train_config.yaml'
-        训练config = {
+        config_save_path = self.output_dir / 'train_config.yaml'
+        train_config_dict = {
             'args': vars(self.args),
-            'train_config': self.训练config,
-            'data_config': self.dataconfig,
+            'train_config': self.train_config,
+            'data_config': self.data_config,
             'timestamp': datetime.now().isoformat(),
         }
-        with open(config保存路径, 'w', encoding='utf-8') as f:
-            yaml.dump(训练config, f, default_flow_style=False, allow_unicode=True)
+        with open(config_save_path, 'w', encoding='utf-8') as f:
+            yaml.dump(train_config_dict, f, default_flow_style=False, allow_unicode=True)
         
-        print(f'\n训练config已保存到: {config保存路径}')
+        print(f'\n训练config已保存到: {config_save_path}')
 
 
 def main():
