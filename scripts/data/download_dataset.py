@@ -77,10 +77,10 @@ def download_flir_dataset(output_dir, skip_existing=False):
     
     # FLIR数据集镜像源列表（按优先级排序）
     mirror_urls = [
-        # 华为云镜像（推荐，速度快）
+        # GitHub Release（推荐，速度快且稳定）
+        "https://github.com/Coolzs77/bishe-datasets/releases/download/v1.0/FLIR_ADAS_v2.zip",
+        # 华为云镜像（备用）
         "https://flir-adas-public.obs.cn-north-4.myhuaweicloud.com/FLIR_ADAS_v2.zip",
-        # 百度网盘公开链接（备用）
-        "https://pan.baidu.com/s/1Xh9vF2nKm3pL4qR5tY6uZw#FLIR_ADAS_v2",
         # RoboFlow公开数据集（备用）
         "https://universe.roboflow.com/downloads/flir-adas-thermal-v2.zip",
     ]
@@ -180,12 +180,10 @@ def download_kaist_dataset(output_dir, skip_existing=False):
     
     # KAIST数据集镜像源列表（按优先级排序）
     mirror_urls = [
-        # 阿里云OSS镜像（推荐）
+        # GitHub Release（推荐，速度快且稳定）
+        "https://github.com/Coolzs77/bishe-datasets/releases/download/v1.0/KAIST_Multispectral_Pedestrian.zip",
+        # 阿里云OSS镜像（备用）
         "https://kaist-dataset.oss-cn-hangzhou.aliyuncs.com/KAIST_Multispectral_Pedestrian.zip",
-        # Google Drive公开链接（备用）
-        "https://drive.google.com/uc?export=download&id=1hF_A8L7W8mNgPp9flK3dKfHC6jK3vB2c",
-        # 百度网盘公开链接（备用）
-        "https://pan.baidu.com/s/1mK9nP4qR3sT5uV6wX7yZ8a#KAIST",
     ]
     
     zip_file = kaist_dir / 'kaist_dataset.zip'
@@ -196,26 +194,6 @@ def download_kaist_dataset(output_dir, skip_existing=False):
         print(f"尝试镜像源 {i}/{len(mirror_urls)}: {url[:60]}...")
         
         try:
-            # 对于Google Drive链接，使用gdown（如果可用）
-            from urllib.parse import urlparse
-            parsed_url = urlparse(url)
-            if parsed_url.netloc == 'drive.google.com' or parsed_url.netloc.endswith('.drive.google.com'):
-                try:
-                    import gdown
-                    file_id = url.split('id=')[1] if 'id=' in url else None
-                    if file_id:
-                        output = gdown.download(id=file_id, output=str(zip_file), quiet=False)
-                        if output and Path(output).exists():
-                            print_colored_message(f"从Google Drive下载成功！", 'green')
-                            downloaded = True
-                            break
-                except ImportError:
-                    print_colored_message("未安装gdown，跳过Google Drive源", 'yellow')
-                    continue
-                except Exception as e:
-                    print_colored_message(f"Google Drive下载失败: {str(e)}", 'yellow')
-                    continue
-            
             # 使用wget下载
             cmd = [
                 'wget',

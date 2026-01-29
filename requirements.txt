@@ -30,9 +30,6 @@ easydict>=1.9
 motmetrics>=1.2.0
 pycocotools>=2.0.2
 
-# 数据集下载（可选）
-gdown>=4.6.0
-
 # RKNN部署 (仅在部署阶段需要)
 # rknn-toolkit2>=1.4.0
 
