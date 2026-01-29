@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-红外图像人体目标检测与跟踪系统
+Infrared human detection and multi-object tracking system.
 
-基于改进YOLOv5的红外目标检测与多目标跟踪，
-部署于RV1126嵌入式平台
+Built on an enhanced YOLOv5 for infrared target detection and multi-object
+tracking, deployed on the RV1126 embedded platform.
 """
 
 __version__ = '1.0.0'

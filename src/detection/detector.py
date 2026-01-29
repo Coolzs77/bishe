@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-检测器基类模块
+Base detector module.
 
-提供目标检测的基础抽象类和检测结果数据类
+Provides abstract interfaces and data structures for object detection results.
 """
 
 from abc import ABC, abstractmethod
@@ -15,15 +15,15 @@ import numpy as np
 @dataclass
 class DetectionResult:
     """
-    检测结果数据类
+    Detection result data class.
     
-    存储目标检测的结果，包括边界框、置信度、类别等信息
+    Stores detection outputs including bounding boxes, confidences, and classes.
     
     Attributes:
-        boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-        confidences: 置信度数组，形状为 (N,)
-        classes: 类别索引数组，形状为 (N,)
-        class_names: 类别名称列表
+        boxes: Bounding boxes array shaped (N, 4), format [x1, y1, x2, y2]
+        confidences: Confidence scores array shaped (N,)
+        classes: Class index array shaped (N,)
+        class_names: List of class names
     """
     boxes: np.ndarray = field(default_factory=lambda: np.array([]))
     confidences: np.ndarray = field(default_factory=lambda: np.array([]))
@@ -78,13 +78,13 @@ class DetectionResult:
     
     def filter_by_confidence(self, min_confidence: float) -> 'DetectionResult':
         """
-        按置信度过滤检测结果
+        Filter detections by confidence threshold.
         
         Args:
-            min_confidence: 最小置信度阈值
+            min_confidence: Minimum confidence threshold
             
         Returns:
-            过滤后的DetectionResult对象
+            Filtered DetectionResult object
         """
         if len(self) == 0:
             return self
@@ -94,13 +94,13 @@ class DetectionResult:
     
     def filter_by_class(self, class_indices: Union[int, List[int]]) -> 'DetectionResult':
         """
-        按类别过滤检测结果
+        Filter detections by class indices.
         
         Args:
-            class_indices: 要保留的类别索引，可以是单个整数或整数列表
+            class_indices: Class indices to keep, int or list of ints
             
         Returns:
-            过滤后的DetectionResult对象
+            Filtered DetectionResult object
         """
         if len(self) == 0:
             return self
