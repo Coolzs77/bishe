@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-def 解析参数():
+def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='训练YOLOv5红外目标检测模型',
@@ -71,40 +71,40 @@ def 解析参数():
     return parser.parse_args()
 
 
-def 设置随机种子(种子):
+def set_random_seed(seed):
     """设置随机种子以确保可复现性"""
-    random.seed(种子)
-    np.random.seed(种子)
+    random.seed(seed)
+    np.random.seed(seed)
     
     try:
         import torch
-        torch.manual_seed(种子)
-        torch.cuda.manual_seed_all(种子)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
     except ImportError:
         pass
 
 
-def 加载配置文件(配置路径):
+def load_config_file(config_path):
     """加载YAML配置文件"""
-    with open(配置路径, 'r', encoding='utf-8') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
 
-def 创建输出目录(基础目录, 实验名称):
+def create_output_dir(base_dir, experiment_name):
     """创建输出目录"""
-    输出目录 = Path(基础目录) / 实验名称
-    权重目录 = 输出目录 / 'weights'
-    日志目录 = 输出目录 / 'logs'
+    output_dir = Path(base_dir) / experiment_name
+    weights_dir = output_dir / 'weights'
+    logs_dir = output_dir / 'logs'
     
-    权重目录.mkdir(parents=True, exist_ok=True)
-    日志目录.mkdir(parents=True, exist_ok=True)
+    weights_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     
-    return 输出目录
+    return output_dir
 
 
-def 打印训练配置(args, 配置):
+def print_training_config(args, config):
     """打印训练配置信息"""
     print('=' * 60)
     print('YOLOv5 红外目标检测训练')
@@ -121,7 +121,7 @@ def 打印训练配置(args, 配置):
     print('=' * 60)
 
 
-class YOLOv5训练器:
+class YOLOv5Trainer:
     """YOLOv5训练器类"""
     
     def __init__(self, args):
@@ -132,23 +132,23 @@ class YOLOv5训练器:
             args: 命令行参数
         """
         self.args = args
-        self.输出目录 = 创建输出目录('outputs/weights', args.name)
+        self.output_dir = create_output_dir('outputs/weights', args.name)
         
         # 设置随机种子
-        设置随机种子(args.seed)
+        set_random_seed(args.seed)
         
         # 加载配置
         if Path(args.config).exists():
-            self.训练配置 = 加载配置文件(args.config)
+            self.train_config = load_config_file(args.config)
         else:
-            self.训练配置 = {}
+            self.train_config = {}
         
         if Path(args.data).exists():
-            self.数据配置 = 加载配置文件(args.data)
+            self.data_config = load_config_file(args.data)
         else:
-            self.数据配置 = {}
+            self.data_config = {}
     
-    def 检查环境(self):
+    def check_environment(self):
         """检查训练环境"""
         print('\n检查训练环境...')
         
@@ -167,16 +167,16 @@ class YOLOv5训练器:
             return False
         
         # 检查数据集
-        if self.数据配置:
-            数据路径 = Path(self.数据配置.get('path', ''))
-            if 数据路径.exists():
-                print(f'  数据集路径: {数据路径} ✓')
+        if self.data_config:
+            data_path = Path(self.data_config.get('path', ''))
+            if data_path.exists():
+                print(f'  数据集路径: {data_path} ✓')
             else:
-                print(f'  数据集路径: {数据路径} ✗ (不存在)')
+                print(f'  数据集路径: {data_path} ✗ (不存在)')
         
         return True
     
-    def 构建模型(self):
+    def build_model(self):
         """
         构建模型
         
@@ -195,7 +195,7 @@ class YOLOv5训练器:
         
         return None
     
-    def 构建数据加载器(self):
+    def build_dataloader(self):
         """
         构建数据加载器
         
@@ -210,7 +210,7 @@ class YOLOv5训练器:
         
         return None, None
     
-    def 训练循环(self, 模型, 训练加载器, 验证加载器):
+    def training_loop(self, model, train_loader, val_loader):
         """
         执行训练循环
         
@@ -226,10 +226,10 @@ class YOLOv5训练器:
         # 以下是训练流程的伪代码结构
         
         """
-        for 轮次 in range(self.args.epochs):
+        for epoch in range(self.args.epochs):
             # 训练阶段
-            模型.train()
-            for 批次数据 in 训练加载器:
+            model.train()
+            for batch_data in train_loader:
                 # 前向传播
                 # 计算损失
                 # 反向传播
@@ -237,60 +237,60 @@ class YOLOv5训练器:
                 pass
             
             # 验证阶段
-            模型.eval()
-            for 批次数据 in 验证加载器:
+            model.eval()
+            for batch_data in val_loader:
                 # 前向传播
                 # 计算指标
                 pass
             
             # 保存检查点
-            if 当前最优:
-                保存模型(self.输出目录 / 'weights' / 'best.pt')
-            保存模型(self.输出目录 / 'weights' / 'last.pt')
+            if is_best:
+                save_model(self.output_dir / 'weights' / 'best.pt')
+            save_model(self.output_dir / 'weights' / 'last.pt')
         """
         
         print('  训练完成!')
-        print(f'  模型保存位置: {self.输出目录 / "weights"}')
+        print(f'  模型保存位置: {self.output_dir / "weights"}')
     
-    def 运行(self):
+    def run(self):
         """运行完整训练流程"""
         # 打印配置
-        打印训练配置(self.args, self.训练配置)
+        print_training_config(self.args, self.train_config)
         
         # 检查环境
-        if not self.检查环境():
+        if not self.check_environment():
             print('环境检查失败，请安装必要依赖')
             return
         
         # 构建模型
-        模型 = self.构建模型()
+        model = self.build_model()
         
         # 构建数据加载器
-        训练加载器, 验证加载器 = self.构建数据加载器()
+        train_loader, val_loader = self.build_dataloader()
         
         # 执行训练
-        self.训练循环(模型, 训练加载器, 验证加载器)
+        self.training_loop(model, train_loader, val_loader)
         
         # 保存训练配置
-        配置保存路径 = self.输出目录 / 'train_config.yaml'
-        训练配置 = {
+        config_save_path = self.output_dir / 'train_config.yaml'
+        train_config = {
             'args': vars(self.args),
-            'train_config': self.训练配置,
-            'data_config': self.数据配置,
+            'train_config': self.train_config,
+            'data_config': self.data_config,
             'timestamp': datetime.now().isoformat(),
         }
-        with open(配置保存路径, 'w', encoding='utf-8') as f:
-            yaml.dump(训练配置, f, default_flow_style=False, allow_unicode=True)
+        with open(config_save_path, 'w', encoding='utf-8') as f:
+            yaml.dump(train_config, f, default_flow_style=False, allow_unicode=True)
         
-        print(f'\n训练配置已保存到: {配置保存路径}')
+        print(f'\n训练配置已保存到: {config_save_path}')
 
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    训练器 = YOLOv5训练器(args)
-    训练器.运行()
+    trainer = YOLOv5Trainer(args)
+    trainer.run()
 
 
 if __name__ == '__main__':
