@@ -37,12 +37,14 @@ env/
 # 数据集 (不提交大文件)
 data/raw/
 data/processed/
+data/annotations/
 *.jpg
 *.jpeg
 *.png
 *.bmp
 *.mp4
 *.avi
+*.zip
 
 # 输出目录
 outputs/weights/
@@ -88,3 +90,7 @@ calibration/
 *.o
 *.a
 *.exe
+
+# 备份文件
+*.backup
+*.bak

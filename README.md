@@ -60,11 +60,29 @@ with open('configs/train_config.yaml', 'r') as f:
 
 | 子目录 | 用途 |
 |--------|------|
-| `raw/` | 原始数据集（FLIR、KAIST红外数据集） |
-| `processed/` | 处理后的数据（统一格式、划分后的训练/验证/测试集） |
-| `annotations/` | 标注文件（YOLO格式的txt标注） |
+| `raw/flir/` | FLIR原始数据集（解压后的数据） |
+| `processed/flir/` | 处理后的数据（YOLO格式、划分后的训练/验证集） |
 
-**注意：** 此目录不纳入版本控制，需要运行数据下载脚本生成。
+**目录结构示例：**
+```
+data/
+├── raw/
+│   └── flir/                      # 解压FLIR ZIP到这里
+│       ├── images_thermal_train/  # 训练图像
+│       ├── images_thermal_val/    # 验证图像
+│       └── annotations/           # 标注文件
+└── processed/
+    └── flir/                      # 处理后的YOLO格式数据
+        ├── images/
+        │   ├── train/             # 训练图像
+        │   └── val/               # 验证图像
+        ├── labels/
+        │   ├── train/             # YOLO格式标签
+        │   └── val/
+        └── calibration/           # 量化校准数据
+```
+
+**注意：** 此目录不纳入版本控制，需要手动下载并处理数据集。
 
 ---
 
@@ -217,15 +235,15 @@ logger.info('Training started')
 
 | 文件 | 用途 | 命令行使用 |
 |------|------|------------|
-| `download_dataset.py` | 自动下载数据集（从公开镜像源） | `python scripts/data/download_dataset.py [--flir] [--kaist]` |
-| `prepare_flir.py` | 准备FLIR数据集（转换为YOLO格式） | `python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed` |
-| `prepare_kaist.py` | 准备KAIST数据集（转换为YOLO格式） | `python scripts/data/prepare_kaist.py --input data/raw/kaist --output data/processed` |
+| `prepare_flir.py` | 处理FLIR数据集（转换为YOLO格式） | `python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed/flir` |
 
-**数据下载说明：**
-- `download_dataset.py` 会尝试从多个公开镜像源自动下载数据集
-- 由于数据集许可限制，自动下载通常需要手动辅助
-- 脚本提供详细的下载指引，并支持手动下载后继续处理
-- 建议直接访问官方网站获取数据集
+**数据处理说明：**
+- `prepare_flir.py` 将FLIR COCO格式标注转换为YOLO格式
+- 自动划分训练集和验证集
+- 支持图像尺寸调整和数据增强
+- 生成数据集统计信息
+
+详细使用方法请参考：[DATA_PROCESSING_GUIDE.md](DATA_PROCESSING_GUIDE.md)
 
 #### scripts/train/ - 训练脚本
 
@@ -355,30 +373,41 @@ pip install -r requirements.txt
 
 ### 2. 数据准备
 
+本项目使用 **FLIR ADAS v2 热红外数据集**，包含行人、车辆和自行车三个类别。
+
+#### 步骤1：获取FLIR数据集
+
+从FLIR官网下载数据集：
+- 访问：https://www.flir.com/oem/adas/adas-dataset-form/
+- 填写表单获取下载链接
+- 下载 FLIR_ADAS_v2.zip 文件
+
+#### 步骤2：解压数据集
+
 ```bash
-# 自动下载FLIR和KAIST数据集（推荐）
-python scripts/data/download_dataset.py
-
-# 仅下载FLIR数据集
-python scripts/data/download_dataset.py --flir
-
-# 仅下载KAIST数据集
-python scripts/data/download_dataset.py --kaist
-
-# 准备FLIR数据集（转换为YOLO格式）
-python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed
-
-# 准备KAIST数据集（转换为YOLO格式）
-python scripts/data/prepare_kaist.py --input data/raw/kaist --output data/processed
+# 将ZIP文件解压到项目的data/raw/flir目录
+unzip FLIR_ADAS_v2.zip -d data/raw/flir/
 ```
 
+#### 步骤3：处理数据集
+
+运行数据处理脚本，将FLIR数据转换为YOLO训练格式：
+
+```bash
+python scripts/data/prepare_flir.py --input data/raw/flir --output data/processed/flir
+```
+
+**可选参数：**
+- `--split-ratio 0.8`: 设置训练集比例（默认0.8）
+- `--img-size 640`: 设置图像尺寸（默认640）
+- `--visualize`: 可视化处理结果
+
+详细说明请参考：[DATA_PROCESSING_GUIDE.md](DATA_PROCESSING_GUIDE.md)
+
 **注意：**
-- ✅ **脚本已更新为v2.0版本，使用真实的GitHub公开源**
-- 脚本会自动从GitHub仓库下载数据集或示例数据
-- 对于需要注册的完整数据集，脚本提供详细的下载指引
-- **FLIR数据集**: 脚本会尝试从GitHub下载样本数据，或引导你从官方获取完整版
-- **KAIST数据集**: 脚本会下载官方GitHub仓库（含说明），并引导你获取完整数据
-- 所有步骤都有清晰的提示，无需手动调试
+- 处理完成后，数据将保存在 `data/processed/flir/` 目录
+- 训练和验证集会自动划分
+- 标注会转换为YOLO格式（归一化的边界框）
 - 手动下载后，将ZIP文件放到 `data/raw/flir` 或 `data/raw/kaist` 目录即可
 
 ### 3. 模型训练
