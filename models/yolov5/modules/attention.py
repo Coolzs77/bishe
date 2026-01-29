@@ -81,12 +81,12 @@ class ChannelAttention(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播"""
-        平均特征 = self.shared_mlp(self.avg_pool(x))
-        最大特征 = self.shared_mlp(self.max_pool(x))
+        avg_feat = self.shared_mlp(self.avg_pool(x))
+        max_feat = self.shared_mlp(self.max_pool(x))
         
-        注意力 = self.sigmoid(平均特征 + 最大特征)
+        attention = self.sigmoid(avg_feat + max_feat)
         
-        return x * 注意力
+        return x * attention
 
 
 class SpatialAttention(nn.Module):
@@ -105,22 +105,22 @@ class SpatialAttention(nn.Module):
         
         padding = (kernel_size - 1) // 2
         
-        self.卷积 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """前向传播"""
         # 通道维度池化
-        平均特征 = torch.mean(x, dim=1, keepdim=True)
-        最大特征, _ = torch.max(x, dim=1, keepdim=True)
+        avg_feat = torch.mean(x, dim=1, keepdim=True)
+        max_feat, _ = torch.max(x, dim=1, keepdim=True)
         
         # 拼接
-        特征 = torch.cat([平均特征, 最大特征], dim=1)
+        feat = torch.cat([avg_feat, max_feat], dim=1)
         
         # 卷积生成注意力图
-        注意力 = self.sigmoid(self.卷积(特征))
+        attention = self.sigmoid(self.conv(feat))
         
-        return x * 注意力
+        return x * attention
 
 
 class CBAMAttention(nn.Module):
@@ -171,15 +171,15 @@ class CoordAttention(nn.Module):
         
         mid_channels = max(8, in_channels // reduction_ratio)
         
-        self.水平池化 = nn.AdaptiveAvgPool2d((None, 1))
-        self.垂直池化 = nn.AdaptiveAvgPool2d((1, None))
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
         
-        self.卷积1 = nn.Conv2d(in_channels, mid_channels, 1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, mid_channels, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(mid_channels)
         self.activation = nn.ReLU(inplace=True)
         
-        self.卷积_h = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
-        self.卷积_w = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
+        self.conv_h = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
+        self.conv_w = nn.Conv2d(mid_channels, out_channels, 1, bias=False)
         
         self.sigmoid = nn.Sigmoid()
     
@@ -188,20 +188,20 @@ class CoordAttention(nn.Module):
         b, c, h, w = x.size()
         
         # 水平和垂直方向池化
-        x_h = self.水平池化(x)  # [b, c, h, 1]
-        x_w = self.垂直池化(x).permute(0, 1, 3, 2)  # [b, c, w, 1] -> [b, c, 1, w] -> permute -> [b, c, w, 1]
+        x_h = self.pool_h(x)  # [b, c, h, 1]
+        x_w = self.pool_w(x).permute(0, 1, 3, 2)  # [b, c, w, 1] -> [b, c, 1, w] -> permute -> [b, c, w, 1]
         
         # 拼接并编码
         y = torch.cat([x_h, x_w], dim=2)  # [b, c, h+w, 1]
-        y = self.activation(self.bn1(self.卷积1(y)))
+        y = self.activation(self.bn1(self.conv1(y)))
         
         # 分割
         x_h, x_w = torch.split(y, [h, w], dim=2)
         x_w = x_w.permute(0, 1, 3, 2)
         
         # 生成注意力
-        a_h = self.sigmoid(self.卷积_h(x_h))
-        a_w = self.sigmoid(self.卷积_w(x_w))
+        a_h = self.sigmoid(self.conv_h(x_h))
+        a_w = self.sigmoid(self.conv_w(x_w))
         
         # 应用注意力
         return x * a_h * a_w
@@ -231,7 +231,7 @@ class ECAAttention(nn.Module):
         k = t if t % 2 else t + 1
         
         self.global_pool = nn.AdaptiveAvgPool2d(1)
-        self.卷积 = nn.Conv1d(1, 1, kernel_size=k, padding=(k - 1) // 2, bias=False)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k, padding=(k - 1) // 2, bias=False)
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -241,7 +241,7 @@ class ECAAttention(nn.Module):
         
         # 一维卷积
         y = y.squeeze(-1).transpose(-1, -2)  # [b, 1, c]
-        y = self.卷积(y)
+        y = self.conv(y)
         y = y.transpose(-1, -2).unsqueeze(-1)  # [b, c, 1, 1]
         
         # 注意力加权

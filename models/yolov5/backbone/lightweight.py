@@ -34,7 +34,7 @@ class standard_conv(nn.Module):
         """初始化标准卷积"""
         super().__init__()
         
-        self.卷积 = nn.Conv2d(
+        self.conv = nn.Conv2d(
             in_channels, out_channels, kernel, stride,
             autopad(kernel) if padding is None else padding,
             groups=group, bias=False
@@ -43,11 +43,11 @@ class standard_conv(nn.Module):
         self.activation = nn.SiLU(inplace=True) if activation else nn.Identity()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.activation(self.bn(self.卷积(x)))
+        return self.activation(self.bn(self.conv(x)))
     
     def forward_fuse(self, x: torch.Tensor) -> torch.Tensor:
         """融合后的前向传播"""
-        return self.activation(self.卷积(x))
+        return self.activation(self.conv(x))
 
 
 class depthwise_separable_conv(nn.Module):
@@ -60,21 +60,21 @@ class depthwise_separable_conv(nn.Module):
         super().__init__()
         
         # 深度卷积
-        self.深度卷积 = nn.Conv2d(
+        self.depthwise_conv = nn.Conv2d(
             in_channels, in_channels, kernel, stride,
             autopad(kernel), groups=in_channels, bias=False
         )
         self.bn1 = nn.BatchNorm2d(in_channels)
         
         # 逐点卷积
-        self.逐点卷积 = nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False)
+        self.pointwise_conv = nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
         
         self.activation = nn.SiLU(inplace=True)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.activation(self.bn1(self.深度卷积(x)))
-        x = self.activation(self.bn2(self.逐点卷积(x)))
+        x = self.activation(self.bn1(self.depthwise_conv(x)))
+        x = self.activation(self.bn2(self.pointwise_conv(x)))
         return x
 
 
@@ -110,27 +110,27 @@ class GhostModule(nn.Module):
         super().__init__()
         
         self.out_channels = out_channels
-        初始通道 = math.ceil(out_channels / ratio)
-        新通道 = 初始通道 * (ratio - 1)
+        init_channels = math.ceil(out_channels / ratio)
+        new_channels = init_channels * (ratio - 1)
         
         # 主卷积
-        self.主卷积 = nn.Sequential(
-            nn.Conv2d(in_channels, 初始通道, kernel, stride, autopad(kernel), bias=False),
-            nn.BatchNorm2d(初始通道),
+        self.primary_conv = nn.Sequential(
+            nn.Conv2d(in_channels, init_channels, kernel, stride, autopad(kernel), bias=False),
+            nn.BatchNorm2d(init_channels),
             nn.SiLU(inplace=True) if activation else nn.Identity(),
         )
         
         # 廉价操作 (深度卷积)
-        self.廉价操作 = nn.Sequential(
-            nn.Conv2d(初始通道, 新通道, dw_kernel, 1, autopad(dw_kernel), groups=初始通道, bias=False),
-            nn.BatchNorm2d(新通道),
+        self.cheap_operation = nn.Sequential(
+            nn.Conv2d(init_channels, new_channels, dw_kernel, 1, autopad(dw_kernel), groups=init_channels, bias=False),
+            nn.BatchNorm2d(new_channels),
             nn.SiLU(inplace=True) if activation else nn.Identity(),
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        主特征 = self.主卷积(x)
-        廉价特征 = self.廉价操作(主特征)
-        output = torch.cat([主特征, 廉价特征], dim=1)
+        primary_feat = self.primary_conv(x)
+        cheap_feat = self.cheap_operation(primary_feat)
+        output = torch.cat([primary_feat, cheap_feat], dim=1)
         return output[:, :self.out_channels, :, :]
 
 
@@ -162,7 +162,7 @@ class GhostBottleneck(nn.Module):
         
         # 深度卷积 (仅当步长>1时)
         if stride > 1:
-            self.dw卷积 = nn.Sequential(
+            self.dw_conv = nn.Sequential(
                 nn.Conv2d(hidden_channels, hidden_channels, kernel, stride, autopad(kernel), groups=hidden_channels, bias=False),
                 nn.BatchNorm2d(hidden_channels),
             )
@@ -187,16 +187,16 @@ class GhostBottleneck(nn.Module):
             )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        残差 = self.shortcut(x)
+        residual = self.shortcut(x)
         
         out = self.ghost1(x)
         if self.stride > 1:
-            out = self.dw卷积(out)
+            out = self.dw_conv(out)
         if self.use_se:
             out = self.se(out)
         out = self.ghost2(out)
         
-        return out + 残差
+        return out + residual
 
 
 class shuffle_channels(nn.Module):
@@ -234,29 +234,29 @@ class ShuffleNetUnit(nn.Module):
         
         if stride == 1:
             # 步长为1时，input通道分两半
-            分支通道 = out_channels // 2
+            branch_channels = out_channels // 2
             
-            self.分支1 = nn.Identity()
-            self.分支2 = nn.Sequential(
-                nn.Conv2d(分支通道, 分支通道, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(分支通道),
+            self.branch1 = nn.Identity()
+            self.branch2 = nn.Sequential(
+                nn.Conv2d(branch_channels, branch_channels, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(branch_channels),
                 nn.SiLU(inplace=True),
-                nn.Conv2d(分支通道, 分支通道, 3, 1, 1, groups=分支通道, bias=False),
-                nn.BatchNorm2d(分支通道),
-                nn.Conv2d(分支通道, 分支通道, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(分支通道),
+                nn.Conv2d(branch_channels, branch_channels, 3, 1, 1, groups=branch_channels, bias=False),
+                nn.BatchNorm2d(branch_channels),
+                nn.Conv2d(branch_channels, branch_channels, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(branch_channels),
                 nn.SiLU(inplace=True),
             )
         else:
             # 步长为2时，使用两个分支进行下采样
-            self.分支1 = nn.Sequential(
+            self.branch1 = nn.Sequential(
                 nn.Conv2d(in_channels, in_channels, 3, stride, 1, groups=in_channels, bias=False),
                 nn.BatchNorm2d(in_channels),
                 nn.Conv2d(in_channels, out_channels // 2, 1, 1, 0, bias=False),
                 nn.BatchNorm2d(out_channels // 2),
                 nn.SiLU(inplace=True),
             )
-            self.分支2 = nn.Sequential(
+            self.branch2 = nn.Sequential(
                 nn.Conv2d(in_channels, out_channels // 2, 1, 1, 0, bias=False),
                 nn.BatchNorm2d(out_channels // 2),
                 nn.SiLU(inplace=True),
@@ -267,16 +267,16 @@ class ShuffleNetUnit(nn.Module):
                 nn.SiLU(inplace=True),
             )
         
-        self.通道重排 = shuffle_channels(2)
+        self.channel_shuffle = shuffle_channels(2)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.stride == 1:
             x1, x2 = x.chunk(2, dim=1)
-            out = torch.cat([x1, self.分支2(x2)], dim=1)
+            out = torch.cat([x1, self.branch2(x2)], dim=1)
         else:
-            out = torch.cat([self.分支1(x), self.分支2(x)], dim=1)
+            out = torch.cat([self.branch1(x), self.branch2(x)], dim=1)
         
-        out = self.通道重排(out)
+        out = self.channel_shuffle(out)
         return out
 
 
