@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-工具模块
-提供评估指标、可视化和日志功能
+Utilities module providing metrics, visualization, and logging helpers.
 """
 
 from .metrics import (
@@ -40,7 +39,7 @@ from .logger import (
 )
 
 __all__ = [
-    # 指标
+    # Metrics
     'compute_iou',
     'compute_batch_iou',
     'compute_precision_recall',
@@ -49,7 +48,7 @@ __all__ = [
     'MOTMetricsCalculator',
     'save_metrics_to_json',
     'load_metrics_from_json',
-    # 可视化
+    # Visualization
     'generate_color_list',
     'get_id_color',
     'draw_bounding_box',
@@ -58,7 +57,7 @@ __all__ = [
     'draw_info_panel',
     'create_image_grid',
     'save_visualization_video',
-    # 日志
+    # Logging
     'LogManager',
     'TrainingLogger',
     'ProgressBar',

@@ -1,7 +1,7 @@
 """
-日志工具模块
+Logging utilities module.
 
-提供统一的日志管理功能，包括日志管理器、训练日志记录器和进度条等工具。
+Provides unified logging management, training loggers, and progress bar helpers.
 """
 
 import json
@@ -15,10 +15,10 @@ from typing import Any, Dict, List, Optional, Union
 
 class LogManager:
     """
-    日志管理器（单例模式）
+    Logging manager (singleton).
     
-    提供统一的日志记录接口，支持控制台和文件输出。
-    使用线程锁确保多线程安全。
+    Offers a unified logging interface with console and file output.
+    Thread-safe via locking.
     """
     
     _instance = None
@@ -43,14 +43,14 @@ class LogManager:
         file_output: bool = True
     ):
         """
-        初始化日志管理器
+        Initialize the logging manager.
         
         Args:
-            name: 日志器名称
-            log_dir: 日志文件保存目录
-            level: 日志级别
-            console_output: 是否输出到控制台
-            file_output: 是否输出到文件
+            name: Logger name
+            log_dir: Directory to store log files
+            level: Logging level
+            console_output: Whether to log to console
+            file_output: Whether to log to file
         """
         # 避免重复初始化
         if LogManager._initialized:
@@ -95,28 +95,28 @@ class LogManager:
     
     def debug(self, message: str):
         """
-        记录调试级别日志
+        Log a debug-level message.
         
         Args:
-            message: 日志消息
+            message: Log message
         """
         self.logger.debug(message)
     
     def info(self, message: str):
         """
-        记录信息级别日志
+        Log an info-level message.
         
         Args:
-            message: 日志消息
+            message: Log message
         """
         self.logger.info(message)
     
     def warning(self, message: str):
         """
-        记录警告级别日志
+        Log a warning-level message.
         
         Args:
-            message: 日志消息
+            message: Log message
         """
         self.logger.warning(message)
     

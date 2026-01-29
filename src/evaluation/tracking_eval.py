@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-多目标跟踪评估模块
+Multi-object tracking evaluation module.
 
-提供多目标跟踪的评估功能，包括MOTA、MOTP、IDF1等指标
+Provides MOT evaluation utilities, including MOTA, MOTP, IDF1, and related metrics.
 """
 
 import os
@@ -15,22 +15,22 @@ from collections import defaultdict
 
 class MOTEvaluator:
     """
-    多目标跟踪评估器
+    Multi-object tracking evaluator.
     
-    评估多目标跟踪算法的性能，计算CLEAR MOT和ID评估指标
+    Evaluates MOT algorithms, computing CLEAR MOT and ID metrics.
     
     Attributes:
-        iou_threshold: IoU匹配阈值
-        frame_results: 帧级别的跟踪结果
-        frame_gts: 帧级别的真实标注
+        iou_threshold: IoU matching threshold
+        frame_results: Frame-level tracking results
+        frame_gts: Frame-level ground truth annotations
     """
     
     def __init__(self, iou_threshold: float = 0.5):
         """
-        初始化MOT评估器
+        Initialize the MOT evaluator.
         
         Args:
-            iou_threshold: IoU匹配阈值
+            iou_threshold: IoU matching threshold
         """
         self.iou_threshold = iou_threshold
         self.reset()

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-目标检测评估模块
+Object detection evaluation module.
 
-提供目标检测模型的评估功能，包括mAP、精确率、召回率等指标
+Provides evaluation utilities for detection models, including mAP, precision,
+recall, and related metrics.
 """
 
 import os
@@ -14,16 +15,16 @@ import numpy as np
 
 class DetectionEvaluator:
     """
-    目标检测评估器
+    Object detection evaluator.
     
-    评估目标检测模型的性能
+    Evaluates detection model performance.
     
     Attributes:
-        iou_thresholds: IoU阈值列表
-        class_names: 类别名称列表
-        num_classes: 类别数量
-        detections: 收集的检测结果
-        ground_truths: 收集的真实标注
+        iou_thresholds: List of IoU thresholds
+        class_names: List of class names
+        num_classes: Number of classes
+        detections: Collected detection results
+        ground_truths: Collected ground truth annotations
     """
     
     def __init__(
@@ -45,7 +46,7 @@ class DetectionEvaluator:
         self.reset()
     
     def reset(self) -> None:
-        """重置评估器"""
+        """Reset evaluator state."""
         self.detections: Dict[int, List[Dict]] = {}
         self.ground_truths: Dict[int, List[Dict]] = {}
         self.image_ids: List[int] = []
@@ -58,13 +59,13 @@ class DetectionEvaluator:
         class_ids: np.ndarray
     ) -> None:
         """
-        添加检测结果
+        Add detection results.
         
         Args:
-            image_id: 图像ID
-            boxes: 边界框数组，形状为 (N, 4)，格式为 [x1, y1, x2, y2]
-            scores: 置信度数组
-            class_ids: 类别ID数组
+            image_id: Image identifier
+            boxes: Bounding boxes shaped (N, 4) in [x1, y1, x2, y2]
+            scores: Confidence scores
+            class_ids: Class ID array
         """
         if image_id not in self.detections:
             self.detections[image_id] = []
@@ -86,12 +87,12 @@ class DetectionEvaluator:
         class_ids: np.ndarray
     ) -> None:
         """
-        添加真实标注
+        Add ground truth annotations.
         
         Args:
-            image_id: 图像ID
-            boxes: 边界框数组
-            class_ids: 类别ID数组
+            image_id: Image identifier
+            boxes: Bounding boxes
+            class_ids: Class ID array
         """
         if image_id not in self.ground_truths:
             self.ground_truths[image_id] = []
@@ -107,10 +108,10 @@ class DetectionEvaluator:
     
     def compute_metrics(self) -> Dict[str, Any]:
         """
-        计算所有评估指标
+        Compute all evaluation metrics.
         
         Returns:
-            包含各项指标的字典
+            Dictionary containing metrics
         """
         results = {
             'num_images': len(self.image_ids),
@@ -141,13 +142,13 @@ class DetectionEvaluator:
     
     def _compute_map(self, iou_threshold: float) -> Tuple[float, Dict[int, float]]:
         """
-        计算指定IoU阈值下的mAP
+        Compute mAP at a specific IoU threshold.
         
         Args:
-            iou_threshold: IoU阈值
+            iou_threshold: IoU threshold
             
         Returns:
-            (mAP, 每类AP字典)
+            Tuple of (mAP, per-class AP dictionary)
         """
         # 收集所有类别
         all_classes = set()
@@ -174,14 +175,14 @@ class DetectionEvaluator:
     
     def _compute_ap_for_class(self, class_id: int, iou_threshold: float) -> float:
         """
-        计算单个类别的AP
+        Compute AP for a single class.
         
         Args:
-            class_id: 类别ID
-            iou_threshold: IoU阈值
+            class_id: Class identifier
+            iou_threshold: IoU threshold
             
         Returns:
-            AP值
+            AP value
         """
         # 收集该类别的检测和真实框
         detections = []
@@ -260,7 +261,7 @@ class DetectionEvaluator:
     
     @staticmethod
     def _compute_iou(box1: List[float], box2: List[float]) -> float:
-        """计算IoU"""
+        """Compute IoU."""
         x1 = max(box1[0], box2[0])
         y1 = max(box1[1], box2[1])
         x2 = min(box1[2], box2[2])
@@ -280,7 +281,7 @@ class DetectionEvaluator:
     
     @staticmethod
     def _compute_ap(precision: np.ndarray, recall: np.ndarray) -> float:
-        """计算AP（使用所有点插值法）"""
+        """Compute AP using all-point interpolation."""
         if len(precision) == 0 or len(recall) == 0:
             return 0.0
         
@@ -301,7 +302,7 @@ class DetectionEvaluator:
         return float(ap)
     
     def _compute_overall_pr(self) -> Tuple[float, float]:
-        """计算总体精确率和召回率"""
+        """Compute overall precision and recall."""
         num_tp = 0
         num_fp = 0
         num_gt = 0
@@ -401,16 +402,16 @@ def evaluate_detection_model(
     class_names: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
-    评估检测模型
-    
-    Args:
-        detector: 检测器实例
-        test_images: 测试图像列表
-        test_labels: 测试标签列表，每个元素包含 'boxes' 和 'class_ids'
-        class_names: 类别名称列表
+        Evaluate a detection model.
         
-    Returns:
-        评估结果字典
+        Args:
+            detector: Detector instance
+            test_images: List of test images
+            test_labels: List of test labels, each with 'boxes' and 'class_ids'
+            class_names: List of class names
+        
+        Returns:
+            Evaluation results dictionary
     """
     evaluator = DetectionEvaluator(class_names=class_names)
     

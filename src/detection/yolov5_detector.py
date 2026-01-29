@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-YOLOv5检测器模块
+YOLOv5 detector module.
 
-实现基于YOLOv5的目标检测，支持PyTorch、ONNX和RKNN模型格式
+Implements YOLOv5-based object detection supporting PyTorch, ONNX, and RKNN formats.
 """
 
 import os

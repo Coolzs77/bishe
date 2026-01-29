@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-主函数 - 红外行人多目标检测与跟踪系统
+Main entry - Infrared pedestrian multi-object detection and tracking system.
 
-本脚本涵盖从数据准备到模型部署的完整流程：
-1. 数据准备阶段：下载和预处理数据集
-2. 模型训练阶段：训练YOLOv5检测器
-3. 跟踪集成阶段：集成多目标跟踪算法
-4. 评估测试阶段：评估检测和跟踪性能
-5. 模型部署阶段：转换模型并部署到嵌入式平台
+This script covers the full pipeline from data preparation to deployment:
+1. Data preparation: download and preprocess datasets
+2. Model training: train the YOLOv5 detector
+3. Tracking integration: integrate multi-object tracking algorithms
+4. Evaluation: assess detection and tracking performance
+5. Deployment: convert and deploy to embedded platform
 
-使用方式：
-    python main.py --mode full        # 运行完整流程
-    python main.py --mode prepare     # 仅数据准备
-    python main.py --mode train       # 仅训练
-    python main.py --mode track       # 仅跟踪测试
-    python main.py --mode evaluate    # 仅评估
-    python main.py --mode deploy      # 仅部署
-    python main.py --mode demo        # 演示模式
+Usage:
+    python main.py --mode full        # Run full pipeline
+    python main.py --mode prepare     # Data preparation only
+    python main.py --mode train       # Training only
+    python main.py --mode track       # Tracking test only
+    python main.py --mode evaluate    # Evaluation only
+    python main.py --mode deploy      # Deployment only
+    python main.py --mode demo        # Demo mode
 
-作者: 张仕卓
-日期: 2024
+Author: 张仕卓
+Date: 2024
 """
 
 import os
@@ -32,51 +32,51 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
-# 将项目根目录添加到路径
+# Add project root to sys.path
 PROJECT_ROOT = Path(__file__).parent.absolute()
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
 class InfraredMOTSystem:
     """
-    红外行人多目标检测与跟踪系统
+    Infrared pedestrian multi-object detection and tracking system.
     
-    完整流程包括：
-    - 数据准备：下载和预处理FLIR/KAIST数据集
-    - 模型训练：训练改进的YOLOv5检测器
-    - 跟踪集成：集成DeepSORT/ByteTrack/CenterTrack
-    - 性能评估：计算mAP、MOTA、MOTP等指标
-    - 模型部署：转换为RKNN并部署到RV1126
+    Full pipeline includes:
+    - Data preparation: download and preprocess FLIR/KAIST datasets
+    - Model training: train an improved YOLOv5 detector
+    - Tracking integration: integrate DeepSORT/ByteTrack/CenterTrack
+    - Performance evaluation: compute mAP, MOTA, MOTP, etc.
+    - Deployment: convert to RKNN and deploy to RV1126
     """
     
     def __init__(self, config_path: str = "configs/train_config.yaml"):
         """
-        初始化系统
+        Initialize the system.
         
         Args:
-            config_path: 主配置文件路径
+            config_path: Path to main config file
         """
         self.project_root = PROJECT_ROOT
         self.config_path = config_path
         self.config = self._load_config(config_path)
         
-        # 创建必要的目录
+        # Create required directories
         self._create_directories()
         
-        # 初始化日志
+        # Initialize logger
         self.logger = self._setup_logger()
         self.logger.info("=" * 60)
-        self.logger.info("红外行人多目标检测与跟踪系统初始化完成")
+        self.logger.info("Infrared pedestrian MOT system initialized")
         self.logger.info("=" * 60)
         
     def _load_config(self, config_path: str) -> Dict:
-        """加载配置文件"""
+        """Load configuration file."""
         config_file = self.project_root / config_path
         if config_file.exists():
             with open(config_file, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
         else:
-            # 返回默认配置
+            # Return default config
             return {
                 'data': {
                     'dataset': 'flir',
@@ -104,7 +104,7 @@ class InfraredMOTSystem:
             }
     
     def _create_directories(self):
-        """创建必要的目录结构"""
+        """Create required directory structure."""
         directories = [
             'data/raw',
             'data/processed',
@@ -120,12 +120,12 @@ class InfraredMOTSystem:
             full_path.mkdir(parents=True, exist_ok=True)
     
     def _setup_logger(self):
-        """设置日志系统"""
+        """Set up logging."""
         try:
             from src.utils.logger import LogManager
             return LogManager.get_logger('main', log_dir=str(self.project_root / 'outputs/logs'))
         except ImportError:
-            # 如果无法导入，使用标准库
+            # Fallback to stdlib logging
             import logging
             logging.basicConfig(
                 level=logging.INFO,
@@ -133,61 +133,61 @@ class InfraredMOTSystem:
             )
             return logging.getLogger('main')
     
-    # ==================== 阶段1: 数据准备 ====================
+    # ==================== Stage 1: Data preparation ====================
     
     def prepare_data(self, dataset: str = 'flir', download: bool = True) -> bool:
         """
-        数据准备阶段
+        Data preparation stage.
         
         Args:
-            dataset: 数据集名称 ('flir' 或 'kaist')
-            download: 是否下载数据集
+            dataset: Dataset name ('flir' or 'kaist')
+            download: Whether to download dataset
             
         Returns:
-            是否成功完成
+            Whether succeeded
         """
         self.logger.info("=" * 60)
         self.logger.info("阶段1: 数据准备")
         self.logger.info("=" * 60)
         
         try:
-            # 步骤1.1: 下载数据集
+            # Step 1.1: download dataset
             if download:
-                self.logger.info(f"步骤1.1: 下载{dataset.upper()}数据集...")
+                self.logger.info(f"Step 1.1: Downloading {dataset.upper()} dataset...")
                 self._download_dataset(dataset)
             
-            # 步骤1.2: 预处理数据集
-            self.logger.info(f"步骤1.2: 预处理{dataset.upper()}数据集...")
+            # Step 1.2: preprocess dataset
+            self.logger.info(f"Step 1.2: Preprocessing {dataset.upper()} dataset...")
             self._preprocess_dataset(dataset)
             
-            # 步骤1.3: 划分数据集
-            self.logger.info("步骤1.3: 划分训练/验证/测试集...")
+            # Step 1.3: split dataset
+            self.logger.info("Step 1.3: Splitting train/val/test sets...")
             self._split_dataset()
             
-            # 步骤1.4: 生成数据增强
-            self.logger.info("步骤1.4: 配置红外数据增强策略...")
+            # Step 1.4: data augmentation setup
+            self.logger.info("Step 1.4: Configuring infrared data augmentation...")
             self._setup_data_augmentation()
             
-            self.logger.info("数据准备阶段完成！")
+            self.logger.info("Data preparation completed!")
             return True
             
         except Exception as e:
-            self.logger.error(f"数据准备阶段失败: {e}")
+            self.logger.error(f"Data preparation failed: {e}")
             return False
     
     def _download_dataset(self, dataset: str):
-        """下载数据集"""
-        self.logger.info(f"  - 检查{dataset.upper()}数据集...")
+        """Download dataset."""
+        self.logger.info(f"  - Checking {dataset.upper()} dataset...")
         raw_path = self.project_root / 'data/raw' / dataset
         
         if raw_path.exists() and any(raw_path.iterdir()):
-            self.logger.info(f"  - 数据集已存在于 {raw_path}")
+            self.logger.info(f"  - Dataset already present at {raw_path}")
             return
         
-        # 尝试使用下载脚本
+        # Try download script
         download_script = self.project_root / 'scripts/data/download_dataset.py'
         if download_script.exists():
-            self.logger.info(f"  - 使用脚本下载数据集...")
+            self.logger.info(f"  - Using script to download dataset...")
             import subprocess
             result = subprocess.run(
                 [sys.executable, str(download_script), '--dataset', dataset, '--output', str(raw_path)],
@@ -195,30 +195,30 @@ class InfraredMOTSystem:
                 text=True
             )
             if result.returncode == 0:
-                self.logger.info(f"  - 数据集下载完成")
+                self.logger.info(f"  - Dataset download completed")
             else:
-                self.logger.warning(f"  - 自动下载失败，请手动下载数据集到 {raw_path}")
+                self.logger.warning(f"  - Automatic download failed, please download manually to {raw_path}")
         else:
             self.logger.warning(f"  - 请手动下载{dataset.upper()}数据集到 {raw_path}")
     
     def _preprocess_dataset(self, dataset: str):
-        """预处理数据集"""
+        """Preprocess dataset."""
         raw_path = self.project_root / 'data/raw' / dataset
         processed_path = self.project_root / 'data/processed'
         
         # 检查数据是否已处理
         if (processed_path / 'images').exists():
-            self.logger.info("  - 发现已处理的数据")
+            self.logger.info("  - Found processed data")
             return
         
-        # 使用对应的预处理脚本
+        # Use the corresponding preprocess script
         if dataset == 'flir':
             script_path = self.project_root / 'scripts/data/prepare_flir.py'
         else:
             script_path = self.project_root / 'scripts/data/prepare_kaist.py'
         
         if script_path.exists() and raw_path.exists():
-            self.logger.info(f"  - 使用 {script_path.name} 处理数据...")
+            self.logger.info(f"  - Using {script_path.name} to process data...")
             import subprocess
             result = subprocess.run(
                 [sys.executable, str(script_path), '--input', str(raw_path), '--output', str(processed_path)],
@@ -226,11 +226,11 @@ class InfraredMOTSystem:
                 text=True
             )
             if result.returncode == 0:
-                self.logger.info("  - 数据预处理完成")
+                self.logger.info("  - Data preprocessing completed")
             else:
-                self.logger.warning("  - 数据预处理脚本执行失败，请检查数据")
+                self.logger.warning("  - Data preprocessing script failed, please check data")
         else:
-            self.logger.info("  - 创建数据目录结构...")
+            self.logger.info("  - Creating dataset directory structure...")
             (processed_path / 'images/train').mkdir(parents=True, exist_ok=True)
             (processed_path / 'images/val').mkdir(parents=True, exist_ok=True)
             (processed_path / 'images/test').mkdir(parents=True, exist_ok=True)
@@ -239,19 +239,19 @@ class InfraredMOTSystem:
             (processed_path / 'labels/test').mkdir(parents=True, exist_ok=True)
     
     def _split_dataset(self):
-        """划分数据集"""
-        self.logger.info("  - 数据集划分比例: 训练70% / 验证15% / 测试15%")
-        # 数据划分逻辑在预处理脚本中完成
+        """Split dataset."""
+        self.logger.info("  - Dataset split: train 70% / val 15% / test 15%")
+        # Split logic handled inside preprocess scripts
         pass
     
     def _setup_data_augmentation(self):
-        """设置数据增强"""
-        self.logger.info("  - 红外数据增强策略:")
-        self.logger.info("    * 亮度调整 (brightness)")
-        self.logger.info("    * 对比度增强 (contrast)")
-        self.logger.info("    * 高斯噪声 (gaussian noise)")
-        self.logger.info("    * 随机翻转 (flip)")
-        self.logger.info("    * 缩放裁剪 (scale & crop)")
+        """Configure data augmentation."""
+        self.logger.info("  - Infrared data augmentation strategies:")
+        self.logger.info("    * Brightness adjustment (brightness)")
+        self.logger.info("    * Contrast enhancement (contrast)")
+        self.logger.info("    * Gaussian noise (gaussian noise)")
+        self.logger.info("    * Random flip (flip)")
+        self.logger.info("    * Scale & crop (scale & crop)")
     
     # ==================== 阶段2: 模型训练 ====================
     

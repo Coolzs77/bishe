@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-红外图像数据增强模块
+Infrared image data augmentation module.
 
-提供针对红外/热成像图像的专用数据增强方法
+Provides augmentation methods tailored for infrared/thermal images.
 """
 
 import random
@@ -13,21 +13,21 @@ import numpy as np
 
 class InfraredDataAugmentor:
     """
-    红外图像数据增强器
+    Infrared image data augmentor.
     
-    针对红外/热成像图像设计的数据增强类，包含多种增强方法
+    Designed for infrared/thermal imagery with multiple augmentation methods.
     
     Attributes:
-        brightness_range: 亮度调整范围
-        contrast_range: 对比度调整范围
-        noise_intensity: 噪声强度
-        blur_prob: 模糊概率
-        flip_prob: 翻转概率
-        rotation_angle: 旋转角度范围
-        scale_range: 缩放范围
-        crop_range: 裁剪范围
-        mosaic_prob: Mosaic增强概率
-        mixup_prob: MixUp增强概率
+        brightness_range: Brightness adjustment range
+        contrast_range: Contrast adjustment range
+        noise_intensity: Noise intensity
+        blur_prob: Blur probability
+        flip_prob: Flip probability
+        rotation_angle: Rotation angle range
+        scale_range: Scaling range
+        crop_range: Cropping range
+        mosaic_prob: Mosaic augmentation probability
+        mixup_prob: MixUp augmentation probability
     """
     
     def __init__(
@@ -44,19 +44,19 @@ class InfraredDataAugmentor:
         mixup_prob: float = 0.0
     ):
         """
-        初始化红外数据增强器
+        Initialize the infrared data augmentor.
         
         Args:
-            brightness_range: 亮度调整范围，默认(-0.2, 0.2)
-            contrast_range: 对比度调整范围，默认(0.8, 1.2)
-            noise_intensity: 噪声强度，默认0.02
-            blur_prob: 模糊概率，默认0.1
-            flip_prob: 水平翻转概率，默认0.5
-            rotation_angle: 旋转角度范围（度），默认10.0
-            scale_range: 缩放范围，默认(0.8, 1.2)
-            crop_range: 随机裁剪范围，默认(0.8, 1.0)
-            mosaic_prob: Mosaic增强概率，默认0.0
-            mixup_prob: MixUp增强概率，默认0.0
+            brightness_range: Brightness adjustment range, default (-0.2, 0.2)
+            contrast_range: Contrast adjustment range, default (0.8, 1.2)
+            noise_intensity: Noise intensity, default 0.02
+            blur_prob: Blur probability, default 0.1
+            flip_prob: Horizontal flip probability, default 0.5
+            rotation_angle: Rotation angle range (degrees), default 10.0
+            scale_range: Scaling range, default (0.8, 1.2)
+            crop_range: Random crop range, default (0.8, 1.0)
+            mosaic_prob: Mosaic augmentation probability, default 0.0
+            mixup_prob: MixUp augmentation probability, default 0.0
         """
         self.brightness_range = brightness_range
         self.contrast_range = contrast_range
