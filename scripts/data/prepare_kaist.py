@@ -56,17 +56,17 @@ class KAISTDatasetConverter:
         self.modality = modality
         
         # create_output_dir
-        self.序列目录 = self.output_dir / 'test_sequences'
-        self.标注目录 = self.output_dir / 'annotations'
+        self.sequence_dir = self.output_dir / 'test_sequences'
+        self.annotation_dir = self.output_dir / 'annotations'
         
-        self.序列目录.mkdir(parents=True, exist_ok=True)
-        self.标注目录.mkdir(parents=True, exist_ok=True)
+        self.sequence_dir.mkdir(parents=True, exist_ok=True)
+        self.annotation_dir.mkdir(parents=True, exist_ok=True)
         
         # 初始化statistics
-        self.统计 = {
-            '总序列数': 0,
-            '总帧数': 0,
-            '总标注数': 0,
+        self.stats = {
+            'total_sequences': 0,
+            'total_frames': 0,
+            'total_annotations': 0,
         }
     
     def find_video_sequences(self):
@@ -79,32 +79,32 @@ class KAISTDatasetConverter:
         sequence_list = []
         
         # KAISTdata集结构: set00/V000, set00/V001, ...
-        for set目录 in sorted(self.input_dir.glob('set*')):
-            if not set目录.is_dir():
+        for set_dir in sorted(self.input_dir.glob('set*')):
+            if not set_dir.is_dir():
                 continue
             
-            for 视频目录 in sorted(set目录.glob('V*')):
-                if not 视频目录.is_dir():
+            for video_dir in sorted(set_dir.glob('V*')):
+                if not video_dir.is_dir():
                     continue
                 
                 # 根据模态确定image目录
                 if self.modality == 'thermal':
-                    image目录 = 视频目录 / 'lwir'
+                    img_dir = video_dir / 'lwir'
                 elif self.modality == 'visible':
-                    image目录 = 视频目录 / 'visible'
+                    img_dir = video_dir / 'visible'
                 else:
-                    image目录 = 视频目录
+                    img_dir = video_dir
                 
                 # 检查是否存在image文件
-                存在image = (image目录.exists() and 
-                          (any(image目录.glob('*.jpg')) or any(image目录.glob('*.png'))))
+                has_images = (img_dir.exists() and 
+                          (any(img_dir.glob('*.jpg')) or any(img_dir.glob('*.png'))))
                 
-                if 存在image:
+                if has_images:
                     sequence_list.append({
-                        'set': set目录.name,
-                        'video': 视频目录.name,
-                        'path': 视频目录,
-                        'img_dir': image目录,
+                        'set': set_dir.name,
+                        'video': video_dir.name,
+                        'path': video_dir,
+                        'img_dir': img_dir,
                     })
         
         return sequence_list
@@ -119,37 +119,37 @@ class KAISTDatasetConverter:
         返回:
             标注列表
         """
-        标注列表 = []
+        annotation_list = []
         
         if not annotation_path.exists():
-            return 标注列表
+            return annotation_list
         
         with open(annotation_path, 'r', encoding='utf-8') as f:
-            行列表 = f.readlines()
+            lines = f.readlines()
         
-        for 行 in 行列表:
-            行 = 行.strip()
-            if not 行 or 行.startswith('%'):
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('%'):
                 continue
             
-            部分列表 = 行.split()
-            if len(部分列表) < 5:
+            parts = line.split()
+            if len(parts) < 5:
                 continue
             
             try:
                 # 格式: class x y w h [occlusion] [...]
-                classes = 部分列表[0]
-                x, y, w, h = map(int, 部分列表[1:5])
+                classes = parts[0]
+                x, y, w, h = map(int, parts[1:5])
                 
-                标注列表.append({
+                annotation_list.append({
                     'class': classes,
                     'bbox': [x, y, w, h],
-                    'occlusion': int(部分列表[5]) if len(部分列表) > 5 else 0,
+                    'occlusion': int(parts[5]) if len(parts) > 5 else 0,
                 })
             except (ValueError, IndexError):
                 continue
         
-        return 标注列表
+        return annotation_list
     
     def process_video_sequence(self, sequence_info):
         """
@@ -161,82 +161,82 @@ class KAISTDatasetConverter:
         返回:
             处理的帧数
         """
-        sequence_name = f"{序列信息['set']}_{序列信息['video']}"
-        output序列目录 = self.序列目录 / sequence_name / 'images'
-        output标注目录 = self.标注目录 / sequence_name
+        sequence_name = f"{sequence_info['set']}_{sequence_info['video']}"
+        output_sequence_dir = self.sequence_dir / sequence_name / 'images'
+        output_annotation_dir = self.annotation_dir / sequence_name
         
-        output序列目录.mkdir(parents=True, exist_ok=True)
-        output标注目录.mkdir(parents=True, exist_ok=True)
+        output_sequence_dir.mkdir(parents=True, exist_ok=True)
+        output_annotation_dir.mkdir(parents=True, exist_ok=True)
         
         # 获取image文件列表
-        image目录 = sequence_info['img_dir']
-        image文件列表 = sorted(list(image目录.glob('*.jpg')) + list(image目录.glob('*.png')))
+        img_dir = sequence_info['img_dir']
+        image_files = sorted(list(img_dir.glob('*.jpg')) + list(img_dir.glob('*.png')))
         
-        if not image文件列表:
+        if not image_files:
             return 0
         
         # 标注目录
-        标注目录 = sequence_info['path'] / 'annotations'
+        annotation_dir = sequence_info['path'] / 'annotations'
         
         # 准备跟踪标注格式
-        跟踪标注列表 = []
+        tracking_annotations = []
         
-        for frame_idx, image_path in enumerate(image文件列表):
+        for frame_idx, image_path in enumerate(image_files):
             # 复制image
-            outputimage_path = output序列目录 / f'{frame_idx:06d}.jpg'
+            output_image_path = output_sequence_dir / f'{frame_idx:06d}.jpg'
             
             image = cv2.imread(str(image_path))
             if image is not None:
-                cv2.imwrite(str(outputimage_path), image)
+                cv2.imwrite(str(output_image_path), image)
             
             # 处理标注
-            标注文件名 = image_path.stem + '.txt'
-            annotation_path = 标注目录 / 标注文件名
+            annotation_filename = image_path.stem + '.txt'
+            annotation_path = annotation_dir / annotation_filename
             
-            帧标注列表 = self.parse_annotation_file(annotation_path)
+            frame_annotations = self.parse_annotation_file(annotation_path)
             
-            for 标注 in 帧标注列表:
-                if 标注['class'].lower() == 'person':
-                    跟踪标注列表.append({
+            for annotation in frame_annotations:
+                if annotation['class'].lower() == 'person':
+                    tracking_annotations.append({
                         'frame': frame_idx,
                         'id': -1,  # KAIST原始data没有跟踪ID
-                        'bbox': 标注['bbox'],
-                        'class': 标注['class'],
+                        'bbox': annotation['bbox'],
+                        'class': annotation['class'],
                     })
             
-            self.统计['总标注数'] += len(帧标注列表)
+            self.stats['total_annotations'] += len(frame_annotations)
         
         # 保存跟踪标注
-        标注output路径 = output标注目录 / 'gt.json'
-        with open(标注output路径, 'w', encoding='utf-8') as f:
-            json.dump(跟踪标注列表, f, indent=2, ensure_ascii=False)
+        annotation_output_path = output_annotation_dir / 'gt.json'
+        with open(annotation_output_path, 'w', encoding='utf-8') as f:
+            json.dump(tracking_annotations, f, indent=2, ensure_ascii=False)
         
         # 更新统计
-        self.统计['总帧数'] += len(image文件列表)
-        self.统计['总序列数'] += 1
+        self.stats['total_frames'] += len(image_files)
+        self.stats['total_sequences'] += 1
         
-        return len(image文件列表)
+        return len(image_files)
     
     def generate_sequence_list_file(self):
         """生成sequence_list文件"""
-        列表文件路径 = self.output_dir / 'sequences.txt'
+        list_file_path = self.output_dir / 'sequences.txt'
         
-        sequence_list = sorted([目录.name for 目录 in self.序列目录.iterdir() if 目录.is_dir()])
+        sequence_list = sorted([seq_dir.name for seq_dir in self.sequence_dir.iterdir() if seq_dir.is_dir()])
         
-        with open(列表文件路径, 'w', encoding='utf-8') as f:
-            for 序列 in sequence_list:
-                f.write(序列 + '\n')
+        with open(list_file_path, 'w', encoding='utf-8') as f:
+            for sequence in sequence_list:
+                f.write(sequence + '\n')
         
-        print(f'sequence_list已保存到: {列表文件路径}')
+        print(f'sequence_list已保存到: {list_file_path}')
     
     def perform_convert(self):
         """执行完整的data集convert流程"""
         print('=' * 50)
         print('KAISTdata集convert')
         print('=' * 50)
-        print(f'input目录: {self.input目录}')
-        print(f'output目录: {self.output目录}')
-        print(f'image模态: {self.模态}')
+        print(f'input目录: {self.input_dir}')
+        print(f'output目录: {self.output_dir}')
+        print(f'image模态: {self.modality}')
         print()
         
         # 查找视频序列
@@ -266,22 +266,22 @@ class KAISTDatasetConverter:
         print('\n' + '=' * 50)
         print('convert完成!')
         print('=' * 50)
-        print(f"处理序列数: {self.统计['总序列数']}")
-        print(f"总帧数: {self.统计['总帧数']}")
-        print(f"总标注数: {self.统计['总标注数']}")
+        print(f"处理序列数: {self.stats['total_sequences']}")
+        print(f"总帧数: {self.stats['total_frames']}")
+        print(f"总标注数: {self.stats['total_annotations']}")
 
 
 def main():
     """主函数"""
     args = parse_args()
     
-    convert器 = KAISTDatasetConverter(
+    converter = KAISTDatasetConverter(
         input_dir=args.input,
         output_dir=args.output,
         modality=args.modality
     )
     
-    convert器.perform_convert()
+    converter.perform_convert()
 
 
 if __name__ == '__main__':
