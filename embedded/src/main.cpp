@@ -17,7 +17,7 @@ volatile bool g_running = true;
  * @brief 信号处理函数
  */
 void signalHandler(int signum) {
-    std::cout << "\n接收到信号 " << signum << "，正在退出..." << std::endl;
+    std::cout << "\nReceived signal " << signum << ", exiting..." << std::endl;
     g_running = false;
 }
 
@@ -25,30 +25,30 @@ void signalHandler(int signum) {
  * @brief 打印使用说明
  */
 void printUsage(const char* program) {
-    std::cout << "用法: " << program << " [选项]" << std::endl;
-    std::cout << "选项:" << std::endl;
-    std::cout << "  --model <path>    RKNN模型路径" << std::endl;
-    std::cout << "  --config <path>   配置文件路径" << std::endl;
-    std::cout << "  --source <path>   视频源 (设备路径或文件)" << std::endl;
-    std::cout << "  --help            显示帮助信息" << std::endl;
+    std::cout << "Usage: " << program << " [options]" << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << "  --model <path>    RKNN model path" << std::endl;
+    std::cout << "  --config <path>   Configuration file path" << std::endl;
+    std::cout << "  --source <path>   Video source (device path or file)" << std::endl;
+    std::cout << "  --help            Show help information" << std::endl;
 }
 
 /**
  * @brief 结果回调函数
  */
 void onResult(const FrameResult& result) {
-    std::cout << "帧 " << result.frame_id 
-              << " | 目标数: " << result.objects.size()
-              << " | 总耗时: " << result.total_time << " ms"
+    std::cout << "Frame " << result.frame_id 
+              << " | Objects: " << result.objects.size()
+              << " | Total time: " << result.total_time << " ms"
               << " | FPS: " << (1000.0f / result.total_time)
               << std::endl;
     
     // 打印每个跟踪目标
     for (const auto& obj : result.objects) {
         std::cout << "  ID=" << obj.id 
-                  << " 类别=" << obj.class_id
-                  << " 位置=(" << obj.box.x << "," << obj.box.y << ")"
-                  << " 尺寸=" << obj.box.width << "x" << obj.box.height
+                  << " Class=" << obj.class_id
+                  << " Position=(" << obj.box.x << "," << obj.box.y << ")"
+                  << " Size=" << obj.box.width << "x" << obj.box.height
                   << std::endl;
     }
 }
@@ -58,8 +58,8 @@ void onResult(const FrameResult& result) {
  */
 int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
-    std::cout << "  红外目标检测与跟踪系统" << std::endl;
-    std::cout << "  版本: 1.0.0" << std::endl;
+    std::cout << "  Infrared Object Detection & Tracking System" << std::endl;
+    std::cout << "  Version: 1.0.0" << std::endl;
     std::cout << "========================================" << std::endl;
     
     // 默认参数
@@ -83,10 +83,10 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    std::cout << "\n配置:" << std::endl;
-    std::cout << "  模型: " << model_path << std::endl;
-    std::cout << "  配置: " << config_path << std::endl;
-    std::cout << "  视频源: " << source << std::endl;
+    std::cout << "\nConfiguration:" << std::endl;
+    std::cout << "  Model: " << model_path << std::endl;
+    std::cout << "  Config: " << config_path << std::endl;
+    std::cout << "  Video source: " << source << std::endl;
     
     // 注册信号处理
     signal(SIGINT, signalHandler);
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     Pipeline pipeline(config_path);
     
     if (!pipeline.init()) {
-        std::cerr << "初始化流水线失败!" << std::endl;
+        std::cerr << "Pipeline initialization failed!" << std::endl;
         return -1;
     }
     
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
     pipeline.setResultCallback(onResult);
     
     // 开始处理视频流
-    std::cout << "\n开始处理视频流..." << std::endl;
+    std::cout << "\nStarting video stream processing..." << std::endl;
     pipeline.startVideoStream(source);
     
     // 主循环
@@ -119,6 +119,6 @@ int main(int argc, char* argv[]) {
     // 打印统计信息
     std::cout << "\n" << pipeline.getStats() << std::endl;
     
-    std::cout << "程序已退出" << std::endl;
+    std::cout << "Program exited" << std::endl;
     return 0;
 }
