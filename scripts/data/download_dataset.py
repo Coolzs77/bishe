@@ -76,13 +76,15 @@ def download_flir_dataset(output_dir, skip_existing=False):
     print_colored_message("从公开镜像源自动下载FLIR数据集...", 'blue')
     
     # FLIR数据集镜像源列表（按优先级排序）
+    # 注意：FLIR数据集通常需要从官方网站注册后下载
+    # 这里提供一些可能的公开镜像源，但可能需要手动下载
     mirror_urls = [
-        # GitHub Release（推荐，速度快且稳定）
-        "https://github.com/Coolzs77/bishe-datasets/releases/download/v1.0/FLIR_ADAS_v2.zip",
+        # 尝试从S3公开bucket（如果可用）
+        "https://s3.amazonaws.com/flir-adas-dataset/FLIR_ADAS_v2.zip",
+        # 尝试从Azure公开存储（如果可用）
+        "https://fliradas.blob.core.windows.net/datasets/FLIR_ADAS_v2.zip",
         # 华为云镜像（备用）
         "https://flir-adas-public.obs.cn-north-4.myhuaweicloud.com/FLIR_ADAS_v2.zip",
-        # RoboFlow公开数据集（备用）
-        "https://universe.roboflow.com/downloads/flir-adas-thermal-v2.zip",
     ]
     
     zip_file = flir_dir / 'FLIR_ADAS_v2.zip'
@@ -122,14 +124,26 @@ def download_flir_dataset(output_dir, skip_existing=False):
         print_colored_message("所有镜像源下载失败！", 'red')
         print()
         print_colored_message("备选方案：手动下载", 'yellow')
-        print("请访问以下任一网址手动下载:")
-        print("1. https://www.flir.com/oem/adas/adas-dataset-form/")
-        print("2. https://universe.roboflow.com/flir-adas-thermal")
-        print(f"3. 下载后将 FLIR_ADAS_v2.zip 放到 {flir_dir}")
+        print("FLIR数据集需要手动下载，请按以下步骤操作:")
+        print()
+        print("方式1 - 官方网站（推荐）:")
+        print("  1. 访问 https://www.flir.com/oem/adas/adas-dataset-form/")
+        print("  2. 填写简单表单（姓名、邮箱等）")
+        print("  3. 下载 FLIR ADAS Dataset v2")
+        print(f"  4. 将下载的ZIP文件重命名为 FLIR_ADAS_v2.zip 并放到: {flir_dir}")
+        print()
+        print("方式2 - 学术网盘（如果有分享链接）:")
+        print("  - 百度网盘/Google Drive等学术分享")
+        print("  - 注意验证文件完整性")
+        print()
+        print(f"目标位置: {flir_dir / 'FLIR_ADAS_v2.zip'}")
         print()
         
         # 等待用户手动下载
-        input("下载完成后，按Enter继续...")
+        response = input("已下载完成？(y/n): ").lower()
+        if response != 'y':
+            print_colored_message("跳过FLIR数据集下载", 'yellow')
+            return False
         
         if not zip_file.exists():
             print_colored_message("未找到数据集文件，跳过", 'red')
@@ -179,9 +193,12 @@ def download_kaist_dataset(output_dir, skip_existing=False):
     print_colored_message("从公开镜像源自动下载KAIST数据集...", 'blue')
     
     # KAIST数据集镜像源列表（按优先级排序）
+    # KAIST官方仓库提供下载链接，但可能需要从百度网盘等获取
     mirror_urls = [
-        # GitHub Release（推荐，速度快且稳定）
-        "https://github.com/Coolzs77/bishe-datasets/releases/download/v1.0/KAIST_Multispectral_Pedestrian.zip",
+        # 尝试从官方服务器
+        "https://soonminhwang.github.io/data/KAIST_Multispectral_Pedestrian.zip",
+        # 尝试从S3镜像
+        "https://s3.ap-northeast-2.amazonaws.com/kaist-rgbt/KAIST_Multispectral_Pedestrian.zip",
         # 阿里云OSS镜像（备用）
         "https://kaist-dataset.oss-cn-hangzhou.aliyuncs.com/KAIST_Multispectral_Pedestrian.zip",
     ]
@@ -223,14 +240,25 @@ def download_kaist_dataset(output_dir, skip_existing=False):
         print_colored_message("所有镜像源下载失败！", 'red')
         print()
         print_colored_message("备选方案：手动下载", 'yellow')
-        print("请访问以下任一网址手动下载:")
-        print("1. https://soonminhwang.github.io/rgbt-ped-detection/")
-        print("2. https://github.com/SoonminHwang/rgbt-ped-detection")
-        print(f"3. 下载后将 kaist_dataset.zip 放到 {kaist_dir}")
+        print("KAIST数据集需要手动下载，请按以下步骤操作:")
+        print()
+        print("方式1 - 官方GitHub仓库:")
+        print("  1. 访问 https://github.com/SoonminHwang/rgbt-ped-detection")
+        print("  2. 查看README中的数据下载说明")
+        print("  3. 通常数据在百度网盘或Google Drive分享")
+        print()
+        print("方式2 - 官方网站:")
+        print("  访问 https://soonminhwang.github.io/rgbt-ped-detection/")
+        print()
+        print(f"下载后将ZIP文件重命名为 kaist_dataset.zip 并放到: {kaist_dir}")
+        print(f"目标位置: {zip_file}")
         print()
         
         # 等待用户手动下载
-        input("下载完成后，按Enter继续...")
+        response = input("已下载完成？(y/n): ").lower()
+        if response != 'y':
+            print_colored_message("跳过KAIST数据集下载", 'yellow')
+            return False
         
         if not zip_file.exists():
             print_colored_message("未找到数据集文件，跳过", 'red')
