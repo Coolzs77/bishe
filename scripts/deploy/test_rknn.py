@@ -53,7 +53,7 @@ class RKNNTester:
             args: command行参数
         """
         self.args = args
-        self.model路径 = Path(args.model)
+        self.model_path = Path(args.model)
     
     def check_environment(self):
         """检查测试环境"""
@@ -94,19 +94,19 @@ class RKNNTester:
         返回:
             RKNN对象
         """
-        print(f'\nload_model: {self.model路径}')
+        print(f'\nload_model: {self.model_path}')
         
-        if not self.model路径.exists():
-            print(f'错误: model文件不存在 - {self.model路径}')
+        if not self.model_path.exists():
+            print(f'错误: model文件不存在 - {self.model_path}')
             return None
         
         try:
             from rknn_obj.api import RKNN
             
-            rknn_obj = RKNN()
+            rknn = RKNN()
             
             print('  加载RKNNmodel文件...')
-            ret = rknn_obj.load_rknn_obj(str(self.model路径))
+            ret = rknn.load_rknn_obj(str(self.model_path))
             if ret != 0:
                 print(f'  加载RKNNmodel失败，错误码: {ret}')
                 return None
@@ -114,10 +114,10 @@ class RKNNTester:
             # 初始化run时
             print('  初始化run时环境...')
             if self.args.simulator:
-                ret = rknn_obj.init_runtime(target=None)  # PC模拟器
+                ret = rknn.init_runtime(target=None)  # PC模拟器
                 print('  使用PC模拟器模式')
             else:
-                ret = rknn_obj.init_runtime(target='rv1126')  # 开发板
+                ret = rknn.init_runtime(target='rv1126')  # 开发板
                 print('  使用RV1126开发板模式')
             
             if ret != 0:
@@ -125,12 +125,12 @@ class RKNNTester:
                 return None
             
             print('  RKNNmodel加载success')
-            return rknn_obj
+            return rknn
             
         except ImportError:
             print('  RKNN Toolkit未安装')
             print('  将返回占位model用于演示')
-            return 'mock_rknn_obj'
+            return 'mock_rknn'
         except Exception as e:
             print(f'  加载失败: {e}')
             return None
@@ -166,27 +166,27 @@ class RKNNTester:
             print('错误: opencv未安装')
             return None
     
-    def inference(self, rknn_obj, inputdata):
+    def inference(self, rknn, input_data):
         """
         执行modelinference
         
         参数:
-            rknn_obj: RKNN对象
-            inputdata: 预处理后的input
+            rknn: RKNN对象
+            input_data: 预处理后的input
         
         返回:
             inferenceresults
         """
-        if rknn_obj == 'mock_rknn_obj':
+        if rknn == 'mock_rknn':
             # 模拟inferenceresults
             import numpy as np
             return [np.random.rand(1, 25200, 85).astype(np.float32)]
         
-        if rknn_obj is None:
+        if rknn is None:
             return None
         
         try:
-            outputs = rknn_obj.inference(inputs=[inputdata])
+            outputs = rknn.inference(inputs=[input_data])
             return outputs
         except Exception as e:
             print(f'  inference失败: {e}')
@@ -217,13 +217,13 @@ class RKNNTester:
                 output = output[0]  # 取第一个batch
             
             # 过滤低confidence
-            confidence阈值 = 0.25
+            confidence_threshold = 0.25
             obj_conf = output[:, 4]
-            mask = obj_conf >= confidence阈值
+            mask = obj_conf >= confidence_threshold
             output = output[mask]
             
             # 解析检测results
-            检测results = []
+            detection_results = []
             for det in output:
                 x, y, w, h = det[:4]
                 conf = det[4]
@@ -231,25 +231,25 @@ class RKNNTester:
                 class_id = np.argmax(class_scores)
                 class_conf = class_scores[class_id]
                 
-                if class_conf * conf >= confidence阈值:
-                    检测results.append({
+                if class_conf * conf >= confidence_threshold:
+                    detection_results.append({
                         'bbox': [x-w/2, y-h/2, x+w/2, y+h/2],
                         'confidence': float(conf * class_conf),
                         'class_id': int(class_id)
                     })
             
-            return 检测results
+            return detection_results
             
         except Exception as e:
             print(f'  postprocess失败: {e}')
             return []
     
-    def test_image(self, rknn_obj):
+    def test_image(self, rknn):
         """
         测试单张image
         
         参数:
-            rknn_obj: RKNN对象
+            rknn: RKNN对象
         """
         if not self.args.image:
             return
@@ -257,28 +257,28 @@ class RKNNTester:
         print(f'\ntest_image: {self.args.image}')
         
         # 预处理
-        input = self.preprocess_image(self.args.image)
-        if input is None:
+        input_data = self.preprocess_image(self.args.image)
+        if input_data is None:
             return
         
         # inference
         start_time = time.time()
-        output = self.inference(rknn_obj, input)
+        output = self.inference(rknn, input_data)
         end_time = time.time()
         
         inference_time = (end_time - start_time) * 1000
-        print(f'  inference时间: {inference时间:.2f} ms')
+        print(f'  inference时间: {inference_time:.2f} ms')
         
         # postprocess
-        检测results = self.postprocess(output)
-        print(f'  检测到 {len(检测results)} 个目标')
+        detection_results = self.postprocess(output)
+        print(f'  检测到 {len(detection_results)} 个目标')
     
-    def benchmark(self, rknn_obj):
+    def benchmark(self, rknn):
         """
         run性能benchmark
         
         参数:
-            rknn_obj: RKNN对象
+            rknn: RKNN对象
         """
         if not self.args.benchmark:
             return
@@ -289,19 +289,19 @@ class RKNNTester:
             import numpy as np
             
             # 创建随机input
-            input = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
+            input_data = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
             
             # 预热
             for _ in range(10):
-                self.inference(rknn_obj, input)
+                self.inference(rknn, input_data)
             
             # 计时
             time_list = []
             for i in range(self.args.iterations):
-                开始 = time.time()
-                self.inference(rknn_obj, input)
-                结束 = time.time()
-                time_list.append((结束 - 开始) * 1000)
+                start = time.time()
+                self.inference(rknn, input_data)
+                end = time.time()
+                time_list.append((end - start) * 1000)
             
             # 统计
             avg_time = np.mean(time_list)
@@ -319,7 +319,7 @@ class RKNNTester:
             
             # save_results
             results = {
-                'model': str(self.model路径),
+                'model': str(self.model_path),
                 'iterations': self.args.iterations,
                 'simulator': self.args.simulator,
                 'timestamp': datetime.now().isoformat(),
@@ -332,12 +332,12 @@ class RKNNTester:
                 }
             }
             
-            output路径 = Path('outputs/results') / 'rknn_obj_benchmark.json'
-            output路径.parent.mkdir(parents=True, exist_ok=True)
-            with open(output路径, 'w', encoding='utf-8') as f:
+            output_path = Path('outputs/results') / 'rknn_obj_benchmark.json'
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
             
-            print(f'\nresults已保存到: {output路径}')
+            print(f'\nresults已保存到: {output_path}')
             
         except ImportError:
             print('错误: numpy未安装')
@@ -347,7 +347,7 @@ class RKNNTester:
         print('=' * 60)
         print('RKNNmodel测试')
         print('=' * 60)
-        print(f'model: {self.model路径}')
+        print(f'model: {self.model_path}')
         print(f'模式: {"PC模拟器" if self.args.simulator else "开发板"}')
         
         # check_environment
@@ -357,15 +357,15 @@ class RKNNTester:
             print('\n警告: 部分依赖缺失，某些功能可能不可用')
         
         # load_model
-        rknn_obj = self.load_model()
+        rknn = self.load_model()
         
         # test_image
         if self.args.image:
-            self.test_image(rknn_obj)
+            self.test_image(rknn)
         
         # benchmark
         if self.args.benchmark:
-            self.benchmark(rknn_obj)
+            self.benchmark(rknn)
         
         print('\n' + '=' * 60)
         print('测试完成!')
