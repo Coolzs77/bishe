@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-def 解析参数():
+def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         description='将ONNX模型转换为RKNN格式',
@@ -42,7 +42,7 @@ def 解析参数():
     return parser.parse_args()
 
 
-class RKNN转换器:
+class RKNNConverter:
     """RKNN模型转换器类"""
     
     def __init__(self, args):
@@ -53,17 +53,17 @@ class RKNN转换器:
             args: 命令行参数
         """
         self.args = args
-        self.onnx路径 = Path(args.onnx)
+        self.onnx_path = Path(args.onnx)
         
         # 确定输出路径
         if args.output:
-            self.输出路径 = Path(args.output)
+            self.output_path = Path(args.output)
         else:
-            self.输出路径 = self.onnx路径.with_suffix('.rknn')
+            self.output_path = self.onnx_path.with_suffix('.rknn')
         
-        self.输出路径.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    def 检查环境(self):
+    def check_environment(self):
         """检查转换环境"""
         print('\n检查环境...')
         
@@ -78,7 +78,7 @@ class RKNN转换器:
             print('  下载地址: https://github.com/rockchip-linux/rknn-toolkit2')
             return False
     
-    def 获取校准图像(self, 数量=100):
+    def get_calibration_images(self, count=100):
         """
         获取量化校准图像列表
         
@@ -92,24 +92,24 @@ class RKNN转换器:
             print('  警告: 未指定校准数据集，将使用随机数据')
             return None
         
-        数据集路径 = Path(self.args.dataset)
-        if not 数据集路径.exists():
-            print(f'  警告: 校准数据集不存在 - {数据集路径}')
+        dataset_path = Path(self.args.dataset)
+        if not dataset_path.exists():
+            print(f'  警告: 校准数据集不存在 - {dataset_path}')
             return None
         
         # 收集图像文件
-        图像列表 = []
-        for 后缀 in ['*.jpg', '*.jpeg', '*.png']:
-            图像列表.extend(数据集路径.glob(后缀))
+        image_list = []
+        for suffix in ['*.jpg', '*.jpeg', '*.png']:
+            image_list.extend(dataset_path.glob(suffix))
         
-        if len(图像列表) < 数量:
-            数量 = len(图像列表)
+        if len(image_list) < count:
+            count = len(image_list)
         
-        print(f'  找到 {len(图像列表)} 张校准图像，使用 {数量} 张')
+        print(f'  找到 {len(image_list)} 张校准图像，使用 {count} 张')
         
-        return [str(路径) for 路径 in 图像列表[:数量]]
+        return [str(path) for path in image_list[:count]]
     
-    def 转换(self):
+    def convert(self):
         """
         执行ONNX到RKNN的转换
         
@@ -117,8 +117,8 @@ class RKNN转换器:
             是否成功
         """
         print(f'\n转换ONNX到RKNN...')
-        print(f'  输入: {self.onnx路径}')
-        print(f'  输出: {self.输出路径}')
+        print(f'  输入: {self.onnx_path}')
+        print(f'  输出: {self.output_path}')
         print(f'  平台: {self.args.platform}')
         print(f'  量化: {self.args.quantize}')
         
@@ -140,23 +140,23 @@ class RKNN转换器:
         )
         
         # 加载ONNX模型
-        ret = rknn.load_onnx(model=str(self.onnx路径))
+        ret = rknn.load_onnx(model=str(self.onnx_path))
         if ret != 0:
             print('加载ONNX失败')
             return False
         
         # 构建模型
-        校准图像 = self.获取校准图像()
+        calibration_images = self.get_calibration_images()
         ret = rknn.build(
             do_quantization=True if self.args.quantize != 'fp16' else False,
-            dataset=校准图像,
+            dataset=calibration_images,
         )
         if ret != 0:
             print('构建模型失败')
             return False
         
         # 导出RKNN模型
-        ret = rknn.export_rknn(str(self.输出路径))
+        ret = rknn.export_rknn(str(self.output_path))
         if ret != 0:
             print('导出RKNN失败')
             return False
@@ -168,42 +168,42 @@ class RKNN转换器:
         print(f'  转换配置已记录，待RKNN Toolkit环境就绪后执行')
         
         # 保存转换配置供后续使用
-        配置文件 = self.输出路径.with_suffix('.config.txt')
-        with open(配置文件, 'w', encoding='utf-8') as f:
-            f.write(f'ONNX模型: {self.onnx路径}\n')
-            f.write(f'输出路径: {self.输出路径}\n')
+        config_file = self.output_path.with_suffix('.config.txt')
+        with open(config_file, 'w', encoding='utf-8') as f:
+            f.write(f'ONNX模型: {self.onnx_path}\n')
+            f.write(f'输出路径: {self.output_path}\n')
             f.write(f'目标平台: {self.args.platform}\n')
             f.write(f'量化类型: {self.args.quantize}\n')
             f.write(f'校准数据: {self.args.dataset}\n')
             f.write(f'预编译: {self.args.pre_compile}\n')
             f.write(f'生成时间: {datetime.now().isoformat()}\n')
         
-        print(f'  转换配置已保存到: {配置文件}')
+        print(f'  转换配置已保存到: {config_file}')
         
         return True
     
-    def 运行(self):
+    def run(self):
         """运行转换流程"""
         print('=' * 60)
         print('RKNN模型转换 (ONNX -> RKNN)')
         print('=' * 60)
         
         # 检查ONNX文件
-        if not self.onnx路径.exists():
-            print(f'错误: ONNX文件不存在 - {self.onnx路径}')
+        if not self.onnx_path.exists():
+            print(f'错误: ONNX文件不存在 - {self.onnx_path}')
             return False
         
         # 检查环境
-        环境就绪 = self.检查环境()
+        env_ready = self.check_environment()
         
         # 执行转换
-        self.转换()
+        self.convert()
         
         print('\n' + '=' * 60)
         print('转换流程完成!')
         print('=' * 60)
         
-        if not 环境就绪:
+        if not env_ready:
             print('\n下一步:')
             print('  1. 安装RKNN Toolkit')
             print('  2. 使用保存的配置重新运行转换')
@@ -213,10 +213,10 @@ class RKNN转换器:
 
 def main():
     """主函数"""
-    args = 解析参数()
+    args = parse_args()
     
-    转换器 = RKNN转换器(args)
-    转换器.运行()
+    converter = RKNNConverter(args)
+    converter.run()
 
 
 if __name__ == '__main__':
