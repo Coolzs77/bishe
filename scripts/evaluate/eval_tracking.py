@@ -112,7 +112,6 @@ class TrackingRunner:
         try:
             if self.args.tracker == 'deepsort':
                 from src.tracking.deepsort_tracker import create_deepsort_tracker
-                # 注意：这里确保 deepsort_tracker.py 已经修复了 n_init 问题
                 return create_deepsort_tracker(max_age=30, min_hits=3)
 
             elif self.args.tracker == 'bytetrack':
@@ -121,7 +120,7 @@ class TrackingRunner:
 
         except Exception as e:
             print(f'❌ 跟踪器初始化失败: {e}')
-            print('提示: 请检查 src/tracking/ 下的文件是否完整 (包含 tracker.py, kalman_filter.py 等)')
+            print('提示: 请确认已安装官方跟踪库: pip install deep-sort-realtime supervision')
             traceback.print_exc()
             sys.exit(1)
 

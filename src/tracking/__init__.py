@@ -15,14 +15,14 @@ __all__ = [
     'BaseTracker',
     'TrackObject',
     'TrackingResult',
-    # 卡尔曼滤波
+    # 卡尔曼滤波（由 CenterTrack 内部使用）
     'KalmanFilter',
     'KalmanBoxTracker',
     'xyxy_to_xywh',
     'xywh_to_xyxy',
     'xyxy_to_xyah',
     'xyah_to_xyxy',
-    # tracker
+    # 跟踪器
     'DeepSORTTracker',
     'create_deepsort_tracker',
     'ByteTrack',

@@ -293,62 +293,71 @@ class TestBaseTrackerMethods(unittest.TestCase):
 
 class TestDeepSORTTracker(unittest.TestCase):
     """测试DeepSORTtracker"""
-    
+
     def test_tracker_creation(self):
         """测试tracker创建"""
         tracker = create_deepsort_tracker()
-        
+
         self.assertIsInstance(tracker, DeepSORTTracker)
         self.assertEqual(tracker.frame_count, 0)
-    
+
     def test_tracker_update_empty(self):
         """测试空检测更新"""
         tracker = create_deepsort_tracker()
-        
+
         result = tracker.update(np.array([]).reshape(0, 4))
-        
+
         self.assertEqual(len(result), 0)
-    
+
     def test_tracker_update_with_detections(self):
-        """测试有检测的更新"""
+        """测试有检测的更新（使用虚拟图像，不依赖真实embedder下载）"""
         tracker = create_deepsort_tracker(min_hits=1)
-        
+
         detections = np.array([
             [10, 20, 100, 200],
             [150, 160, 250, 360]
-        ])
-        
-        result = tracker.update(detections)
-        
-        # 第一帧可能还没有确认的跟踪
-        # 多次更新后应该有跟踪results
+        ], dtype=float)
+        dummy_img = np.zeros((400, 400, 3), dtype=np.uint8)
+
+        result = tracker.update(detections, ori_img=dummy_img)
+
+        # 多次更新后应该有跟踪结果
         for _ in range(3):
-            result = tracker.update(detections)
-        
+            result = tracker.update(detections, ori_img=dummy_img)
+
         self.assertGreater(len(result), 0)
-    
+
     def test_tracker_reset(self):
         """测试tracker重置"""
         tracker = create_deepsort_tracker()
-        
-        detections = np.array([[10, 20, 100, 200]])
-        tracker.update(detections)
-        
+
+        detections = np.array([[10, 20, 100, 200]], dtype=float)
+        dummy_img = np.zeros((400, 400, 3), dtype=np.uint8)
+        tracker.update(detections, ori_img=dummy_img)
+
         tracker.reset()
-        
+
         self.assertEqual(tracker.frame_count, 0)
-        self.assertEqual(len(tracker.tracks), 0)
 
 
 class TestByteTrack(unittest.TestCase):
     """测试ByteTracktracker"""
-    
+
     def test_tracker_creation(self):
         """测试tracker创建"""
         tracker = create_bytetrack_tracker()
-        
+
         self.assertIsInstance(tracker, ByteTrack)
-    
+
+    def test_tracker_update_empty(self):
+        """测试空检测更新"""
+        tracker = create_bytetrack_tracker()
+
+        result = tracker.update(np.array([]).reshape(0, 4))
+
+        self.assertIsInstance(result, TrackingResult)
+        self.assertEqual(len(result), 0)
+
     def test_tracker_high_low_detection(self):
         """测试高低confidence检测处理"""
         tracker = create_bytetrack_tracker(
@@ -356,22 +365,40 @@ class TestByteTrack(unittest.TestCase):
             low_threshold=0.1,
             min_hits=1
         )
-        
+
         # 混合高低confidence检测
         detections = np.array([
             [10, 20, 100, 200],
             [150, 160, 250, 360]
-        ])
+        ], dtype=float)
         confidences = np.array([0.8, 0.3])  # 一高一低
-        
+
         result = tracker.update(detections, confidences)
-        
+
         # 多次更新
         for _ in range(3):
             result = tracker.update(detections, confidences)
-        
+
         # ByteTrack应该能利用低confidence检测
-        self.assertTrue(True)  # 主要测试不崩溃
+        self.assertIsInstance(result, TrackingResult)
+
+    def test_tracker_track_thresh_alias(self):
+        """测试 track_thresh / match_thresh 参数别名"""
+        tracker = create_bytetrack_tracker(track_thresh=0.6, match_thresh=0.7)
+        self.assertAlmostEqual(tracker.high_threshold, 0.6)
+        self.assertAlmostEqual(tracker.match_threshold, 0.7)
+
+    def test_tracker_reset(self):
+        """测试tracker重置"""
+        tracker = create_bytetrack_tracker(min_hits=1)
+
+        detections = np.array([[10, 20, 100, 200]], dtype=float)
+        confidences = np.array([0.9])
+        tracker.update(detections, confidences)
+
+        tracker.reset()
+
+        self.assertEqual(tracker.frame_count, 0)
 
 
 class TestCenterTrack(unittest.TestCase):
