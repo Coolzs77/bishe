@@ -117,7 +117,7 @@ class TrackingRunner:
 
             elif self.args.tracker == 'bytetrack':
                 from src.tracking.bytetrack_tracker import create_bytetrack_tracker
-                return create_bytetrack_tracker(track_thresh=0.5, match_thresh=0.8)
+                return create_bytetrack_tracker(high_threshold=0.5, match_threshold=0.8)
 
         except Exception as e:
             print(f'❌ 跟踪器初始化失败: {e}')

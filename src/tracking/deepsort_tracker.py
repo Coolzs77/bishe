@@ -52,7 +52,17 @@ class DeepSORTTracker(BaseTracker):
             raw_detections.append((ltwh, float(conf), int(cls)))
 
         if ori_img is None:
-            # Build a minimal dummy frame large enough to contain all bounding boxes
+            # ori_img is required by deep-sort-realtime for appearance embedding.
+            # When it is absent (e.g. during unit tests), a blank frame is used.
+            # In production, always pass the actual video frame so that the
+            # MobileNet embedder produces valid appearance features.
+            import warnings
+            warnings.warn(
+                "ori_img not provided to DeepSORTTracker.update(); "
+                "a blank dummy frame will be used, which disables appearance features.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             if raw_detections:
                 max_x = int(max(d[0][0] + d[0][2] for d in raw_detections)) + 1
                 max_y = int(max(d[0][1] + d[0][3] for d in raw_detections)) + 1

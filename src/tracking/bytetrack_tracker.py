@@ -80,7 +80,7 @@ class ByteTrack(BaseTracker):
         ], axis=1)
         dets_tensor = torch.from_numpy(dets_np).float()
 
-        outputs = self._tracker.update(dets_tensor, None)
+        outputs = self._tracker.update(dets_tensor, None)  # None = img_info not used by BYTETracker
 
         # Build a lookup from track_id → STrack for accessing actual track state
         track_lookup = {t.track_id: t for t in self._tracker.tracked_stracks}

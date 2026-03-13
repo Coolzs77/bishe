@@ -438,27 +438,26 @@ class InfraredMOTSystem:
         """初始化tracker"""
         tracker_map = {
             'deepsort': 'DeepSORTTracker',
-            'bytetrack': 'ByteTracker',
-            'centertrack': 'CenterTracker',
+            'bytetrack': 'ByteTrack',
+            'centertrack': 'CenterTrack',
         }
         
         tracker_class_name = tracker_map.get(algorithm, 'DeepSORTTracker')
-        tracking_config_path = self.project_root / 'configs/tracking_config.yaml'
         
         try:
             if algorithm == 'deepsort':
-                from src.tracking.deepsort_tracker import DeepSORTTracker
-                tracker = DeepSORTTracker(config_path=str(tracking_config_path))
+                from src.tracking.deepsort_tracker import create_deepsort_tracker
+                tracker = create_deepsort_tracker()
             elif algorithm == 'bytetrack':
-                from src.tracking.bytetrack_tracker import ByteTracker
-                tracker = ByteTracker(config_path=str(tracking_config_path))
+                from src.tracking.bytetrack_tracker import create_bytetrack_tracker
+                tracker = create_bytetrack_tracker()
             elif algorithm == 'centertrack':
-                from src.tracking.centertrack_tracker import CenterTracker
-                tracker = CenterTracker(config_path=str(tracking_config_path))
+                from src.tracking.centertrack_tracker import create_centertrack_tracker
+                tracker = create_centertrack_tracker()
             else:
                 self.logger.warning(f"  - 未知跟踪算法: {algorithm}，使用DeepSORT")
-                from src.tracking.deepsort_tracker import DeepSORTTracker
-                tracker = DeepSORTTracker(config_path=str(tracking_config_path))
+                from src.tracking.deepsort_tracker import create_deepsort_tracker
+                tracker = create_deepsort_tracker()
             
             self.logger.info(f"  - {tracker_class_name}初始化完成")
             return tracker

@@ -3,11 +3,13 @@
 """
 卡尔曼滤波器模块
 
-提供用于目标跟踪的卡尔曼滤波器实现
+使用官方 filterpy 库实现卡尔曼滤波，提供用于目标跟踪的 Kalman 状态估计
 """
 
 import numpy as np
 from typing import Tuple, Optional
+
+from filterpy.kalman import KalmanFilter as _FilterpyKF
 
 
 def xyxy_to_xywh(bbox: np.ndarray) -> np.ndarray:
@@ -129,44 +131,50 @@ def xyah_to_xyxy(bbox: np.ndarray) -> np.ndarray:
         return result
 
 
+def _make_filterpy_kf(std_weight_position: float, std_weight_velocity: float) -> '_FilterpyKF':
+    """Build a configured filterpy KalmanFilter instance (8-state, 4-obs)."""
+    kf = _FilterpyKF(dim_x=8, dim_z=4)
+    # State-transition matrix: x_{k+1} = F * x_k
+    kf.F = np.eye(8)
+    for i in range(4):
+        kf.F[i, 4 + i] = 1.0
+    # Observation matrix: z_k = H * x_k
+    kf.H = np.eye(4, 8)
+    return kf
+
+
 class KalmanFilter:
     """
-    卡尔曼滤波器
+    卡尔曼滤波器 (基于官方 filterpy 库)
     
-    用于目标跟踪的标准卡尔曼滤波器实现
+    用于目标跟踪的卡尔曼滤波器。
     状态向量: [x, y, a, h, vx, vy, va, vh]
-    其中 (x, y) 是中心坐标, a 是宽高比, h 是高度
-    (vx, vy, va, vh) 是对应的速度
+    其中 (x, y) 是中心坐标, a 是宽高比, h 是高度,
+    (vx, vy, va, vh) 是对应的速度。
     
     Attributes:
-        dim_x: 状态向量维度
-        dim_z: 观测向量维度
         _std_weight_position: 位置噪声权重
         _std_weight_velocity: 速度噪声权重
     """
-    
-    def __init__(self, std_weight_position: float = 1./20, std_weight_velocity: float = 1./160):
-        """
-        初始化卡尔曼滤波器
-        
-        Args:
-            std_weight_position: 位置噪声权重
-            std_weight_velocity: 速度噪声权重
-        """
-        self.dim_x = 8  # 状态向量维度
-        self.dim_z = 4  # 观测向量维度
-        
+
+    def __init__(
+        self,
+        std_weight_position: float = 1. / 20,
+        std_weight_velocity: float = 1. / 160
+    ):
         self._std_weight_position = std_weight_position
         self._std_weight_velocity = std_weight_velocity
-        
-        # 状态转移矩阵
-        self._motion_mat = np.eye(self.dim_x)
-        for i in range(4):
-            self._motion_mat[i, 4 + i] = 1.0
-        
-        # 观测矩阵
-        self._update_mat = np.eye(self.dim_z, self.dim_x)
-    
+        # Reuse a single filterpy instance to avoid repeated allocation
+        self._kf = _make_filterpy_kf(std_weight_position, std_weight_velocity)
+
+    # ------------------------------------------------------------------
+    # Helper: restore the shared filterpy KF from an external (mean, cov)
+    # ------------------------------------------------------------------
+    def _restore(self, mean: np.ndarray, covariance: np.ndarray) -> '_FilterpyKF':
+        self._kf.x = mean.copy().reshape(8, 1)
+        self._kf.P = covariance.copy()
+        return self._kf
+
     def initiate(self, measurement: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         根据初始观测创建跟踪状态
@@ -175,213 +183,181 @@ class KalmanFilter:
             measurement: 初始观测 [x, y, a, h]
             
         Returns:
-            mean: 初始状态均值
-            covariance: 初始状态协方差
+            mean: 初始状态均值 (8,)
+            covariance: 初始状态协方差 (8, 8)
         """
-        mean_pos = measurement
-        mean_vel = np.zeros(4)
-        mean = np.concatenate([mean_pos, mean_vel])
-        
-        # 初始协方差
+        h = measurement[3]
+        kf = self._restore(np.concatenate([measurement, np.zeros(4)]), np.zeros((8, 8)))
+
         std = [
-            2 * self._std_weight_position * measurement[3],
-            2 * self._std_weight_position * measurement[3],
+            2 * self._std_weight_position * h,
+            2 * self._std_weight_position * h,
             1e-2,
-            2 * self._std_weight_position * measurement[3],
-            10 * self._std_weight_velocity * measurement[3],
-            10 * self._std_weight_velocity * measurement[3],
+            2 * self._std_weight_position * h,
+            10 * self._std_weight_velocity * h,
+            10 * self._std_weight_velocity * h,
             1e-5,
-            10 * self._std_weight_velocity * measurement[3]
+            10 * self._std_weight_velocity * h,
         ]
-        covariance = np.diag(np.square(std))
-        
-        return mean, covariance
-    
+        kf.P = np.diag(np.square(std))
+        return kf.x.flatten().copy(), kf.P.copy()
+
     def predict(self, mean: np.ndarray, covariance: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         预测步骤
         
         Args:
-            mean: 当前状态均值
-            covariance: 当前状态协方差
+            mean: 当前状态均值 (8,)
+            covariance: 当前状态协方差 (8, 8)
             
         Returns:
-            预测的状态均值和协方差
+            预测的状态均值 (8,) 和协方差 (8, 8)
         """
-        # 过程噪声
+        h = float(mean[3])
         std_pos = [
-            self._std_weight_position * mean[3],
-            self._std_weight_position * mean[3],
+            self._std_weight_position * h,
+            self._std_weight_position * h,
             1e-2,
-            self._std_weight_position * mean[3]
+            self._std_weight_position * h,
         ]
         std_vel = [
-            self._std_weight_velocity * mean[3],
-            self._std_weight_velocity * mean[3],
+            self._std_weight_velocity * h,
+            self._std_weight_velocity * h,
             1e-5,
-            self._std_weight_velocity * mean[3]
+            self._std_weight_velocity * h,
         ]
-        motion_cov = np.diag(np.square(np.concatenate([std_pos, std_vel])))
-        
-        # 预测
-        mean = self._motion_mat @ mean
-        covariance = self._motion_mat @ covariance @ self._motion_mat.T + motion_cov
-        
-        return mean, covariance
-    
+        kf = self._restore(mean, covariance)
+        kf.Q = np.diag(np.square(np.concatenate([std_pos, std_vel])))
+        kf.predict()
+        return kf.x.flatten().copy(), kf.P.copy()
+
     def project(self, mean: np.ndarray, covariance: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         将状态投影到观测空间
         
         Args:
-            mean: 状态均值
-            covariance: 状态协方差
+            mean: 状态均值 (8,)
+            covariance: 状态协方差 (8, 8)
             
         Returns:
-            观测空间的均值和协方差
+            观测空间的均值 (4,) 和协方差 (4, 4)
         """
-        # 观测噪声
+        h = float(mean[3])
         std = [
-            self._std_weight_position * mean[3],
-            self._std_weight_position * mean[3],
+            self._std_weight_position * h,
+            self._std_weight_position * h,
             1e-1,
-            self._std_weight_position * mean[3]
+            self._std_weight_position * h,
         ]
-        innovation_cov = np.diag(np.square(std))
-        
-        mean = self._update_mat @ mean
-        covariance = self._update_mat @ covariance @ self._update_mat.T + innovation_cov
-        
-        return mean, covariance
-    
+        H = np.eye(4, 8)
+        R = np.diag(np.square(std))
+        projected_mean = H @ mean
+        projected_cov = H @ covariance @ H.T + R
+        return projected_mean, projected_cov
+
     def update(
-        self, 
-        mean: np.ndarray, 
-        covariance: np.ndarray, 
-        measurement: np.ndarray
+        self,
+        mean: np.ndarray,
+        covariance: np.ndarray,
+        measurement: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         更新步骤
         
         Args:
-            mean: 预测的状态均值
-            covariance: 预测的状态协方差
+            mean: 预测的状态均值 (8,)
+            covariance: 预测的状态协方差 (8, 8)
             measurement: 观测值 [x, y, a, h]
             
         Returns:
-            更新后的状态均值和协方差
+            更新后的状态均值 (8,) 和协方差 (8, 8)
         """
-        # 投影到观测空间
-        projected_mean, projected_cov = self.project(mean, covariance)
-        
-        # 计算卡尔曼增益 K = P * H^T * S^(-1)
-        # 其中 S = H * P * H^T + R (projected_cov)
-        try:
-            chol_factor = np.linalg.cholesky(projected_cov)
-            # 使用Cholesky分解求解
-            kalman_gain = np.linalg.solve(
-                chol_factor.T,
-                np.linalg.solve(chol_factor, self._update_mat @ covariance.T)
-            ).T
-        except np.linalg.LinAlgError:
-            # 如果Cholesky分解失败，使用伪逆
-            kalman_gain = covariance @ self._update_mat.T @ np.linalg.pinv(projected_cov)
-        
-        # 计算新息
-        innovation = measurement - projected_mean
-        
-        # 更新状态
-        new_mean = mean + kalman_gain @ innovation
-        new_covariance = covariance - kalman_gain @ projected_cov @ kalman_gain.T
-        
-        return new_mean, new_covariance
-    
+        h = float(mean[3])
+        std = [
+            self._std_weight_position * h,
+            self._std_weight_position * h,
+            1e-1,
+            self._std_weight_position * h,
+        ]
+        kf = self._restore(mean, covariance)
+        kf.R = np.diag(np.square(std))
+        kf.update(measurement.reshape(4, 1))
+        return kf.x.flatten().copy(), kf.P.copy()
+
     def gating_distance(
         self,
         mean: np.ndarray,
         covariance: np.ndarray,
         measurements: np.ndarray,
-        only_position: bool = False
+        only_position: bool = False,
     ) -> np.ndarray:
         """
         计算状态和观测之间的马氏距离
         
         Args:
-            mean: 状态均值
-            covariance: 状态协方差
-            measurements: 观测数组，形状为 (N, 4)
+            mean: 状态均值 (8,)
+            covariance: 状态协方差 (8, 8)
+            measurements: 观测数组 (N, 4)
             only_position: 是否只考虑位置
             
         Returns:
-            马氏距离数组
+            马氏距离数组 (N,)
         """
         projected_mean, projected_cov = self.project(mean, covariance)
-        
+
         if only_position:
             projected_mean = projected_mean[:2]
             projected_cov = projected_cov[:2, :2]
             measurements = measurements[:, :2]
-        
-        # 计算马氏距离
+
         diff = measurements - projected_mean
-        
         try:
             chol = np.linalg.cholesky(projected_cov)
             z = np.linalg.solve(chol, diff.T).T
             return np.sum(z ** 2, axis=1)
         except np.linalg.LinAlgError:
-            # 如果协方差矩阵不是正定的，使用伪逆
             inv_cov = np.linalg.pinv(projected_cov)
             return np.sum(diff @ inv_cov * diff, axis=1)
 
 
 class KalmanBoxTracker:
     """
-    单目标卡尔曼滤波tracker
+    单目标卡尔曼滤波 tracker (基于官方 filterpy 库)
     
-    封装了卡尔曼滤波器，用于跟踪单个目标
+    封装了 filterpy 卡尔曼滤波器，用于跟踪单个目标。
     
     Attributes:
-        kf: 卡尔曼滤波器实例
-        mean: 当前状态均值
-        covariance: 当前状态协方差
-        track_id: 跟踪ID
+        track_id: 跟踪 ID
         hits: 命中次数
         time_since_update: 自上次更新以来的帧数
         age: 目标存在帧数
     """
-    
+
     count = 0  # 全局计数器
-    
+
     def __init__(self, bbox: np.ndarray, track_id: Optional[int] = None):
         """
-        初始化单目标tracker
+        初始化单目标 tracker
         
         Args:
             bbox: 初始边界框 [x1, y1, x2, y2]
-            track_id: 跟踪ID，如果为None则自动分配
+            track_id: 跟踪 ID；为 None 时自动分配
         """
-        self.kalman_filter = KalmanFilter()
-        
-        # convert为 [x, y, a, h] 格式
+        self._kf = KalmanFilter()
         measurement = xyxy_to_xyah(bbox)
-        self.mean, self.covariance = self.kalman_filter.initiate(measurement)
-        
-        # 跟踪ID
+        self.mean, self.covariance = self._kf.initiate(measurement)
+
         if track_id is None:
             KalmanBoxTracker.count += 1
             self.track_id = KalmanBoxTracker.count
         else:
             self.track_id = track_id
-        
-        # 跟踪状态
+
         self.hits = 1
         self.time_since_update = 0
         self.age = 1
-        
-        # 历史记录
         self.history = []
-    
+
     def predict(self) -> np.ndarray:
         """
         预测下一帧的状态
@@ -389,21 +365,17 @@ class KalmanBoxTracker:
         Returns:
             预测的边界框 [x1, y1, x2, y2]
         """
-        # 防止宽高比和高度变为负值
         if self.mean[6] + self.mean[2] <= 0:
-            self.mean[6] = 0
+            self.mean[6] = 0.0
         if self.mean[7] + self.mean[3] <= 0:
-            self.mean[7] = 0
-        
-        self.mean, self.covariance = self.kalman_filter.predict(self.mean, self.covariance)
+            self.mean[7] = 0.0
+
+        self.mean, self.covariance = self._kf.predict(self.mean, self.covariance)
         self.age += 1
         self.time_since_update += 1
-        
-        # 保存历史
         self.history.append(self.get_state())
-        
         return self.get_state()
-    
+
     def update(self, bbox: np.ndarray) -> None:
         """
         使用观测更新状态
@@ -412,14 +384,11 @@ class KalmanBoxTracker:
             bbox: 观测的边界框 [x1, y1, x2, y2]
         """
         measurement = xyxy_to_xyah(bbox)
-        self.mean, self.covariance = self.kalman_filter.update(self.mean, self.covariance, measurement)
-        
+        self.mean, self.covariance = self._kf.update(self.mean, self.covariance, measurement)
         self.hits += 1
         self.time_since_update = 0
-        
-        # 清空历史（已更新）
         self.history = []
-    
+
     def get_state(self) -> np.ndarray:
         """
         获取当前状态的边界框
@@ -428,8 +397,9 @@ class KalmanBoxTracker:
             边界框 [x1, y1, x2, y2]
         """
         return xyah_to_xyxy(self.mean[:4])
-    
+
     @classmethod
-    def reset_count(cls):
+    def reset_count(cls) -> None:
         """重置全局计数器"""
         cls.count = 0
+
