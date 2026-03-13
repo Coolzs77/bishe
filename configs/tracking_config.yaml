@@ -1,0 +1,94 @@
+# 跟踪算法配置文件
+# 多目标跟踪算法参数配置
+
+# 通用配置
+general:
+  max_age: 30                   # 轨迹最大消失帧数
+  min_hits: 3                   # 轨迹确认所需最小连续命中数
+  iou_threshold: 0.3            # IoU匹配阈值
+
+# DeepSORT配置
+deepsort:
+  enabled: true
+  # ReID模型配置
+  reid:
+    model_path: models/tracking/deepsort/reid_model.pt
+    feature_dim: 512            # 特征维度
+    input_size: [128, 64]       # 输入尺寸 [高, 宽]
+  
+  # 卡尔曼滤波配置
+  kalman:
+    std_weight_position: 1/20   # 位置标准差权重
+    std_weight_velocity: 1/160  # 速度标准差权重
+  
+  # 匹配配置
+  matching:
+    max_cosine_distance: 0.2    # 外观匹配阈值
+    nn_budget: 100              # 最近邻特征缓存大小
+    max_iou_distance: 0.7       # IoU匹配阈值
+  
+  # 级联匹配
+  cascade:
+    enabled: true
+    max_age: 70                 # 级联匹配的最大年龄
+
+# ByteTrack配置
+bytetrack:
+  enabled: true
+  # 检测阈值
+  detection:
+    track_thresh: 0.5           # 高置信度阈值
+    track_buffer: 30            # 轨迹缓存帧数
+    match_thresh: 0.8           # 匹配阈值
+    low_thresh: 0.1             # 低置信度阈值
+  
+  # 卡尔曼滤波配置
+  kalman:
+    std_weight_position: 1/20
+    std_weight_velocity: 1/160
+  
+  # 双阶段匹配
+  two_stage:
+    first_association_thresh: 0.8   # 第一阶段IoU阈值
+    second_association_thresh: 0.5  # 第二阶段IoU阈值
+
+# CenterTrack配置
+centertrack:
+  enabled: true
+  # 模型配置
+  model:
+    path: models/tracking/centertrack/centertrack.pt
+    backbone: dla34             # 骨干网络
+    heads: ['hm', 'wh', 'reg', 'tracking']
+  
+  # 跟踪配置
+  tracking:
+    pre_thresh: 0.5             # 上一帧检测阈值
+    new_thresh: 0.4             # 新目标检测阈值
+    track_thresh: 0.4           # 跟踪阈值
+    max_age: 32                 # 最大消失帧数
+  
+  # 偏移预测
+  offset:
+    enabled: true
+    max_displacement: 50        # 最大位移（像素）
+
+# 红外图像特殊配置
+infrared:
+  # 针对红外图像的匹配策略调整
+  appearance_weight: 0.3        # 外观特征权重（红外降低）
+  motion_weight: 0.7            # 运动特征权重（红外提高）
+  
+  # 遮挡处理
+  occlusion:
+    detection_margin: 0.1       # 检测边界扩展
+    overlap_threshold: 0.5      # 重叠判断阈值
+    recovery_frames: 10         # 遮挡恢复帧数
+
+# 可视化配置
+visualization:
+  enabled: false
+  show_ids: true                # 显示目标ID
+  show_trajectories: true       # 显示轨迹
+  trajectory_length: 30         # 轨迹显示长度
+  colors: 'random'              # 颜色方案

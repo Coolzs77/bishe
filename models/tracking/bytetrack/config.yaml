@@ -1,0 +1,20 @@
+# ByteTrack配置
+# 基于字节关联的多目标跟踪
+
+# 跟踪器参数
+tracker:
+  track_thresh: 0.5      # 高置信度检测阈值
+  track_buffer: 30       # 轨迹缓冲帧数
+  match_thresh: 0.8      # 匹配IoU阈值
+  min_box_area: 10       # 最小边界框面积
+  
+# 二次关联参数
+second_association:
+  enabled: true
+  low_thresh: 0.1        # 低置信度检测阈值
+  new_track_thresh: 0.6  # 新建轨迹阈值
+
+# 卡尔曼滤波参数
+kalman:
+  std_weight_position: 1.0 / 20
+  std_weight_velocity: 1.0 / 160

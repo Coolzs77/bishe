@@ -1,0 +1,59 @@
+# 数据集配置文件
+# 用于YOLOv5训练的FLIR红外数据集配置
+
+# 数据集路径
+path: data/processed/flir  # 数据集根目录
+train: images/train        # 训练图像目录
+val: images/val            # 验证图像目录
+test: images/val           # 测试图像目录（可选）
+
+# 类别信息
+nc: 3  # 类别数量
+names: ['person', 'car', 'bicycle']  # 类别名称
+
+# 数据增强配置（针对红外图像优化）
+augmentation:
+  # HSV增强（红外图像调整）
+  hsv_h: 0.0       # 色调（红外无颜色，关闭）
+  hsv_s: 0.0       # 饱和度（红外无颜色，关闭）
+  hsv_v: 0.3       # 亮度变化（模拟温度变化）
+  
+  # 几何变换
+  degrees: 10.0    # 旋转角度范围
+  translate: 0.1   # 平移比例
+  scale: 0.5       # 缩放范围
+  shear: 5.0       # 剪切角度
+  perspective: 0.0 # 透视变换
+  flipud: 0.0      # 上下翻转概率
+  fliplr: 0.5      # 左右翻转概率
+  
+  # Mosaic和MixUp
+  mosaic: 1.0      # Mosaic增强概率
+  mixup: 0.1       # MixUp增强概率
+  copy_paste: 0.0  # Copy-Paste增强概率
+  
+  # 红外图像专用增强
+  infrared:
+    gaussian_noise: 0.02    # 高斯噪声强度（模拟传感器噪声）
+    salt_pepper: 0.01       # 椒盐噪声概率
+    contrast_adjust: 0.2    # 对比度调整范围
+    brightness_shift: 0.1   # 亮度偏移范围
+    blur_prob: 0.1          # 模糊概率
+    blur_kernel: [3, 5]     # 模糊核大小范围
+
+# 数据加载配置
+dataloader:
+  batch_size: 32
+  num_workers: 8
+  pin_memory: true
+  shuffle: true
+
+# 数据集统计信息（由prepare_flir.py自动生成）
+statistics:
+  total_images: 0
+  train_images: 0
+  val_images: 0
+  total_instances: 0
+  per_class_instances: {}
+  image_size_distribution: {}
+  object_size_distribution: {}

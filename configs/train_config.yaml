@@ -1,0 +1,94 @@
+# 训练配置文件
+# YOLOv5红外目标检测训练配置
+
+# 基础配置
+project: outputs/weights        # 项目输出目录
+name: infrared_detection        # 实验名称
+exist_ok: false                 # 是否覆盖已存在的实验
+
+# 模型配置
+model:
+  name: yolov5s                 # 基础模型: yolov5n/yolov5s/yolov5m/yolov5l/yolov5x
+  weights: yolov5s.pt           # 预训练权重
+  cfg: null                     # 自定义模型配置（可选）
+  
+  # 轻量化配置
+  backbone:
+    type: c3                    # 骨干类型: c3/ghost/shuffle
+    depth_multiple: 0.33        # 模型深度系数
+    width_multiple: 0.50        # 模型宽度系数
+  
+  # 注意力机制
+  attention:
+    type: none                  # 注意力类型: none/cbam/coordatt/se
+    position: neck              # 插入位置: backbone/neck/head
+  
+  # 检测头配置
+  head:
+    anchors: 3                  # 每个尺度的anchor数量
+    num_classes: 3              # 检测类别数
+
+# 训练超参数
+train:
+  epochs: 300                   # 训练轮数
+  batch_size: 32                # 批量大小
+  img_size: 640                 # 输入图像尺寸
+  
+  # 优化器配置
+  optimizer:
+    type: SGD                   # 优化器: SGD/Adam/AdamW
+    lr0: 0.01                   # 初始学习率
+    lrf: 0.01                   # 最终学习率系数
+    momentum: 0.937             # SGD动量
+    weight_decay: 0.0005        # 权重衰减
+    warmup_epochs: 3.0          # 预热轮数
+    warmup_momentum: 0.8        # 预热动量
+    warmup_bias_lr: 0.1         # 预热偏置学习率
+  
+  # 学习率调度
+  scheduler:
+    type: cosine                # 调度器: cosine/linear/step
+  
+  # 损失函数配置
+  loss:
+    box_type: ciou              # 边界框损失: ciou/siou/eiou
+    box_gain: 0.05              # 边界框损失权重
+    cls_gain: 0.5               # 分类损失权重
+    obj_gain: 1.0               # 目标置信度损失权重
+    anchor_t: 4.0               # anchor匹配阈值
+  
+  # 正则化
+  regularization:
+    label_smoothing: 0.0        # 标签平滑
+    dropout: 0.0                # Dropout比例
+
+# 验证配置
+val:
+  batch_size: 32
+  conf_thres: 0.001             # 置信度阈值
+  iou_thres: 0.6                # NMS IoU阈值
+  max_det: 300                  # 最大检测数
+
+# 设备配置
+device:
+  gpu: 0                        # GPU设备ID，多GPU用逗号分隔如"0,1,2,3"
+  workers: 8                    # 数据加载线程数
+  sync_bn: false                # 是否使用同步BatchNorm
+
+# 日志和保存
+logging:
+  tensorboard: true             # 启用TensorBoard
+  save_period: -1               # 保存周期（-1为仅保存最优和最后）
+  save_dir: outputs/logs        # 日志保存目录
+
+# 实验配置
+experiment:
+  seed: 42                      # 随机种子
+  deterministic: true           # 是否使用确定性算法
+  resume: null                  # 断点续训路径
+  evolve: false                 # 是否进行超参数进化
+
+# 早停配置
+early_stopping:
+  patience: 50                  # 早停耐心值
+  min_delta: 0.001              # 最小改进阈值
