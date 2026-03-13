@@ -90,7 +90,6 @@ calibration/
 *.exe
 
 # 屏蔽第三方库
-yolov5/
 *.pt
 *.pth
 .venv/
