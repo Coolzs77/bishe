@@ -141,6 +141,8 @@ class ByteTrack(BaseTracker):
                     confidence=conf,
                     class_id=cls,
                     state='confirmed',
+                    # supervision ByteTrack does not expose per-track age/hits;
+                    # use placeholder values of 1 / 0 as safe defaults.
                     age=1,
                     hits=1,
                     time_since_update=0,

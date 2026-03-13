@@ -5,23 +5,19 @@
 """
 
 from .tracker import BaseTracker, TrackObject, TrackingResult
-from .kalman_filter import KalmanFilter, KalmanBoxTracker, xyxy_to_xywh, xywh_to_xyxy, xyxy_to_xyah, xyah_to_xyxy
 from .deepsort_tracker import DeepSORTTracker, create_deepsort_tracker
 from .bytetrack_tracker import ByteTrack, create_bytetrack_tracker
-from .centertrack_tracker import CenterTrack, create_centertrack_tracker
+from .centertrack_tracker import (
+    CenterTrack, create_centertrack_tracker,
+    KalmanFilter, KalmanBoxTracker,
+    xyxy_to_xywh, xywh_to_xyxy, xyxy_to_xyah, xyah_to_xyxy,
+)
 
 __all__ = [
     # 基类
     'BaseTracker',
     'TrackObject',
     'TrackingResult',
-    # 卡尔曼滤波（由 CenterTrack 内部使用）
-    'KalmanFilter',
-    'KalmanBoxTracker',
-    'xyxy_to_xywh',
-    'xywh_to_xyxy',
-    'xyxy_to_xyah',
-    'xyah_to_xyxy',
     # 跟踪器
     'DeepSORTTracker',
     'create_deepsort_tracker',
@@ -29,4 +25,11 @@ __all__ = [
     'create_bytetrack_tracker',
     'CenterTrack',
     'create_centertrack_tracker',
+    # CenterTrack 内部工具（保持向后兼容）
+    'KalmanFilter',
+    'KalmanBoxTracker',
+    'xyxy_to_xywh',
+    'xywh_to_xyxy',
+    'xyxy_to_xyah',
+    'xyah_to_xyxy',
 ]
