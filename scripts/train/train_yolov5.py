@@ -10,10 +10,13 @@ import subprocess
 import argparse
 from pathlib import Path
 import torch
+import yaml
 
 # ========== 自动定位项目根目录 ==========
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
+
+
 
 
 def parse_args():
@@ -255,6 +258,7 @@ def print_training_config(args):
     print(f'优化器: {args.optimizer}')
     print(f'设备: {args.device}')
     print(f'数据加载线程: {args.workers}')
+    print('默认类别策略: 仅 person/car（自行车标签已删除）')
     if args.cache:
         print(f'图像缓存: ✓ ({args.cache_type})')
     else:
@@ -368,7 +372,6 @@ def main():
 
     # 估算训练时间
     data_config_path = PROJECT_ROOT / args.data
-    import yaml
     with open(data_config_path, 'r') as f:
         config = yaml.safe_load(f)
     train_path = Path(config.get('path', '')) / config.get('train', '')

@@ -1,39 +1,49 @@
-# 依赖包配置
-# Python环境: 3.8+
+# 完全锁定版依赖（训练/评估专用，不含部署）
+# 使用方式：
+# 1) pip install -r requirements-lock.txt
+# 2) 若Torch安装与CUDA不匹配，请按PyTorch官网命令单独安装torch/torchvision后再执行其余包安装。
 
 # 深度学习框架
-torch>=1.10.0
-torchvision>=0.11.0
+torch==2.3.1
+torchvision==0.18.1
 
-# YOLOv5相关
-opencv-python>=4.5.0
-numpy>=1.20.0
-pillow>=8.0.0
-pyyaml>=5.4.0
-scipy>=1.6.0
-tqdm>=4.60.0
-matplotlib>=3.4.0
-seaborn>=0.11.0
-pandas>=1.2.0
-tensorboard>=2.6.0
+# YOLOv5基础依赖（锁定）
+gitpython==3.1.43
+matplotlib==3.8.4
+numpy==1.26.4
+opencv-python==4.10.0.84
+pillow==10.4.0
+psutil==6.0.0
+PyYAML==6.0.2
+requests==2.32.3
+scipy==1.13.1
+thop==0.1.1.post2209072238
+tqdm==4.66.5
+ultralytics==8.2.86
+pandas==2.2.2
+seaborn==0.13.2
+packaging==24.1
+setuptools==70.3.0
+urllib3==2.2.2 ; python_version > "3.8"
 
-# 模型导出
-onnx>=1.10.0
-onnx-simplifier>=0.3.0
+# 训练与日志
+tensorboard==2.16.2
+loguru==0.7.2
+prettytable==3.10.0
 
-# 多目标跟踪
-filterpy>=1.4.5
-lap>=0.4.0
-easydict>=1.9
+# 跟踪模块
+filterpy==1.4.5
+easydict==1.13
+lapx==0.5.9 ; platform_system != "Windows"
 
-# 评估指标
-motmetrics>=1.2.0
-pycocotools>=2.0.2
+# 评估模块
+motmetrics==1.4.0
+pycocotools==2.0.8 ; platform_system != "Windows"
+scikit-learn==1.5.1
 
-# RKNN部署 (仅在部署阶段需要)
-# rknn-toolkit2>=1.4.0
+# 导出模块（训练阶段常用）
+onnx==1.16.2
+onnx-simplifier==0.4.36
 
-# 工具库
-loguru>=0.5.0
-prettytable>=2.1.0
-scikit-learn>=0.24.0
+# 兼容性
+protobuf==4.25.4

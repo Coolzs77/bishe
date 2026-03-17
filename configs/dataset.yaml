@@ -8,8 +8,8 @@ val: images/val            # 验证图像目录
 test: images/val           # 测试图像目录（可选）
 
 # 类别信息
-nc: 3  # 类别数量
-names: ['person', 'car', 'bicycle']  # 类别名称
+nc: 2  # 类别数量
+names: ['person', 'car']  # 类别名称
 
 # 数据增强配置（针对红外图像优化）
 augmentation:

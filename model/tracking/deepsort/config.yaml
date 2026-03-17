@@ -3,7 +3,7 @@
 
 # Reid模型配置
 reid:
-  model_path: "models/tracking/deepsort/reid.onnx"
+  model_path: "model/tracking/deepsort/reid.onnx"
   input_size: [128, 64]  # [height, width]
   feature_dim: 512
 

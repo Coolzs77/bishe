@@ -113,7 +113,7 @@ class InfraredMOTSystem:
             'outputs/logs',
             'outputs/results',
             'outputs/visualizations',
-            'models/rknn_obj',
+            'model/rknn_obj',
         ]
         for directory in directories:
             full_path = self.project_root / directory
@@ -122,7 +122,7 @@ class InfraredMOTSystem:
     def _setup_logger(self):
         """设置日志系统"""
         try:
-            from src.utils.logger import LogManager
+            from src.util.logger import LogManager
             return LogManager.get_logger('main', log_dir=str(self.project_root / 'outputs/logs'))
         except ImportError:
             # 如果无法导入，使用标准库
@@ -302,7 +302,7 @@ class InfraredMOTSystem:
     
     def _load_model_config(self) -> Dict:
         """load_Model configuration"""
-        model_yaml = self.project_root / 'models/yolov5/yolov5s_infrared.yaml'
+        model_yaml = self.project_root / 'model/yolov5/yolov5s_base.yaml'
         if model_yaml.exists():
             with open(model_yaml, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
@@ -468,7 +468,7 @@ class InfraredMOTSystem:
     
     def _log_tracker_config(self, algorithm: str):
         """记录trackerconfig"""
-        tracker_config_file = self.project_root / f'models/tracking/{algorithm}/config.yaml'
+        tracker_config_file = self.project_root / f'model/tracking/{algorithm}/config.yaml'
         if tracker_config_file.exists():
             with open(tracker_config_file, 'r', encoding='utf-8') as f:
                 tracker_config = yaml.safe_load(f)
@@ -676,7 +676,7 @@ class InfraredMOTSystem:
     
     def _convert_to_rknn_obj(self, input_onnx_path: str, should_quantize: bool) -> str:
         """convert为RKNNmodel"""
-        output_rknn_path = self.project_root / 'models/rknn_obj/best.rknn_obj'
+        output_rknn_path = self.project_root / 'model/rknn_obj/best.rknn_obj'
         
         self.logger.info(f"  - inputONNX: {input_onnx_path}")
         self.logger.info(f"  - outputRKNN: {output_rknn_path}")

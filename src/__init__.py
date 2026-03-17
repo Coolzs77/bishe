@@ -14,4 +14,4 @@ from . import detection
 from . import tracking
 from . import deploy
 from . import evaluation
-from . import utils
+from . import util

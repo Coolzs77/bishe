@@ -271,7 +271,7 @@ std::unique_ptr<DetectionTrackingPipeline> createPipeline(const std::string& con
     if (config.match_thresh == 0) config.match_thresh = 0.8f;
     if (config.max_time_lost == 0) config.max_time_lost = 30;
     if (config.class_names.empty()) {
-        config.class_names = {"person", "car", "bicycle"};
+        config.class_names = {"person", "car"};
     }
     
     if (!pipeline->initialize(config)) {

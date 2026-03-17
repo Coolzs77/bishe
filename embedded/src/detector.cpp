@@ -38,7 +38,7 @@ YOLOv5Detector::YOLOv5Detector()
     , is_initialized_(false) {
     
     // 默认类别名称
-    class_names_ = {"person", "car", "bicycle"};
+    class_names_ = {"person", "car"};
     num_classes_ = class_names_.size();
 }
 

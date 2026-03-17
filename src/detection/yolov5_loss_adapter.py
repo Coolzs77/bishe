@@ -5,9 +5,7 @@ YOLOv5损失函数适配器
 在YOLOv5训练中集成EIoU和Focal Loss
 """
 
-import torch
-import torch.nn as nn
-from models.yolov5.losses import EIoULoss, FocalLoss
+from models.yolov5.modules.losses import EIoULoss, FocalLoss
 
 
 class YOLOv5LossAdapter:

@@ -26,7 +26,7 @@ model:
   # 检测头配置
   head:
     anchors: 3                  # 每个尺度的anchor数量
-    num_classes: 3              # 检测类别数
+    num_classes: 2              # 检测类别数
 
 # 训练超参数
 train:

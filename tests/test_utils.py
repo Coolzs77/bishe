@@ -16,12 +16,12 @@ import numpy as np
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.utils.metrics import (
+from src.util.metrics import (
     compute_iou, compute_batch_iou, compute_precision_recall,
     compute_ap, compute_map, MOTMetricsCalculator,
     save_metrics_to_json, load_metrics_from_json
 )
-from src.utils.logger import LogManager, TrainingLogger, ProgressBar, init_logger, get_logger
+from src.util.logger import LogManager, TrainingLogger, ProgressBar, init_logger, get_logger
 
 
 class TestIoUComputation(unittest.TestCase):

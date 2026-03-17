@@ -77,7 +77,7 @@ ls data/processed/flir/labels/train/ | wc -l    # 训练标签数量
 - **分辨率**: 640x512 (原始)
 - **格式**: JPEG (8-bit)
 - **标注**: COCO JSON格式
-- **类别**: person, car, bicycle (本项目使用的3个核心类别)
+- **类别**: person, car (本项目当前使用的2个核心类别)
 - **场景**: 日间/夜间道路场景
 
 ### 数据集统计（典型）

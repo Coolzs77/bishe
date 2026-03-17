@@ -194,8 +194,9 @@ print(mot_eval.get_metrics())  # MOTA, MOTP, IDF1等
 | `logger.py` | 日志工具 | `LogManager`、`TrainingLogger`、`ProgressBar` |
 
 **使用示例：**
+
 ```python
-from src.utils import Visualizer, LogManager
+from src.util import Visualizer, LogManager
 
 # 可视化
 vis = Visualizer()

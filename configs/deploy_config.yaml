@@ -70,8 +70,8 @@ postprocess:
     - [[116, 90], [156, 198], [373, 326]] # P5/32
   
   # 类别配置
-  classes: ['person', 'car', 'bicycle']
-  num_classes: 3
+  classes: ['person', 'car']
+  num_classes: 2
 
 # 视频流配置
 video:

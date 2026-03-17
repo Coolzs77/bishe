@@ -32,14 +32,12 @@ def process_flir(input_dir, output_dir):
     input_path = Path(input_dir)
     output_path = Path(output_dir)
 
-    # 类别映射（只保留常用的3类）
+    # 类别映射（默认仅保留person/car）
     CLASS_MAP = {
         'person': 0,
         'car': 1,
-        'bicycle': 2,
-        'bike': 2,
     }
-    CLASS_NAMES = ['person', 'car', 'bicycle']
+    CLASS_NAMES = ['person', 'car']
 
     print('=' * 60)
     print('FLIR红外数据预处理')

@@ -31,7 +31,7 @@ class YOLOv5Detector(BaseDetector):
     """
     
     # 默认classesname（可根据实际data集修改）
-    DEFAULT_CLASS_NAMES = ['person', 'vehicle', 'animal']
+    DEFAULT_CLASS_NAMES = ['person', 'car']
     
     def __init__(
         self,
