@@ -4,11 +4,11 @@
 global:
   # 在 optimal 模式下，先用更充分的训练周期和更稳健优化器。
   epochs: 100
-  batch: 8
+  batch: 64
   img: 640
   patience: 40
-  workers: 4
-  cache: none
+  workers: 16
+  cache: ram
   weights: yolov5s.pt
   optimizer: AdamW
   label_smoothing: 0.01
