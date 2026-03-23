@@ -7,6 +7,7 @@ YOLOv5detector模块
 """
 
 import os
+import pathlib
 from typing import List, Optional, Tuple, Dict, Any, Union
 import numpy as np
 
@@ -115,6 +116,10 @@ class YOLOv5Detector(BaseDetector):
             import torch
         except ImportError:
             raise ImportError("PyTorch未安装，请run: pip install torch")
+
+        # 兼容在Linux训练、Windows加载.pt权重时的路径反序列化问题
+        if os.name == 'nt':
+            pathlib.PosixPath = pathlib.WindowsPath
         
         # load_model
         self.model = torch.hub.load(

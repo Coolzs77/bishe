@@ -202,6 +202,7 @@ def train(hyp, opt, device, callbacks):
         opt.workers,
         opt.freeze,
     )
+    val_interval = max(1, int(getattr(opt, "val_interval", 1)))
     callbacks.run("on_pretrain_routine_start")
 
     # Directories
@@ -523,7 +524,9 @@ def train(hyp, opt, device, callbacks):
             callbacks.run("on_train_epoch_end", epoch=epoch)
             ema.update_attr(model, include=["yaml", "nc", "hyp", "names", "stride", "class_weights"])
             final_epoch = (epoch + 1 == epochs) or stopper.possible_stop
-            if not noval or final_epoch:  # Calculate mAP
+            interval_epoch = ((epoch + 1) % val_interval == 0)
+            should_validate = final_epoch or (not noval and interval_epoch)
+            if should_validate:  # Calculate mAP
                 results, maps, _ = validate.run(
                     data_dict,
                     batch_size=batch_size // WORLD_SIZE * 2,
@@ -539,10 +542,14 @@ def train(hyp, opt, device, callbacks):
                 )
 
             # Update best mAP
-            fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
-            stop = stopper(epoch=epoch, fitness=fi)  # early stop check
-            if fi > best_fitness:
-                best_fitness = fi
+            if should_validate:
+                fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
+                stop = stopper(epoch=epoch, fitness=fi)  # early stop check
+                if fi > best_fitness:
+                    best_fitness = fi
+            else:
+                fi = best_fitness
+                stop = False
             log_vals = list(mloss) + list(results) + lr
             callbacks.run("on_fit_epoch_end", log_vals, epoch, best_fitness, fi)
 
@@ -644,6 +651,7 @@ def parse_opt(known=False):
     parser.add_argument("--resume", nargs="?", const=True, default=False, help="resume most recent training")
     parser.add_argument("--nosave", action="store_true", help="only save final checkpoint")
     parser.add_argument("--noval", action="store_true", help="only validate final epoch")
+    parser.add_argument("--val-interval", type=int, default=1, help="validate every N epochs (ignored if --noval)")
     parser.add_argument("--noautoanchor", action="store_true", help="disable AutoAnchor")
     parser.add_argument("--noplots", action="store_true", help="save no plot files")
     parser.add_argument("--evolve", type=int, nargs="?", const=300, help="evolve hyperparameters for x generations")
@@ -1007,6 +1015,7 @@ def run(**kwargs):
         resume (bool | str, optional): Resume most recent training with an optional path. Defaults to False.
         nosave (bool, optional): Only save the final checkpoint. Defaults to False.
         noval (bool, optional): Only validate at the final epoch. Defaults to False.
+        val_interval (int, optional): Validate every N epochs during training. Defaults to 1.
         noautoanchor (bool, optional): Disable AutoAnchor. Defaults to False.
         noplots (bool, optional): Do not save plot files. Defaults to False.
         evolve (int, optional): Evolve hyperparameters for a specified number of generations. Use 300 if provided

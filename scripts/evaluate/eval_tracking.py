@@ -3,7 +3,7 @@
 """
 跟踪算法评估脚本 (改进版)
 添加了调试信息和参数优化
-支持 DeepSORT 和 ByteTrack
+支持 DeepSORT、ByteTrack 和 CenterTrack
 """
 
 import os
@@ -11,6 +11,8 @@ import sys
 import argparse
 import time
 import traceback
+import csv
+import json
 from pathlib import Path
 from datetime import datetime
 import yaml
@@ -39,19 +41,25 @@ def parse_args():
     parser.add_argument('--weights', type=str, required=True, help='YOLOv5 检测器权重路径 (.pt)')
     parser.add_argument('--data', type=str, default='data/processed/flir/dataset.yaml',
                         help='数据集配置文件 或 视频文件路径 或 视频目录路径')
-    parser.add_argument('--tracker', type=str, default='deepsort', choices=['deepsort', 'bytetrack'],
+    parser.add_argument('--tracker', type=str, default='deepsort', choices=['deepsort', 'bytetrack', 'centertrack'],
                         help='选择跟踪算法')
 
     # 输出设置
     parser.add_argument('--output', type=str, default='outputs/tracking', help='结果输出目录')
     parser.add_argument('--save-vid', action='store_true', default=True, help='是否保存 MP4 视频')
     parser.add_argument('--save-txt', action='store_true', default=True, help='是否保存 MOT 格式的 txt 指标文件')
+    parser.add_argument('--no-save-vid', action='store_true', help='不保存视频（提速）')
+    parser.add_argument('--no-save-txt', action='store_true', help='不保存txt（提速）')
     parser.add_argument('--show', action='store_true', help='是否实时弹窗显示')
+    parser.add_argument('--no-overlay', action='store_true', help='不绘制框和HUD（提速）')
 
     # 检测参数
     parser.add_argument('--conf-thres', type=float, default=0.25,
                         help='检测置信度阈值 (降低此值可以检测更多目标)')
     parser.add_argument('--nms-thres', type=float, default=0.45, help='NMS 阈值')
+    parser.add_argument('--img-size', type=int, default=640, help='检测输入尺寸（推荐 512/448 提速）')
+    parser.add_argument('--half', action='store_true', help='开启半精度推理（GPU提速）')
+    parser.add_argument('--no-warmup', action='store_true', help='禁用模型预热（仅影响启动时延）')
     parser.add_argument('--device', type=str, default='0', help='计算设备')
 
     # 跟踪参数
@@ -59,6 +67,10 @@ def parse_args():
                         help='目标最大失踪帧数 (越大越容易保持ID)')
     parser.add_argument('--min-hits', type=int, default=3,
                         help='目标最少检测次数 (越小越容易出现)')
+    parser.add_argument('--track-visible-lag', type=int, default=8,
+                        help='目标漏检后继续显示的最大帧数，用于减少跟踪框时有时无')
+    parser.add_argument('--fps-alpha', type=float, default=0.12,
+                        help='FPS平滑系数(0-1)，越小越稳定')
     parser.add_argument('--debug', action='store_true', help='是否输出调试信息')
 
     return parser.parse_args()
@@ -75,6 +87,7 @@ class TrackingRunner:
 
         # 加载模型
         self.detector = self._load_detector()
+        self.class_names = getattr(self.detector, 'class_names', []) or []
         self.tracker = None
 
     def _select_device(self, device):
@@ -90,10 +103,12 @@ class TrackingRunner:
             from src.detection.yolov5_detector import create_yolov5_detector
             return create_yolov5_detector(
                 model_path=str(self.args.weights),
+                input_size=(self.args.img_size, self.args.img_size),
                 conf_threshold=self.args.conf_thres,
                 nms_threshold=self.args.nms_thres,
                 device=self.device,
-                warmup=True
+                half=self.args.half,
+                warmup=not self.args.no_warmup,
             )
         except Exception as e:
             print(f'❌ 检测器加载失败: {e}')
@@ -101,17 +116,33 @@ class TrackingRunner:
             sys.exit(1)
 
     def _create_tracker(self):
-        """初始化跟踪器 (DeepSORT 或 ByteTrack)"""
+        """初始化跟踪器 (DeepSORT / ByteTrack / CenterTrack)"""
         print(f'[2/3] 初始化跟踪器: {self.args.tracker}')
         print(f'      参数: max_age={self.args.max_age}, min_hits={self.args.min_hits}')
         try:
             if self.args.tracker == 'deepsort':
                 from src.tracking.deepsort_tracker import create_deepsort_tracker
-                return create_deepsort_tracker(max_age=self.args.max_age, min_hits=self.args.min_hits)
+                return create_deepsort_tracker(
+                    max_age=self.args.max_age,
+                    min_hits=self.args.min_hits,
+                    visible_lag=self.args.track_visible_lag,
+                )
 
             elif self.args.tracker == 'bytetrack':
                 from src.tracking.bytetrack_tracker import create_bytetrack_tracker
-                return create_bytetrack_tracker(max_age=self.args.max_age, min_hits=self.args.min_hits)
+                return create_bytetrack_tracker(
+                    max_age=self.args.max_age,
+                    min_hits=self.args.min_hits,
+                    visible_lag=self.args.track_visible_lag,
+                )
+
+            elif self.args.tracker == 'centertrack':
+                from src.tracking.centertrack_tracker import create_centertrack_tracker
+                return create_centertrack_tracker(
+                    max_age=self.args.max_age,
+                    min_hits=self.args.min_hits,
+                    visible_lag=self.args.track_visible_lag,
+                )
 
         except Exception as e:
             print(f'❌ 跟踪器初始化失败: {e}')
@@ -220,6 +251,214 @@ class TrackingRunner:
             h, w = img0.shape[:2]
             return files, 30, w, h, len(files), False
 
+    def _class_name(self, class_id):
+        class_id = int(class_id)
+        if 0 <= class_id < len(self.class_names):
+            return self.class_names[class_id]
+        return f'cls{class_id}'
+
+    @staticmethod
+    def _draw_hud_chip(
+        img,
+        text,
+        x,
+        y,
+        *,
+        font=cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale=0.62,
+        text_color=(232, 241, 255),
+        bg_color=(28, 34, 44),
+        alpha=0.36,
+        pad_x=10,
+        pad_y=8,
+        radius=8,
+        accent_color=(94, 201, 255),
+    ):
+        """绘制现代HUD胶囊标签（半透明+圆角+细强调条）。"""
+        text_size = cv2.getTextSize(text, font, font_scale, 1)[0]
+        w = text_size[0] + pad_x * 2
+        h = text_size[1] + pad_y * 2
+
+        x1, y1 = int(x), int(y)
+        x2, y2 = int(x + w), int(y + h)
+
+        # 边界保护
+        x1 = max(0, min(x1, img.shape[1] - 2))
+        x2 = max(x1 + 1, min(x2, img.shape[1] - 1))
+        y1 = max(0, min(y1, img.shape[0] - 2))
+        y2 = max(y1 + 1, min(y2, img.shape[0] - 1))
+
+        r = min(radius, (x2 - x1) // 2, (y2 - y1) // 2)
+        overlay = img.copy()
+
+        # 中心矩形
+        cv2.rectangle(overlay, (x1 + r, y1), (x2 - r, y2), bg_color, -1)
+        cv2.rectangle(overlay, (x1, y1 + r), (x2, y2 - r), bg_color, -1)
+        # 四角圆
+        cv2.circle(overlay, (x1 + r, y1 + r), r, bg_color, -1)
+        cv2.circle(overlay, (x2 - r, y1 + r), r, bg_color, -1)
+        cv2.circle(overlay, (x1 + r, y2 - r), r, bg_color, -1)
+        cv2.circle(overlay, (x2 - r, y2 - r), r, bg_color, -1)
+
+        cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+
+        # 左侧强调条
+        cv2.line(img, (x1 + 5, y1 + 5), (x1 + 5, y2 - 5), accent_color, 2, cv2.LINE_AA)
+
+        # 文本轻描边
+        org = (x1 + pad_x, y2 - pad_y)
+        cv2.putText(img, text, org, font, font_scale, (12, 14, 18), 2, cv2.LINE_AA)
+        cv2.putText(img, text, org, font, font_scale, text_color, 1, cv2.LINE_AA)
+
+        return x2, y2
+
+    @staticmethod
+    def _compute_iou_matrix(boxes1, boxes2):
+        if len(boxes1) == 0 or len(boxes2) == 0:
+            return np.zeros((len(boxes1), len(boxes2)), dtype=np.float32)
+        b1 = np.asarray(boxes1, dtype=np.float32)
+        b2 = np.asarray(boxes2, dtype=np.float32)
+
+        x1 = np.maximum(b1[:, None, 0], b2[None, :, 0])
+        y1 = np.maximum(b1[:, None, 1], b2[None, :, 1])
+        x2 = np.minimum(b1[:, None, 2], b2[None, :, 2])
+        y2 = np.minimum(b1[:, None, 3], b2[None, :, 3])
+        inter = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
+
+        area1 = np.maximum(0.0, b1[:, 2] - b1[:, 0]) * np.maximum(0.0, b1[:, 3] - b1[:, 1])
+        area2 = np.maximum(0.0, b2[:, 2] - b2[:, 0]) * np.maximum(0.0, b2[:, 3] - b2[:, 1])
+        union = area1[:, None] + area2[None, :] - inter
+        return np.where(union > 0, inter / union, 0.0).astype(np.float32)
+
+    def _estimate_id_switches(self, prev_entries, curr_entries, iou_thres=0.5):
+        """基于相邻帧IoU关联估算ID切换次数（无GT场景下的代理指标）。"""
+        if not prev_entries or not curr_entries:
+            return 0
+
+        prev_boxes = [e['bbox'] for e in prev_entries]
+        curr_boxes = [e['bbox'] for e in curr_entries]
+        iou = self._compute_iou_matrix(prev_boxes, curr_boxes)
+
+        candidates = []
+        for i in range(iou.shape[0]):
+            for j in range(iou.shape[1]):
+                if iou[i, j] >= iou_thres:
+                    # 同类目标优先比较，跨类不参与ID切换统计
+                    if prev_entries[i]['class_id'] == curr_entries[j]['class_id']:
+                        candidates.append((float(iou[i, j]), i, j))
+
+        if not candidates:
+            return 0
+
+        candidates.sort(reverse=True, key=lambda x: x[0])
+        used_prev = set()
+        used_curr = set()
+        switches = 0
+
+        for _, i, j in candidates:
+            if i in used_prev or j in used_curr:
+                continue
+            used_prev.add(i)
+            used_curr.add(j)
+            if int(prev_entries[i]['track_id']) != int(curr_entries[j]['track_id']):
+                switches += 1
+
+        return switches
+
+    @staticmethod
+    def _safe_ratio(num, den):
+        return float(num) / float(den) if den else 0.0
+
+    def _finalize_video_stats(self, stats, input_fps):
+        frames = max(1, stats['frame_count'])
+        elapsed = max(stats.get('elapsed_sec', 0.0), 1e-9)
+        avg_fps = stats['frame_count'] / elapsed
+
+        stats['avg_fps'] = avg_fps
+        stats['input_fps'] = float(input_fps)
+        stats['realtime_factor'] = self._safe_ratio(avg_fps, max(float(input_fps), 1e-9))
+        stats['match_rate'] = self._safe_ratio(stats['matched_detections'], stats['total_detections'])
+        stats['render_rate'] = self._safe_ratio(stats['tracked_detections'], stats['total_detections'])
+        stats['track_presence_rate'] = self._safe_ratio(stats['frames_with_tracks'], stats['frame_count'])
+        stats['det_presence_rate'] = self._safe_ratio(stats['frames_with_detections'], stats['frame_count'])
+        stats['avg_rendered_per_frame'] = self._safe_ratio(stats['tracked_detections'], frames)
+        stats['avg_matched_per_frame'] = self._safe_ratio(stats['matched_detections'], frames)
+        stats['unique_ids'] = len(stats['total_tracks'])
+        stats['id_switch_proxy'] = int(stats.get('id_switch_proxy', 0))
+
+    def _save_video_metrics(self, video_save_dir, video_name, stats):
+        metric = {
+            'video_name': video_name,
+            'frame_count': stats['frame_count'],
+            'total_detections': stats['total_detections'],
+            'rendered_tracks': stats['tracked_detections'],
+            'matched_tracks': stats['matched_detections'],
+            'unique_ids': stats['unique_ids'],
+            'id_switch_proxy': stats['id_switch_proxy'],
+            'avg_fps': round(stats['avg_fps'], 3),
+            'input_fps': round(stats['input_fps'], 3),
+            'realtime_factor': round(stats['realtime_factor'], 3),
+            'match_rate': round(stats['match_rate'], 6),
+            'render_rate': round(stats['render_rate'], 6),
+            'track_presence_rate': round(stats['track_presence_rate'], 6),
+            'det_presence_rate': round(stats['det_presence_rate'], 6),
+            'avg_rendered_per_frame': round(stats['avg_rendered_per_frame'], 6),
+            'avg_matched_per_frame': round(stats['avg_matched_per_frame'], 6),
+            'elapsed_sec': round(stats['elapsed_sec'], 3),
+        }
+        out = video_save_dir / 'metrics.json'
+        with open(out, 'w', encoding='utf-8') as f:
+            json.dump(metric, f, ensure_ascii=False, indent=2)
+
+    def _save_batch_summary(self, main_save_dir, all_stats):
+        csv_path = main_save_dir / 'summary_metrics.csv'
+        json_path = main_save_dir / 'summary_metrics.json'
+
+        rows = []
+        for video_name, stats in all_stats:
+            rows.append({
+                'video_name': video_name,
+                'frame_count': stats['frame_count'],
+                'total_detections': stats['total_detections'],
+                'matched_tracks': stats['matched_detections'],
+                'rendered_tracks': stats['tracked_detections'],
+                'unique_ids': stats['unique_ids'],
+                'id_switch_proxy': stats['id_switch_proxy'],
+                'avg_fps': round(stats['avg_fps'], 3),
+                'input_fps': round(stats['input_fps'], 3),
+                'realtime_factor': round(stats['realtime_factor'], 3),
+                'match_rate': round(stats['match_rate'], 6),
+                'render_rate': round(stats['render_rate'], 6),
+                'track_presence_rate': round(stats['track_presence_rate'], 6),
+            })
+
+        if rows:
+            with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(rows)
+
+            totals = {
+                'video_count': len(rows),
+                'frame_count': int(sum(r['frame_count'] for r in rows)),
+                'total_detections': int(sum(r['total_detections'] for r in rows)),
+                'matched_tracks': int(sum(r['matched_tracks'] for r in rows)),
+                'rendered_tracks': int(sum(r['rendered_tracks'] for r in rows)),
+                'unique_ids_sum': int(sum(r['unique_ids'] for r in rows)),
+                'id_switch_proxy_sum': int(sum(r['id_switch_proxy'] for r in rows)),
+            }
+            totals['match_rate'] = self._safe_ratio(totals['matched_tracks'], totals['total_detections'])
+            totals['avg_fps_mean'] = float(np.mean([r['avg_fps'] for r in rows]))
+            totals['realtime_factor_mean'] = float(np.mean([r['realtime_factor'] for r in rows]))
+
+            payload = {
+                'tracker': self.args.tracker,
+                'rows': rows,
+                'totals': totals,
+            }
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+
     def draw_tracks(self, img, tracks, detections=None):
         """
         核心可视化函数
@@ -247,14 +486,53 @@ class TrackingRunner:
             # 根据 ID 获取颜色
             color = [int(c) for c in COLORS[tid % len(COLORS)]]
 
-            # 画检测框（加粗）
-            cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+            # 漏检延续帧用更细框显示，减少视觉干扰
+            tsu = int(getattr(track, 'time_since_update', 0))
+            thickness = 2 if tsu == 0 else 1
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
 
-            # 画 ID 标签
-            label = f'ID: {tid}'
-            t_size = cv2.getTextSize(label, 0, fontScale=0.8, thickness=2)[0]
-            cv2.rectangle(img, (x1, y1), (x1 + t_size[0] + 6, y1 - t_size[1] - 6), color, -1)
-            cv2.putText(img, label, (x1 + 3, y1 - 3), 0, 0.8, [255, 255, 255], thickness=2, lineType=cv2.LINE_AA)
+            class_id = int(getattr(track, 'class_id', -1))
+            class_name = self._class_name(class_id)
+            short_cls = class_name if len(class_name) <= 8 else class_name[:8]
+            label = f'ID:{tid} {short_cls}'
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.48
+            font_thickness = 1
+            text_w, text_h = cv2.getTextSize(label, font, font_scale, font_thickness)[0]
+
+            # 标签优先绘制在框上方，不够空间则绘制到框内顶部
+            label_x1 = max(0, x1)
+            label_y2 = max(text_h + 6, y1)
+            label_y1 = max(0, label_y2 - text_h - 6)
+            label_x2 = min(img.shape[1] - 1, label_x1 + text_w + 8)
+
+            overlay = img.copy()
+            cv2.rectangle(overlay, (label_x1, label_y1), (label_x2, label_y2), color, -1)
+            cv2.addWeighted(overlay, 0.45, img, 0.55, 0, img)
+
+            text_org = (label_x1 + 4, label_y2 - 4)
+            # 先绘制深色描边，再绘制浅色前景，提升复杂背景下可读性
+            cv2.putText(
+                img,
+                label,
+                text_org,
+                font,
+                font_scale,
+                (20, 20, 20),
+                thickness=2,
+                lineType=cv2.LINE_AA,
+            )
+            cv2.putText(
+                img,
+                label,
+                text_org,
+                font,
+                font_scale,
+                (255, 255, 255),
+                thickness=font_thickness,
+                lineType=cv2.LINE_AA,
+            )
 
         return img
 
@@ -278,12 +556,15 @@ class TrackingRunner:
         vid_writer = None
         txt_file = None
 
-        if self.args.save_vid:
+        save_vid = self.args.save_vid and (not self.args.no_save_vid)
+        save_txt = self.args.save_txt and (not self.args.no_save_txt)
+
+        if save_vid:
             result_video_path = video_save_dir / 'result.mp4'
             vid_writer = cv2.VideoWriter(str(result_video_path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
             print(f'   视频将保存至: {result_video_path}')
 
-        if self.args.save_txt:
+        if save_txt:
             result_txt_path = video_save_dir / 'results.txt'
             txt_file = open(result_txt_path, 'w')
             print(f'   指标将保存至: {result_txt_path}')
@@ -294,14 +575,21 @@ class TrackingRunner:
             'frame_count': 0,
             'total_detections': 0,
             'tracked_detections': 0,
+            'matched_detections': 0,
             'frames_with_detections': 0,
-            'frames_with_tracks': 0
+            'frames_with_tracks': 0,
+            'id_switch_proxy': 0,
+            'elapsed_sec': 0.0,
         }
 
         print('\n🚀 开始跟踪处理...')
         pbar = tqdm(total=total_frames, desc='Tracking', ncols=80)
+        frame_time_start = time.perf_counter()
+        prev_matched_entries = []
+        fps_ema = None
 
         while True:
+            iter_start = time.perf_counter()
             # 读取下一帧
             if is_video:
                 ret, frame = dataloader.read()
@@ -355,6 +643,13 @@ class TrackingRunner:
                         stats['tracked_detections'] += len(tracks)
                         stats['frames_with_tracks'] += 1
 
+                        # 只统计当帧与检测真实匹配到的轨迹，避免可见延迟框导致成功率超过100%
+                        matched_tracks = [
+                            t for t in tracks
+                            if int(getattr(t, 'time_since_update', 0)) == 0
+                        ]
+                        stats['matched_detections'] += len(matched_tracks)
+
                 except Exception as e:
                     if self.args.debug:
                         print(f'\n⚠️  跟踪出错 (Frame {stats["frame_count"]}): {e}')
@@ -380,12 +675,66 @@ class TrackingRunner:
                     line = f"{stats['frame_count'] + 1},{tid},{x1:.2f},{y1:.2f},{w_box:.2f},{h_box:.2f},{conf:.2f},-1,-1,-1\n"
                     txt_file.write(line)
 
-            # 可视化
-            vis_frame = self.draw_tracks(frame.copy(), tracks, boxes if self.args.debug else None)
+            # 可视化（可关闭以提速）
+            if self.args.no_overlay:
+                vis_frame = frame
+            else:
+                vis_frame = self.draw_tracks(frame.copy(), tracks, boxes if self.args.debug else None)
 
-            # 显示统计信息
-            info_text = f'Frame: {stats["frame_count"]} | Det: {len(boxes)} | Track: {len(tracks)} | IDs: {len(stats["total_tracks"])}'
-            cv2.putText(vis_frame, info_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            # 估算ID切换代理指标（仅统计当帧真实匹配轨迹）
+            current_matched_entries = []
+            for t in tracks:
+                if int(getattr(t, 'time_since_update', 0)) != 0:
+                    continue
+                tb = getattr(t, 'bbox', None)
+                if tb is None:
+                    continue
+                current_matched_entries.append({
+                    'track_id': int(getattr(t, 'track_id', -1)),
+                    'class_id': int(getattr(t, 'class_id', -1)),
+                    'bbox': np.asarray(tb, dtype=np.float32),
+                })
+            stats['id_switch_proxy'] += self._estimate_id_switches(prev_matched_entries, current_matched_entries)
+            prev_matched_entries = current_matched_entries
+
+            # 计算并平滑FPS，减少数值抖动便于阅读
+            dt = max(time.perf_counter() - iter_start, 1e-6)
+            inst_fps = 1.0 / dt
+            alpha = float(np.clip(self.args.fps_alpha, 0.01, 1.0))
+            fps_ema = inst_fps if fps_ema is None else (1.0 - alpha) * fps_ema + alpha * inst_fps
+
+            if not self.args.no_overlay:
+                # 顶部提示：现代HUD风格（左上状态 + 右上FPS）
+                line1_text = (
+                    f'Frame {stats["frame_count"]}   '
+                    f'Det {len(boxes)}   '
+                    f'Track {len(tracks)}   '
+                    f'IDs {len(stats["total_tracks"])}'
+                )
+                fps_text = f'FPS {fps_ema:.1f}'
+                self._draw_hud_chip(
+                    vis_frame,
+                    line1_text,
+                    x=12,
+                    y=10,
+                    text_color=(223, 235, 255),
+                    bg_color=(24, 31, 43),
+                    accent_color=(104, 232, 255),
+                    alpha=0.35,
+                )
+
+                fps_w = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.62, 1)[0][0] + 20
+                fps_x = vis_frame.shape[1] - fps_w - 12
+                self._draw_hud_chip(
+                    vis_frame,
+                    fps_text,
+                    x=fps_x,
+                    y=10,
+                    text_color=(255, 245, 214),
+                    bg_color=(29, 37, 52),
+                    accent_color=(255, 166, 108),
+                    alpha=0.38,
+                )
 
             if vid_writer:
                 vid_writer.write(vis_frame)
@@ -408,6 +757,10 @@ class TrackingRunner:
             txt_file.close()
         cv2.destroyAllWindows()
 
+        stats['elapsed_sec'] = time.perf_counter() - frame_time_start
+        self._finalize_video_stats(stats, input_fps=fps)
+        self._save_video_metrics(video_save_dir, video_path.name, stats)
+
         # 打印详细的最终报告
         print('\n' + '-' * 70)
         print(f'✅ 视频处理完成: {video_path.name}')
@@ -418,12 +771,15 @@ class TrackingRunner:
         print(f'   - 总检测数: {stats["total_detections"]}')
         print(
             f'   - 含有检测的帧数: {stats["frames_with_detections"]} ({stats["frames_with_detections"] / max(stats["frame_count"], 1) * 100:.1f}%)')
-        print(f'   - 总跟踪数: {stats["tracked_detections"]}')
+        print(f'   - 总显示跟踪框数: {stats["tracked_detections"]}')
+        print(f'   - 检测匹配跟踪数: {stats["matched_detections"]}')
+        print(f'   - ID切换代理数: {stats["id_switch_proxy"]}')
         print(
             f'   - 含有跟踪的帧数: {stats["frames_with_tracks"]} ({stats["frames_with_tracks"] / max(stats["frame_count"], 1) * 100:.1f}%)')
         print(f'   - 捕获唯一目标ID数: {len(stats["total_tracks"])}')
         if stats['total_detections'] > 0:
-            print(f'   - 跟踪成功率: {stats["tracked_detections"] / stats["total_detections"] * 100:.1f}%')
+            print(f'   - 检测匹配率: {stats["matched_detections"] / stats["total_detections"] * 100:.1f}%')
+        print(f'   - 平均处理FPS: {stats["avg_fps"]:.2f} (xRT={stats["realtime_factor"]:.2f})')
         print('-' * 70)
 
         return stats
@@ -459,31 +815,40 @@ class TrackingRunner:
             print('🎉 所有视频处理完成！')
             print('=' * 70)
             print('\n📊 总体统计:')
-            print(f'{"视频名称":<40} {"帧数":<8} {"检测":<8} {"跟踪":<8} {"目标ID"}')
+            print(f'{"视频名称":<40} {"帧数":<8} {"检测":<8} {"匹配":<8} {"显示":<8} {"目标ID"}')
             print('-' * 70)
 
             total_frames = 0
             total_detections = 0
-            total_tracked = 0
+            total_matched = 0
+            total_rendered = 0
             total_unique_ids = 0
+            total_id_switch_proxy = 0
 
             for video_name, stats in all_stats:
                 frames = stats['frame_count']
                 detections = stats['total_detections']
-                tracked = stats['tracked_detections']
+                matched = stats['matched_detections']
+                rendered = stats['tracked_detections']
                 ids = len(stats['total_tracks'])
+                id_sw = stats['id_switch_proxy']
 
                 total_frames += frames
                 total_detections += detections
-                total_tracked += tracked
+                total_matched += matched
+                total_rendered += rendered
                 total_unique_ids += ids
+                total_id_switch_proxy += id_sw
 
-                print(f'{video_name:<40} {frames:<8} {detections:<8} {tracked:<8} {ids}')
+                print(f'{video_name:<40} {frames:<8} {detections:<8} {matched:<8} {rendered:<8} {ids}')
 
             print('-' * 70)
-            print(f'{"总计":<40} {total_frames:<8} {total_detections:<8} {total_tracked:<8} {total_unique_ids}')
+            print(f'{"总计":<40} {total_frames:<8} {total_detections:<8} {total_matched:<8} {total_rendered:<8} {total_unique_ids}')
             if total_detections > 0:
-                print(f'\n总体跟踪成功率: {total_tracked / total_detections * 100:.1f}%')
+                print(f'\n总体检测匹配率: {total_matched / total_detections * 100:.1f}%')
+            print(f'总体ID切换代理数: {total_id_switch_proxy}')
+
+            self._save_batch_summary(main_save_dir, all_stats)
             print('=' * 70)
             print(f'\n✅ 所有结果已保存至: {main_save_dir}\n')
 

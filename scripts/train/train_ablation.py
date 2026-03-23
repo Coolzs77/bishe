@@ -4,16 +4,16 @@
 
 阶段一（单变量实验）：
 - Exp1: baseline
-- Exp2: baseline + Ghost
-- Exp3: baseline + Attention
-- Exp4: baseline + EIoU
-- Exp5: baseline + Focal
+- Exp2: baseline + Ghost-C3
+- Exp3: baseline + Shuffle-C3
+- Exp4: baseline + CoordAttention
+- Exp5: baseline + SIoU
+- Exp6: baseline + EIoU
 
 阶段二（组合实验，可选）：
-- Exp6: Ghost + Attention
-- Exp7: Ghost + EIoU
-- Exp8: Attention + EIoU
-- Exp9: Ghost + Attention + EIoU + Focal
+- Exp7: Shuffle-C3 + CoordAttention
+- Exp8: Shuffle-C3 + CoordAttention + SIoU
+- Exp9: Shuffle-C3 + CoordAttention + EIoU
 """
 
 import argparse
@@ -40,59 +40,59 @@ STAGE1_EXPERIMENTS = [
         "name": "ablation_exp2_lightweight",
         "yaml": "model/yolov5/configs/yolov5s_lightweight.yaml",
         "hyp": None,
-        "desc": "[Exp2] 基线 + Ghost",
+        "desc": "[Exp2] 基线 + Ghost-C3",
     },
     {
         "id": "exp3",
-        "name": "ablation_exp3_attention",
-        "yaml": "model/yolov5/configs/yolov5s_attention.yaml",
+        "name": "ablation_exp3_shuffle",
+        "yaml": "model/yolov5/configs/yolov5s_shuffle.yaml",
         "hyp": None,
-        "desc": "[Exp3] 基线 + Attention",
+        "desc": "[Exp3] 基线 + Shuffle-C3",
     },
     {
         "id": "exp4",
-        "name": "ablation_exp4_eiou",
-        "yaml": "model/yolov5/configs/yolov5s_base.yaml",
-        "hyp": "configs/ablation/hyp_eiou_only.yaml",
-        "desc": "[Exp4] 基线 + EIoU",
+        "name": "ablation_exp4_coordatt",
+        "yaml": "model/yolov5/configs/yolov5s_coordatt.yaml",
+        "hyp": None,
+        "desc": "[Exp4] 基线 + CoordAttention",
     },
     {
         "id": "exp5",
-        "name": "ablation_exp5_focal",
+        "name": "ablation_exp5_siou",
         "yaml": "model/yolov5/configs/yolov5s_base.yaml",
-        "hyp": "configs/ablation/hyp_focal_only.yaml",
-        "desc": "[Exp5] 基线 + Focal",
+        "hyp": "configs/ablation/hyp_siou_only.yaml",
+        "desc": "[Exp5] 基线 + SIoU",
+    },
+    {
+        "id": "exp6",
+        "name": "ablation_exp6_eiou",
+        "yaml": "model/yolov5/configs/yolov5s_base.yaml",
+        "hyp": "configs/ablation/hyp_eiou_only.yaml",
+        "desc": "[Exp6] 基线 + EIoU",
     },
 ]
 
 STAGE2_EXPERIMENTS = [
     {
-        "id": "exp6",
-        "name": "ablation_exp6_ghost_attention",
-        "yaml": "model/yolov5/configs/yolov5s_ghost_attention.yaml",
-        "hyp": None,
-        "desc": "[Exp6] Ghost + Attention",
-    },
-    {
         "id": "exp7",
-        "name": "ablation_exp7_ghost_eiou",
-        "yaml": "model/yolov5/configs/yolov5s_lightweight.yaml",
-        "hyp": "configs/ablation/hyp_eiou_only.yaml",
-        "desc": "[Exp7] Ghost + EIoU",
+        "name": "ablation_exp7_shuffle_coordatt",
+        "yaml": "model/yolov5/configs/yolov5s_shuffle_coordatt.yaml",
+        "hyp": None,
+        "desc": "[Exp7] Shuffle-C3 + CoordAttention",
     },
     {
         "id": "exp8",
-        "name": "ablation_exp8_attention_eiou",
-        "yaml": "model/yolov5/configs/yolov5s_attention.yaml",
-        "hyp": "configs/ablation/hyp_eiou_only.yaml",
-        "desc": "[Exp8] Attention + EIoU",
+        "name": "ablation_exp8_shuffle_coordatt_siou",
+        "yaml": "model/yolov5/configs/yolov5s_shuffle_coordatt.yaml",
+        "hyp": "configs/ablation/hyp_siou_only.yaml",
+        "desc": "[Exp8] Shuffle-C3 + CoordAttention + SIoU",
     },
     {
         "id": "exp9",
-        "name": "ablation_exp9_all",
-        "yaml": "model/yolov5/configs/yolov5s_ghost_attention.yaml",
-        "hyp": "configs/ablation/hyp_eiou_focal.yaml",
-        "desc": "[Exp9] Ghost + Attention + EIoU + Focal",
+        "name": "ablation_exp9_shuffle_coordatt_eiou",
+        "yaml": "model/yolov5/configs/yolov5s_shuffle_coordatt.yaml",
+        "hyp": "configs/ablation/hyp_eiou_only.yaml",
+        "desc": "[Exp9] Shuffle-C3 + CoordAttention + EIoU",
     },
 ]
 
@@ -108,15 +108,24 @@ def train_experiment(exp_name, yaml_path, desc, hyp_path, dataset_yaml_path, arg
         '--img', str(args.img),
         '--batch', str(args.batch),
         '--epochs', str(args.epochs),
+        '--val-interval', str(args.val_interval),
         '--data', str(dataset_yaml_path),
         '--cfg', str(PROJECT_ROOT / yaml_path),
         '--weights', 'yolov5s.pt',
         '--device', str(args.device),
+        '--workers', str(args.workers),
         '--name', exp_name,
         '--project', str(PROJECT_ROOT / 'outputs/ablation_study'),
         '--patience', str(args.patience),
         '--cos-lr',
     ]
+
+    if args.cache != 'none':
+        cmd.extend(['--cache', args.cache])
+    if args.noval:
+        cmd.append('--noval')
+    if args.noplots:
+        cmd.append('--noplots')
 
     if hyp_path:
         cmd.extend(['--hyp', str(PROJECT_ROOT / hyp_path)])
@@ -150,11 +159,21 @@ def parse_args():
     parser.add_argument("--img", type=int, default=640)
     parser.add_argument("--device", type=str, default="0")
     parser.add_argument("--patience", type=int, default=20)
+    parser.add_argument("--val-interval", type=int, default=1, help="每隔 N 轮验证一次")
+    parser.add_argument("--workers", type=int, default=16, help="dataloader 线程数")
+    parser.add_argument(
+        "--cache",
+        choices=["none", "ram", "disk"],
+        default="ram",
+        help="图像缓存模式：none/ram/disk",
+    )
+    parser.add_argument("--noval", action="store_true", help="仅最后一轮验证（提速）")
+    parser.add_argument("--noplots", action="store_true", help="不生成图像可视化（提速）")
     parser.add_argument(
         "--only",
         type=str,
         default=None,
-        help="仅运行单个实验，可填 exp1~exp9、数字(1~9) 或实验名(ablation_exp3_attention)",
+        help="仅运行单个实验，可填 exp1~exp9、数字(1~9) 或实验名(ablation_exp3_shuffle)",
     )
     parser.add_argument(
         "--list",
@@ -217,6 +236,10 @@ def main():
     if args.only:
         print(f"* 单实验模式: {args.only}")
     print("* 类别策略: 仅 person/car")
+    print(
+        f"* workers: {args.workers} | cache: {args.cache} | "
+        f"val_interval: {args.val_interval} | noval: {args.noval} | noplots: {args.noplots}"
+    )
     print(f"* 实验总数: {len(experiments)}")
     print(f"{'*' * 70}")
 

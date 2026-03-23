@@ -2,20 +2,26 @@
 # -*- coding: utf-8 -*-
 """
 检测模型评估脚本
-评估 YOLOv5 目标检测模型的性能
+支持两种评估模式：
+1) speed: 推理速度评估（FPS, ms/img）
+2) metric: 标准检测指标评估（P, R, mAP50, mAP50-95）
+
+新增能力：
+3) metric + --batch-eval: 批量评估消融实验并输出汇总表
 """
 
-import os
 import sys
 import argparse
 import json
+import csv
 import traceback
+import pathlib
+import importlib
+import re
 from pathlib import Path
 from datetime import datetime
 import yaml
 import cv2
-import torch
-import numpy as np
 from tqdm import tqdm
 
 # ========== 核心修复：自动添加项目根目录到环境变量 ==========
@@ -31,7 +37,9 @@ def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='评估目标检测模型性能')
 
-    parser.add_argument('--weights', type=str, required=True, help='模型权重路径 (.pt)')
+    parser.add_argument('--mode', type=str, default='metric', choices=['speed', 'metric'],
+                        help='评估模式: speed(测速) 或 metric(标准检测指标)')
+    parser.add_argument('--weights', type=str, default=None, help='模型权重路径 (.pt)')
     parser.add_argument('--data', type=str, default='data/processed/flir/dataset.yaml',
                         help='数据集配置文件路径 (建议显式指定)')
     parser.add_argument('--batch-size', type=int, default=32, help='批量大小')
@@ -39,6 +47,29 @@ def parse_args():
     parser.add_argument('--conf-thres', type=float, default=0.001, help='置信度阈值')
     parser.add_argument('--iou-thres', type=float, default=0.6, help='NMS IoU阈值')
     parser.add_argument('--device', type=str, default='0', help='计算设备 (0, 1, cpu)')
+    parser.add_argument('--workers', type=int, default=8, help='dataloader 线程数（metric模式）')
+    parser.add_argument('--project', type=str, default='outputs/val_detection',
+                        help='metric模式的输出目录（对应 val.py --project）')
+    parser.add_argument('--name', type=str, default='eval_detection',
+                        help='metric模式的实验名（对应 val.py --name）')
+    parser.add_argument('--exist-ok', action='store_true', help='metric模式下允许覆盖已有同名目录')
+    parser.add_argument('--task', type=str, default='val', choices=['val', 'test'],
+                        help='metric模式评估集合（val或test）')
+
+    # 批量评估参数
+    parser.add_argument('--batch-eval', action='store_true',
+                        help='批量评估消融实验（仅 metric 模式）')
+    parser.add_argument('--ablation-dir', type=str, default='outputs/ablation_study',
+                        help='消融实验根目录（默认 outputs/ablation_study）')
+    parser.add_argument('--stage', type=str, default='all', choices=['stage1', 'stage2', 'all'],
+                        help='批量评估阶段过滤')
+    parser.add_argument('--weights-name', type=str, default='best.pt',
+                        help='批量评估时使用的权重文件名（best.pt 或 last.pt）')
+    parser.add_argument('--sort-by', type=str, default='map5095',
+                        choices=['precision', 'recall', 'map50', 'map5095'],
+                        help='批量汇总时的排序指标')
+    parser.add_argument('--save-csv', action='store_true', help='批量评估后额外保存 CSV 汇总')
+
     parser.add_argument('--save-json', action='store_true', help='保存结果到JSON')
     parser.add_argument('--output', type=str, default=None, help='指定结果保存路径')
 
@@ -50,16 +81,34 @@ class DetectionEvaluator:
 
     def __init__(self, args):
         self.args = args
-        self.weights_path = Path(args.weights)
+        self.weights_path = Path(args.weights) if args.weights else None
 
         # 确定输出路径
         if args.output:
             self.output_path = Path(args.output)
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.output_path = Path('outputs/results') / f'detection_eval_{timestamp}.json'
+            if self.args.batch_eval:
+                self.output_path = Path('outputs/results') / f'detection_eval_batch_{timestamp}.json'
+            else:
+                self.output_path = Path('outputs/results') / f'detection_eval_{timestamp}.json'
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _stage_range(stage_name):
+        if stage_name == 'stage1':
+            return 1, 6
+        if stage_name == 'stage2':
+            return 7, 9
+        return 1, 999
+
+    @staticmethod
+    def _extract_exp_index(exp_name):
+        match = re.match(r'^ablation_exp(\d+)_', exp_name)
+        if not match:
+            return None
+        return int(match.group(1))
 
     def load_model(self):
         """加载检测模型"""
@@ -155,7 +204,7 @@ class DetectionEvaluator:
             print(f'❌ 读取数据集配置失败: {e}')
             return []
 
-    def evaluate(self, model):
+    def evaluate_speed(self, model):
         """执行评估循环"""
         image_list = self.get_image_list()
 
@@ -170,8 +219,6 @@ class DetectionEvaluator:
         detections_count = 0
 
         pbar = tqdm(image_list, desc='推理中')
-        results_info = []
-
         for img_path in pbar:
             image = cv2.imread(str(img_path))
             if image is None:
@@ -223,15 +270,245 @@ class DetectionEvaluator:
 
         return eval_results
 
+    def evaluate_metric(self):
+        """调用 YOLOv5 val.py 标准评估，输出 P/R/mAP 指标。"""
+        print(f'\n[1/1] 标准指标评估 (YOLOv5 val): {self.weights_path}')
+
+        if not self.weights_path.exists():
+            print(f'❌ 错误: 模型文件不存在 - {self.weights_path}')
+            sys.exit(1)
+
+        return self._evaluate_metric_for_weights(self.weights_path, run_name=self.args.name)
+
+    def _evaluate_metric_for_weights(self, weights_path, run_name):
+        """对指定权重执行一次 metric 评估并返回结构化结果。"""
+        if not Path(weights_path).exists():
+            raise FileNotFoundError(f'模型文件不存在: {weights_path}')
+
+        # 兼容 Linux 训练、Windows 评估时 checkpoint 的 PosixPath 反序列化
+        pathlib.PosixPath = pathlib.WindowsPath
+
+        yolov5_dir = ROOT / 'yolov5'
+        if str(yolov5_dir) not in sys.path:
+            sys.path.insert(0, str(yolov5_dir))
+
+        try:
+            yolo_val_run = importlib.import_module('val').run
+
+            results, maps, _ = yolo_val_run(
+                data=str((ROOT / self.args.data).resolve()) if not Path(self.args.data).is_absolute() else self.args.data,
+                weights=str(weights_path),
+                batch_size=self.args.batch_size,
+                imgsz=self.args.img_size,
+                conf_thres=self.args.conf_thres,
+                iou_thres=self.args.iou_thres,
+                task=self.args.task,
+                device=self.args.device,
+                workers=self.args.workers,
+                single_cls=False,
+                augment=False,
+                verbose=True,
+                save_txt=False,
+                save_hybrid=False,
+                save_conf=False,
+                save_json=False,
+                project=str((ROOT / self.args.project).resolve()) if not Path(self.args.project).is_absolute() else self.args.project,
+                name=run_name,
+                exist_ok=True if self.args.batch_eval else self.args.exist_ok,
+                half=True,
+                dnn=False,
+                plots=False,
+            )
+
+            mp, mr, map50, map5095 = results[:4]
+
+            print('\n' + '=' * 60)
+            print('评估完成（标准检测指标）')
+            print('=' * 60)
+            print(f'P:         {mp:.6f}')
+            print(f'R:         {mr:.6f}')
+            print(f'mAP@0.5:   {map50:.6f}')
+            print(f'mAP@0.95:  {map5095:.6f}')
+
+            eval_results = {
+                'mode': 'metric',
+                'model': str(weights_path),
+                'dataset': self.args.data,
+                'timestamp': datetime.now().isoformat(),
+                'metrics': {
+                    'precision': round(float(mp), 6),
+                    'recall': round(float(mr), 6),
+                    'map50': round(float(map50), 6),
+                    'map5095': round(float(map5095), 6),
+                    'person_map5095': round(float(maps[0]), 6) if len(maps) > 0 else None,
+                    'car_map5095': round(float(maps[1]), 6) if len(maps) > 1 else None,
+                },
+                'val_output': {
+                    'project': self.args.project,
+                    'name': run_name,
+                }
+            }
+            return eval_results
+
+        except Exception as e:
+            raise RuntimeError(f'metric模式评估失败: {e}\n{traceback.format_exc()}') from e
+
+    def discover_ablation_weights(self):
+        """自动发现消融实验权重并按 stage 过滤。"""
+        ablation_dir = ROOT / self.args.ablation_dir if not Path(self.args.ablation_dir).is_absolute() else Path(self.args.ablation_dir)
+        if not ablation_dir.exists():
+            raise FileNotFoundError(f'消融目录不存在: {ablation_dir}')
+
+        low, high = self._stage_range(self.args.stage)
+        discovered = []
+        for exp_dir in sorted(ablation_dir.glob('ablation_exp*_*/')):
+            exp_name = exp_dir.name
+            exp_idx = self._extract_exp_index(exp_name)
+            if exp_idx is None or not (low <= exp_idx <= high):
+                continue
+
+            weight_path = exp_dir / 'weights' / self.args.weights_name
+            discovered.append({
+                'exp_name': exp_name,
+                'exp_idx': exp_idx,
+                'weight_path': weight_path,
+                'exists': weight_path.exists(),
+            })
+
+        discovered.sort(key=lambda x: x['exp_idx'])
+        return discovered
+
+    def evaluate_metric_batch(self):
+        """批量评估消融实验并汇总结果。"""
+        discovered = self.discover_ablation_weights()
+        if not discovered:
+            raise RuntimeError('未发现可评估的消融实验目录，请检查 --ablation-dir 和 --stage')
+
+        print('\n' + '=' * 70)
+        print('批量评估计划')
+        print('=' * 70)
+        for item in discovered:
+            flag = '✅' if item['exists'] else '❌'
+            print(f"{flag} {item['exp_name']} -> {item['weight_path']}")
+
+        eval_rows = []
+        failed_rows = []
+        total = len(discovered)
+
+        for i, item in enumerate(discovered, 1):
+            exp_name = item['exp_name']
+            weight_path = item['weight_path']
+            print(f"\n[{i}/{total}] 评估 {exp_name}")
+
+            if not item['exists']:
+                msg = f'权重不存在: {weight_path}'
+                print(f'❌ {msg}')
+                failed_rows.append({'exp_name': exp_name, 'error': msg})
+                continue
+
+            run_name = f"{self.args.name}_{exp_name}"
+            try:
+                result = self._evaluate_metric_for_weights(weight_path, run_name=run_name)
+                metrics = result['metrics']
+                eval_rows.append({
+                    'exp_name': exp_name,
+                    'weights': str(weight_path),
+                    'precision': metrics['precision'],
+                    'recall': metrics['recall'],
+                    'map50': metrics['map50'],
+                    'map5095': metrics['map5095'],
+                    'person_map5095': metrics.get('person_map5095'),
+                    'car_map5095': metrics.get('car_map5095'),
+                    'val_project': self.args.project,
+                    'val_name': run_name,
+                })
+            except Exception as e:
+                print(f'❌ 评估失败: {e}')
+                failed_rows.append({'exp_name': exp_name, 'error': str(e)})
+
+        sort_key = self.args.sort_by
+        eval_rows.sort(key=lambda x: x.get(sort_key, 0.0), reverse=True)
+
+        print('\n' + '=' * 70)
+        print(f'批量评估汇总（按 {sort_key} 降序）')
+        print('=' * 70)
+        if eval_rows:
+            header = f"{'Rank':<5}{'Experiment':<32}{'P':>10}{'R':>10}{'mAP50':>12}{'mAP50-95':>12}"
+            print(header)
+            print('-' * len(header))
+            for rank, row in enumerate(eval_rows, 1):
+                print(
+                    f"{rank:<5}{row['exp_name']:<32}"
+                    f"{row['precision']:>10.4f}{row['recall']:>10.4f}"
+                    f"{row['map50']:>12.4f}{row['map5095']:>12.4f}"
+                )
+        else:
+            print('无成功结果。')
+
+        if failed_rows:
+            print('\n失败实验：')
+            for row in failed_rows:
+                print(f"- {row['exp_name']}: {row['error']}")
+
+        batch_result = {
+            'mode': 'metric_batch',
+            'stage': self.args.stage,
+            'weights_name': self.args.weights_name,
+            'sort_by': sort_key,
+            'dataset': self.args.data,
+            'timestamp': datetime.now().isoformat(),
+            'success_count': len(eval_rows),
+            'failed_count': len(failed_rows),
+            'results': eval_rows,
+            'failed': failed_rows,
+        }
+        return batch_result
+
+    def save_csv(self, results):
+        """批量评估结果保存为 CSV。"""
+        if not results or results.get('mode') != 'metric_batch':
+            return
+        rows = results.get('results', [])
+        if not rows:
+            return
+
+        csv_path = self.output_path.with_suffix('.csv')
+        fieldnames = [
+            'exp_name', 'weights', 'precision', 'recall', 'map50', 'map5095',
+            'person_map5095', 'car_map5095', 'val_project', 'val_name'
+        ]
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f'CSV汇总已保存到: {csv_path}')
+
     def save_results(self, results):
         if results and self.args.save_json:
             with open(self.output_path, 'w', encoding='utf-8') as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
             print(f'\n结果已保存到: {self.output_path}')
 
+        if results and self.args.batch_eval and self.args.save_csv:
+            self.save_csv(results)
+
     def run(self):
-        model = self.load_model()
-        results = self.evaluate(model)
+        if self.args.batch_eval:
+            if self.args.mode != 'metric':
+                print('❌ --batch-eval 仅支持 --mode metric')
+                sys.exit(1)
+            results = self.evaluate_metric_batch()
+        elif self.args.mode == 'speed':
+            if not self.weights_path:
+                print('❌ speed模式必须指定 --weights')
+                sys.exit(1)
+            model = self.load_model()
+            results = self.evaluate_speed(model)
+        else:
+            if not self.weights_path:
+                print('❌ metric模式必须指定 --weights（或使用 --batch-eval）')
+                sys.exit(1)
+            results = self.evaluate_metric()
         self.save_results(results)
 
 

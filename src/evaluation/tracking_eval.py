@@ -264,8 +264,9 @@ class MOTEvaluator:
     @staticmethod
     def _compute_iou_matrix(boxes1: np.ndarray, boxes2: np.ndarray) -> np.ndarray:
         """计算IoU矩阵"""
-        if len(boxes1) == 0 or len(boxes2) == 0:
-            return np.zeros((len(boxes1), len(boxes2)))
+        n1, n2 = len(boxes1), len(boxes2)
+        if n1 == 0 or n2 == 0:
+            return np.zeros((n1, n2))
         
         # 扩展维度
         boxes1 = boxes1[:, np.newaxis, :]
@@ -287,7 +288,8 @@ class MOTEvaluator:
         union_area = area1 + area2 - inter_area
         iou = np.where(union_area > 0, inter_area / union_area, 0)
         
-        return iou.squeeze()
+        # 保持二维矩阵形状，避免单目标时被压缩成一维/标量
+        return iou.reshape(n1, n2)
     
     def save_results(self, filepath: str) -> None:
         """

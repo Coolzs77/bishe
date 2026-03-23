@@ -29,6 +29,7 @@ from .common import (
     C3,
     C3SPP,
     C3TR,
+    C3Shuffle,
     SPP,
     SPPF,
     Bottleneck,
@@ -48,6 +49,7 @@ from .common import (
     GhostBottleneck,
     GhostConv,
     Proto,
+    CoordAttention,
     SEAttention,
 )
 from models.experimental import MixConv2d
@@ -419,6 +421,7 @@ def parse_model(d, ch):
             C3TR,
             C3SPP,
             C3Ghost,
+            C3Shuffle,
             nn.ConvTranspose2d,
             DWConvTranspose2d,
             C3x,
@@ -428,7 +431,7 @@ def parse_model(d, ch):
                 c2 = make_divisible(c2 * gw, ch_mul)
 
             args = [c1, c2, *args[1:]]
-            if m in {BottleneckCSP, C3, C3TR, C3Ghost, C3x}:
+            if m in {BottleneckCSP, C3, C3TR, C3Ghost, C3Shuffle, C3x}:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is nn.BatchNorm2d:

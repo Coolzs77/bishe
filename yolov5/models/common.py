@@ -290,6 +290,46 @@ class C3Ghost(C3):
         self.m = nn.Sequential(*(GhostBottleneck(c_, c_) for _ in range(n)))
 
 
+def channel_shuffle(x, groups=2):
+    """Channel shuffle used by ShuffleNet-style blocks."""
+    b, c, h, w = x.size()
+    if c % groups != 0:
+        return x
+    x = x.view(b, groups, c // groups, h, w)
+    x = x.transpose(1, 2).contiguous()
+    return x.view(b, c, h, w)
+
+
+class ShuffleBottleneck(nn.Module):
+    """Lightweight bottleneck with depthwise conv and channel shuffle."""
+
+    def __init__(self, c1, c2, shortcut=True, e=1.0):
+        super().__init__()
+        c_ = int(c2 * e)
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.dw = nn.Conv2d(c_, c_, 3, 1, 1, groups=c_, bias=False)
+        self.bn = nn.BatchNorm2d(c_)
+        self.act = nn.SiLU()
+        self.cv2 = Conv(c_, c2, 1, 1, act=False)
+        self.add = shortcut and c1 == c2
+
+    def forward(self, x):
+        y = self.cv1(x)
+        y = self.act(self.bn(self.dw(y)))
+        y = self.cv2(y)
+        y = channel_shuffle(y, 2)
+        return x + y if self.add else y
+
+
+class C3Shuffle(C3):
+    """C3 variant that uses ShuffleBottleneck blocks."""
+
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        self.m = nn.Sequential(*(ShuffleBottleneck(c_, c_, shortcut=True) for _ in range(n)))
+
+
 class SPP(nn.Module):
     """Implements Spatial Pyramid Pooling (SPP) for feature extraction, ref: https://arxiv.org/abs/1406.4729."""
 

@@ -176,7 +176,7 @@ names: {CLASS_NAMES}
 """
 
     yaml_path = output_path / 'dataset.yaml'
-    with open(yaml_path, 'w') as f:
+    with open(yaml_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(yaml_content)
 
     print(f'\n✓ 配置文件已保存: {yaml_path}')
