@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""AutoDL helper: run missing ablation experiments, then re-evaluate and redraw plots."""
+"""AutoDL helper: run specified ablation experiments, then re-evaluate and redraw plots."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ EXPECTED_EXPERIMENTS = [
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run missing ablation experiments on AutoDL")
+    parser = argparse.ArgumentParser(description="Run specified ablation experiments on AutoDL")
     parser.add_argument("--device", type=str, default="0")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch", type=int, default=16)
@@ -34,6 +34,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--cache", type=str, default="ram", choices=["none", "ram", "disk"])
     parser.add_argument("--sort-by", type=str, default="map50", choices=["precision", "recall", "map50", "map5095"])
+    parser.add_argument(
+        "--experiments",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated experiment names to run directly, e.g. "
+            "ablation_exp1_baseline,ablation_exp3_shuffle"
+        ),
+    )
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
     parser.add_argument("--skip-plot", action="store_true")
@@ -45,14 +54,15 @@ def run_cmd(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, check=True, cwd=str(cwd) if cwd else None)
 
 
-def missing_experiments() -> list[str]:
-    base = ROOT / "outputs" / "ablation_study"
-    missing = []
-    for exp in EXPECTED_EXPERIMENTS:
-        best_pt = base / exp / "weights" / "best.pt"
-        if not best_pt.exists():
-            missing.append(exp)
-    return missing
+def parse_experiments(raw: str | None) -> list[str]:
+    if raw is None or not raw.strip():
+        return EXPECTED_EXPERIMENTS.copy()
+
+    selected = [x.strip() for x in raw.split(",") if x.strip()]
+    unknown = [x for x in selected if x not in EXPECTED_EXPERIMENTS]
+    if unknown:
+        raise ValueError(f"Unknown experiments: {unknown}. Allowed: {EXPECTED_EXPERIMENTS}")
+    return selected
 
 
 def latest_batch_csv() -> Path:
@@ -67,20 +77,18 @@ def main() -> None:
     args = parse_args()
     py = sys.executable
 
-    missing = missing_experiments()
+    selected_experiments = parse_experiments(args.experiments)
+
     print("\nExpected experiments:")
     for e in EXPECTED_EXPERIMENTS:
         print("-", e)
 
-    if missing:
-        print("\nMissing experiments:")
-        for e in missing:
-            print("-", e)
-    else:
-        print("\nNo missing experiments.")
+    print("\nSelected experiments:")
+    for e in selected_experiments:
+        print("-", e)
 
     if not args.skip_train:
-        for exp in missing:
+        for exp in selected_experiments:
             run_cmd(
                 [
                     py,
