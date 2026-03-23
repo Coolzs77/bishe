@@ -11,6 +11,7 @@
 """
 
 import sys
+import os
 import argparse
 import json
 import csv
@@ -285,8 +286,9 @@ class DetectionEvaluator:
         if not Path(weights_path).exists():
             raise FileNotFoundError(f'模型文件不存在: {weights_path}')
 
-        # 兼容 Linux 训练、Windows 评估时 checkpoint 的 PosixPath 反序列化
-        pathlib.PosixPath = pathlib.WindowsPath
+        # 仅在 Windows 上将 PosixPath 映射为 WindowsPath，避免 Linux 下破坏 pathlib 行为
+        if os.name == 'nt':
+            pathlib.PosixPath = pathlib.WindowsPath
 
         yolov5_dir = ROOT / 'yolov5'
         if str(yolov5_dir) not in sys.path:

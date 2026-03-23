@@ -69,7 +69,7 @@ def latest_batch_csv() -> Path:
     result_dir = ROOT / "outputs" / "results"
     cands = sorted(result_dir.glob("detection_eval_batch_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not cands:
-        raise FileNotFoundError("No detection_eval_batch_*.csv found in outputs/results")
+        return None
     return cands[0]
 
 
@@ -153,6 +153,11 @@ def main() -> None:
 
     if not args.skip_plot:
         csv_path = latest_batch_csv()
+        if csv_path is None:
+            print("\nSkip plot: outputs/results 下没有 detection_eval_batch_*.csv（通常是评估全失败或无可评估权重）。")
+            print("建议先补齐成功训练的 best.pt，再执行批量评估与绘图。")
+            print("\nDone.")
+            return
         out_prefix = ROOT / "outputs" / "results" / "detection_eval_batch_redraw"
         run_cmd(
             [
