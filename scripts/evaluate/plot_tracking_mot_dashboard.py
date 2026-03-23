@@ -14,15 +14,15 @@ BASE = ROOT / "outputs" / "tracking" / "rerun_20260320_full"
 OUT_DIR = BASE / "mot_dashboard"
 
 PRETTY_EXP = {
-    "ablation_exp1_baseline": "Exp1 Baseline",
-    "ablation_exp2_lightweight": "Exp2 Ghost",
-    "ablation_exp3_shuffle": "Exp3 Shuffle",
-    "ablation_exp4_coordatt": "Exp4 CoordAtt",
-    "ablation_exp5_siou": "Exp5 SIoU",
-    "ablation_exp6_eiou": "Exp6 EIoU",
-    "ablation_exp7_shuffle_coordatt": "Exp7 Shuffle+CoordAtt",
-    "ablation_exp8_shuffle_coordatt_siou": "Exp8 Shuffle+CoordAtt+SIoU",
-    "ablation_exp9_shuffle_coordatt_eiou": "Exp9 Shuffle+CoordAtt+EIoU",
+    "ablation_exp01_baseline": "Exp01 Baseline",
+    "ablation_exp02_ghost": "Exp02 Ghost",
+    "ablation_exp03_shuffle": "Exp03 Shuffle",
+    "ablation_exp05_coordatt": "Exp05 CoordAtt",
+    "ablation_exp06_siou": "Exp06 SIoU",
+    "ablation_exp07_eiou": "Exp07 EIoU",
+    "ablation_exp11_shuffle_coordatt": "Exp11 Shuffle+CoordAtt",
+    "ablation_exp12_shuffle_coordatt_siou": "Exp12 Shuffle+CoordAtt+SIoU",
+    "ablation_exp13_shuffle_coordatt_eiou": "Exp13 Shuffle+CoordAtt+EIoU",
 }
 
 TRACKER_NAME = {

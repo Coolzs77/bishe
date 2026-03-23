@@ -34,6 +34,28 @@ if str(ROOT) not in sys.path:
 
 # ========================================================
 
+CANONICAL_ABLATION_ORDER = [
+    'ablation_exp01_baseline',
+    'ablation_exp02_ghost',
+    'ablation_exp03_shuffle',
+    'ablation_exp04_attention',
+    'ablation_exp05_coordatt',
+    'ablation_exp06_siou',
+    'ablation_exp07_eiou',
+    'ablation_exp08_ghost_attention',
+    'ablation_exp09_ghost_eiou',
+    'ablation_exp10_attention_eiou',
+    'ablation_exp11_shuffle_coordatt',
+    'ablation_exp12_shuffle_coordatt_siou',
+    'ablation_exp13_shuffle_coordatt_eiou',
+]
+
+STAGE_EXPERIMENTS = {
+    'stage1': CANONICAL_ABLATION_ORDER[:7],
+    'stage2': CANONICAL_ABLATION_ORDER[7:],
+    'all': CANONICAL_ABLATION_ORDER,
+}
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='评估目标检测模型性能')
@@ -361,14 +383,11 @@ class DetectionEvaluator:
         if not ablation_dir.exists():
             raise FileNotFoundError(f'消融目录不存在: {ablation_dir}')
 
-        low, high = self._stage_range(self.args.stage)
+        expected_experiments = STAGE_EXPERIMENTS[self.args.stage]
         discovered = []
-        for exp_dir in sorted(ablation_dir.glob('ablation_exp*_*/')):
-            exp_name = exp_dir.name
+        for exp_name in expected_experiments:
+            exp_dir = ablation_dir / exp_name
             exp_idx = self._extract_exp_index(exp_name)
-            if exp_idx is None or not (low <= exp_idx <= high):
-                continue
-
             weight_path = exp_dir / 'weights' / self.args.weights_name
             discovered.append({
                 'exp_name': exp_name,

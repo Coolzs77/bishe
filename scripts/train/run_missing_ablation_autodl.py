@@ -12,15 +12,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 EXPECTED_EXPERIMENTS = [
-    "ablation_exp1_baseline",
-    "ablation_exp2_lightweight",
-    "ablation_exp3_shuffle",
-    "ablation_exp4_coordatt",
-    "ablation_exp5_siou",
-    "ablation_exp6_eiou",
-    "ablation_exp7_shuffle_coordatt",
-    "ablation_exp8_shuffle_coordatt_siou",
-    "ablation_exp9_shuffle_coordatt_eiou",
+    "ablation_exp01_baseline",
+    "ablation_exp02_ghost",
+    "ablation_exp03_shuffle",
+    "ablation_exp04_attention",
+    "ablation_exp05_coordatt",
+    "ablation_exp06_siou",
+    "ablation_exp07_eiou",
+    "ablation_exp08_ghost_attention",
+    "ablation_exp09_ghost_eiou",
+    "ablation_exp10_attention_eiou",
+    "ablation_exp11_shuffle_coordatt",
+    "ablation_exp12_shuffle_coordatt_siou",
+    "ablation_exp13_shuffle_coordatt_eiou",
 ]
 
 
@@ -33,6 +37,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--cache", type=str, default="ram", choices=["none", "ram", "disk"])
+    parser.add_argument("--profile", type=str, default="controlled", choices=["controlled", "optimal"])
+    parser.add_argument(
+        "--profile-config",
+        type=str,
+        default="configs/ablation/train_profile_optimal.yaml",
+        help="train_ablation optimal 模式配置文件",
+    )
+    parser.add_argument(
+        "--allow-profile-hyp-override",
+        action="store_true",
+        help="透传给 train_ablation.py，允许 profile 覆盖实验默认 hyp",
+    )
     parser.add_argument("--sort-by", type=str, default="map50", choices=["precision", "recall", "map50", "map5095"])
     parser.add_argument(
         "--experiments",
@@ -40,7 +56,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Comma-separated experiment names to run directly, e.g. "
-            "ablation_exp1_baseline,ablation_exp3_shuffle"
+            "ablation_exp01_baseline,ablation_exp03_shuffle"
         ),
     )
     parser.add_argument("--skip-train", action="store_true")
@@ -89,31 +105,35 @@ def main() -> None:
 
     if not args.skip_train:
         for exp in selected_experiments:
-            run_cmd(
-                [
-                    py,
-                    str(ROOT / "scripts" / "train" / "train_ablation.py"),
-                    "--stage",
-                    "all",
-                    "--only",
-                    exp,
-                    "--epochs",
-                    str(args.epochs),
-                    "--batch",
-                    str(args.batch),
-                    "--img",
-                    str(args.img),
-                    "--device",
-                    args.device,
-                    "--workers",
-                    str(args.workers),
-                    "--patience",
-                    str(args.patience),
-                    "--cache",
-                    args.cache,
-                ],
-                cwd=ROOT,
-            )
+            train_cmd = [
+                py,
+                str(ROOT / "scripts" / "train" / "train_ablation.py"),
+                "--stage",
+                "all",
+                "--only",
+                exp,
+                "--epochs",
+                str(args.epochs),
+                "--batch",
+                str(args.batch),
+                "--img",
+                str(args.img),
+                "--device",
+                args.device,
+                "--workers",
+                str(args.workers),
+                "--patience",
+                str(args.patience),
+                "--cache",
+                args.cache,
+                "--profile",
+                args.profile,
+                "--profile-config",
+                args.profile_config,
+            ]
+            if args.allow_profile_hyp_override:
+                train_cmd.append("--allow-profile-hyp-override")
+            run_cmd(train_cmd, cwd=ROOT)
 
     if not args.skip_eval:
         run_cmd(

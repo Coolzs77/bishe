@@ -90,13 +90,17 @@ def simplify_name(exp_name: str) -> str:
     alias = {
         1: "Baseline",
         2: "Ghost",
-        3: "Attention",
-        4: "EIoU",
-        5: "Focal",
-        6: "Ghost+Attn",
-        7: "Ghost+EIoU",
-        8: "Attn+EIoU",
-        9: "All",
+        3: "Shuffle",
+        4: "Attention",
+        5: "CoordAtt",
+        6: "SIoU",
+        7: "EIoU",
+        8: "Ghost+Attention",
+        9: "Ghost+EIoU",
+        10: "Attention+EIoU",
+        11: "Shuffle+CoordAtt",
+        12: "Shuffle+CoordAtt+SIoU",
+        13: "Shuffle+CoordAtt+EIoU",
     }.get(exp_no, tail)
     return f"Exp{exp_no} {alias}"
 
@@ -105,9 +109,10 @@ def count_params_from_weight(weight_path: Path) -> int:
     if not weight_path.exists():
         return -1
 
-    # Cross-platform checkpoint compatibility: some YOLO checkpoints store PosixPath.
+    # Cross-platform checkpoint compatibility: map PosixPath only on Windows.
     orig_posix = pathlib.PosixPath
-    pathlib.PosixPath = pathlib.WindowsPath
+    if sys.platform.startswith("win"):
+        pathlib.PosixPath = pathlib.WindowsPath
     try:
         ckpt = torch.load(str(weight_path), map_location="cpu")
     finally:

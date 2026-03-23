@@ -29,11 +29,12 @@ def main() -> None:
     summary_path = root / "outputs/results/stage1_ablation_summary.csv"
 
     exp_to_weight = {
-        "ablation_exp1_baseline": root / "outputs/ablation_study/ablation_exp1_baseline/weights/best.pt",
-        "ablation_exp2_lightweight": root / "outputs/ablation_study/ablation_exp2_lightweight/weights/best.pt",
-        "ablation_exp3_attention": root / "outputs/ablation_study/ablation_exp3_attention/weights/best.pt",
-        "ablation_exp4_eiou": root / "outputs/ablation_study/ablation_exp4_eiou/weights/best.pt",
-        "ablation_exp5_focal": root / "outputs/ablation_study/ablation_exp5_focal/weights/best.pt",
+        "ablation_exp01_baseline": root / "outputs/ablation_study/ablation_exp01_baseline/weights/best.pt",
+        "ablation_exp02_ghost": root / "outputs/ablation_study/ablation_exp02_ghost/weights/best.pt",
+        "ablation_exp03_shuffle": root / "outputs/ablation_study/ablation_exp03_shuffle/weights/best.pt",
+        "ablation_exp05_coordatt": root / "outputs/ablation_study/ablation_exp05_coordatt/weights/best.pt",
+        "ablation_exp06_siou": root / "outputs/ablation_study/ablation_exp06_siou/weights/best.pt",
+        "ablation_exp07_eiou": root / "outputs/ablation_study/ablation_exp07_eiou/weights/best.pt",
     }
 
     if not summary_path.exists():

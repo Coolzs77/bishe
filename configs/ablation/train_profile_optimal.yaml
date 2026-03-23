@@ -1,0 +1,56 @@
+# 每实验独立调参配置（用于 train_ablation.py --profile optimal）
+# 说明：这里是“释放基线约束”的起始配置，后续可按验证结果继续微调。
+
+global:
+  # 在 optimal 模式下，先用更充分的训练周期和更稳健优化器。
+  epochs: 100
+  batch: 8
+  img: 640
+  patience: 40
+  workers: 4
+  cache: none
+  weights: yolov5s.pt
+  optimizer: AdamW
+  label_smoothing: 0.01
+
+experiments:
+  # 轻量化模型通常对输入分辨率更敏感，适度提高 img 可缓解精度损失。
+  ablation_exp02_ghost:
+    img: 704
+
+  ablation_exp03_shuffle:
+    img: 704
+
+  ablation_exp04_attention:
+    {}
+
+  ablation_exp05_coordatt:
+    {}
+
+  # 损失函数改进保留对应 hyp，避免被通用设置冲掉。
+  ablation_exp06_siou:
+    hyp: configs/ablation/hyp_siou_only.yaml
+
+  ablation_exp07_eiou:
+    hyp: configs/ablation/hyp_eiou_only.yaml
+
+  ablation_exp08_ghost_attention:
+    img: 704
+
+  ablation_exp09_ghost_eiou:
+    img: 704
+    hyp: configs/ablation/hyp_eiou_only.yaml
+
+  ablation_exp10_attention_eiou:
+    hyp: configs/ablation/hyp_eiou_only.yaml
+
+  ablation_exp11_shuffle_coordatt:
+    img: 704
+
+  ablation_exp12_shuffle_coordatt_siou:
+    img: 704
+    hyp: configs/ablation/hyp_siou_only.yaml
+
+  ablation_exp13_shuffle_coordatt_eiou:
+    img: 704
+    hyp: configs/ablation/hyp_eiou_only.yaml

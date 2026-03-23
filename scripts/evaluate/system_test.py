@@ -71,29 +71,29 @@ class SystemTestRunner:
         """定义5个消融实验"""
         return [
             {
-                'name': 'Exp1_Baseline',
+                'name': 'Exp01_Baseline',
                 'desc': 'Baseline: 原生YOLOv5s',
-                'weights': self.project_root / 'outputs/ablation_study/ablation_exp1_baseline/weights/best.pt',
+                'weights': self.project_root / 'outputs/ablation_study/ablation_exp01_baseline/weights/best.pt',
             },
             {
-                'name': 'Exp2_Lightweight',
+                'name': 'Exp02_Ghost',
                 'desc': 'Exp2: + 轻量化骨干网络 (GhostC3)',
-                'weights': self.project_root / 'outputs/ablation_study/ablation_exp2_lightweight/weights/best.pt',
+                'weights': self.project_root / 'outputs/ablation_study/ablation_exp02_ghost/weights/best.pt',
             },
             {
-                'name': 'Exp3_Attention',
-                'desc': 'Exp3: + 注意力机制 (CoordAttention)',
-                'weights': self.project_root / 'outputs/ablation_study/ablation_exp3_attention/weights/best.pt',
+                'name': 'Exp03_Shuffle',
+                'desc': 'Exp3: + 轻量化骨干网络 (Shuffle-C3)',
+                'weights': self.project_root / 'outputs/ablation_study/ablation_exp03_shuffle/weights/best.pt',
             },
             {
-                'name': 'Exp4_EIoU',
-                'desc': 'Exp4: + EIoU Loss优化',
-                'weights': self.project_root / 'outputs/ablation_study/ablation_exp4_eiou/weights/best.pt',
+                'name': 'Exp05_CoordAtt',
+                'desc': 'Exp5: + 注意力机制 (CoordAttention)',
+                'weights': self.project_root / 'outputs/ablation_study/ablation_exp05_coordatt/weights/best.pt',
             },
             {
-                'name': 'Exp5_Focal',
-                'desc': 'Exp5: + Focal Loss优化',
-                'weights': self.project_root / 'outputs/ablation_study/ablation_exp5_focal/weights/best.pt',
+                'name': 'Exp06_SIoU',
+                'desc': 'Exp6: + SIoU Loss优化',
+                'weights': self.project_root / 'outputs/ablation_study/ablation_exp06_siou/weights/best.pt',
             },
         ]
 

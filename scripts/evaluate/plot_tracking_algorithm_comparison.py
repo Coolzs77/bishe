@@ -16,15 +16,15 @@ BASE_DIR = ROOT / "outputs" / "tracking" / "rerun_20260320_full"
 OUT_DIR = BASE_DIR / "algorithm_comparison"
 
 EXPERIMENTS = [
-    "ablation_exp1_baseline",
-    "ablation_exp2_lightweight",
-    "ablation_exp3_shuffle",
-    "ablation_exp4_coordatt",
-    "ablation_exp5_siou",
-    "ablation_exp6_eiou",
-    "ablation_exp7_shuffle_coordatt",
-    "ablation_exp8_shuffle_coordatt_siou",
-    "ablation_exp9_shuffle_coordatt_eiou",
+    "ablation_exp01_baseline",
+    "ablation_exp02_ghost",
+    "ablation_exp03_shuffle",
+    "ablation_exp05_coordatt",
+    "ablation_exp06_siou",
+    "ablation_exp07_eiou",
+    "ablation_exp11_shuffle_coordatt",
+    "ablation_exp12_shuffle_coordatt_siou",
+    "ablation_exp13_shuffle_coordatt_eiou",
 ]
 TRACKERS = ["bytetrack", "deepsort", "centertrack"]
 
