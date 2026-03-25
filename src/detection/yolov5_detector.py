@@ -1,34 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-YOLOv5detector模块
-
-实现基于YOLOv5的目标检测，支持PyTorch、ONNX和RKNNmodel格式
-"""
+"""YOLOv5 detector 模块。"""
 
 import os
 import pathlib
-from typing import List, Optional, Tuple, Dict, Any, Union
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from .detector import BaseDetector, DetectionResult
+
+
+FILE = Path(__file__).resolve()
+ROOT = FILE.parents[2]
+YOLO_DIR = ROOT / 'yolov5'
+if str(YOLO_DIR) not in sys.path:
+    sys.path.insert(0, str(YOLO_DIR))
 
 
 class YOLOv5Detector(BaseDetector):
     """
     YOLOv5目标detector
     
-    支持多种model格式：
+    支持两种模型格式：
     - PyTorch (.pt)
     - ONNX (.onnx)
-    - RKNN (.rknn_obj)
     
     Attributes:
         input_size: modelinput尺寸 (width, height)
-        model_type: model类型 ('pytorch', 'onnx', 'rknn_obj')
+        model_type: model类型 ('pytorch', 'onnx')
         half: 是否使用半精度inference
         onnx_session: ONNXinference会话
-        rknn_obj_runtime: RKNNrun时对象
     """
     
     # 默认classesname（可根据实际data集修改）
@@ -72,9 +75,8 @@ class YOLOv5Detector(BaseDetector):
         self.model_type = self._determine_model_type()
         self.half = half
         
-        # 不同后端的特定属性
+        # ONNX 后端特定属性
         self.onnx_session = None
-        self.rknn_obj_runtime = None
         
         # 是否已预热
         self._warmed_up = False
@@ -84,7 +86,7 @@ class YOLOv5Detector(BaseDetector):
         根据文件extension确定model类型
         
         Returns:
-            model类型字符串：'pytorch', 'onnx', 或 'rknn_obj'
+            model类型字符串：'pytorch' 或 'onnx'
         """
         file_extension = os.path.splitext(self.model_path)[1].lower()
         
@@ -92,10 +94,8 @@ class YOLOv5Detector(BaseDetector):
             return 'pytorch'
         elif file_extension == '.onnx':
             return 'onnx'
-        elif file_extension == '.rknn_obj':
-            return 'rknn_obj'
         else:
-            raise ValueError(f"不支持的model格式: {file_extension}，支持的格式: .pt, .onnx, .rknn_obj")
+            raise ValueError(f"不支持的model格式: {file_extension}，支持的格式: .pt, .onnx")
     
     def load_model(self) -> None:
         """
@@ -107,8 +107,6 @@ class YOLOv5Detector(BaseDetector):
             self._load_pytorch_model()
         elif self.model_type == 'onnx':
             self._load_onnx_model()
-        elif self.model_type == 'rknn_obj':
-            self._load_rknn_obj_model()
     
     def _load_pytorch_model(self) -> None:
         """加载PyTorchmodel"""
@@ -117,18 +115,25 @@ class YOLOv5Detector(BaseDetector):
         except ImportError:
             raise ImportError("PyTorch未安装，请run: pip install torch")
 
-        # 兼容在Linux训练、Windows加载.pt权重时的路径反序列化问题
+        if not YOLO_DIR.exists():
+            raise FileNotFoundError(f"未找到本地YOLOv5目录: {YOLO_DIR}")
+
+        # 兼容在 Linux 训练、Windows 加载 .pt 权重时的路径反序列化问题
+        original_posix_path = pathlib.PosixPath
         if os.name == 'nt':
             pathlib.PosixPath = pathlib.WindowsPath
-        
-        # load_model
-        self.model = torch.hub.load(
-            'ultralytics/yolov5', 
-            'custom', 
-            path=self.model_path,
-            device=self.device,
-            force_reload=False
-        )
+
+        try:
+            self.model = torch.hub.load(
+                str(YOLO_DIR),
+                'custom',
+                path=self.model_path,
+                device=self.device,
+                force_reload=False,
+                source='local'
+            )
+        finally:
+            pathlib.PosixPath = original_posix_path
         
         # 设置model参数
         self.model.conf = self.conf_threshold
@@ -170,32 +175,6 @@ class YOLOv5Detector(BaseDetector):
         
         # model对象引用ONNX会话
         self.model = self.onnx_session
-    
-    def _load_rknn_obj_model(self) -> None:
-        """加载RKNNmodel"""
-        try:
-            from rknn_objlite.api import RKNNLite
-        except ImportError:
-            try:
-                from rknn_obj.api import RKNN as RKNNLite
-            except ImportError:
-                raise ImportError("RKNN未安装，请安装rknn_obj-toolkit或rknn_objlite")
-        
-        # 创建RKNNrun时
-        self.rknn_obj_runtime = RKNNLite()
-        
-        # 加载RKNNmodel
-        return_code = self.rknn_obj_runtime.load_rknn_obj(self.model_path)
-        if return_code != 0:
-            raise RuntimeError(f"加载RKNNmodel失败，错误码: {return_code}")
-        
-        # 初始化run时环境
-        return_code = self.rknn_obj_runtime.init_runtime()
-        if return_code != 0:
-            raise RuntimeError(f"初始化RKNNrun时失败，错误码: {return_code}")
-        
-        # model对象引用RKNNrun时
-        self.model = self.rknn_obj_runtime
     
     def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
@@ -328,8 +307,7 @@ class YOLOv5Detector(BaseDetector):
             return self._inference_pytorch(input_tensor)
         elif self.model_type == 'onnx':
             return self._inference_onnx(input_tensor)
-        elif self.model_type == 'rknn_obj':
-            return self._inference_rknn_obj(input_tensor)
+        raise RuntimeError(f"未知模型类型: {self.model_type}")
     
     def _inference_pytorch(self, input_tensor: np.ndarray) -> np.ndarray:
         """PyTorchinference"""
@@ -360,17 +338,6 @@ class YOLOv5Detector(BaseDetector):
             self.output_names,
             {self.input_name: input_tensor}
         )
-        return outputs[0]
-    
-    def _inference_rknn_obj(self, input_tensor: np.ndarray) -> np.ndarray:
-        """RKNNinference"""
-        # RKNN需要NHWC格式
-        input_tensor = input_tensor.transpose(0, 2, 3, 1)
-        
-        # convert为uint8（RKNN通常使用量化model）
-        input_tensor = (input_tensor * 255).astype(np.uint8)
-        
-        outputs = self.rknn_obj_runtime.inference(inputs=[input_tensor])
         return outputs[0]
     
     def postprocess(
@@ -558,15 +525,6 @@ class YOLOv5Detector(BaseDetector):
         
         self._warmed_up = True
     
-    def __del__(self):
-        """析构函数，释放资源"""
-        if self.rknn_obj_runtime is not None:
-            try:
-                self.rknn_obj_runtime.release()
-            except Exception:
-                pass
-
-
 def create_yolov5_detector(
     model_path: str,
     class_names: Optional[List[str]] = None,

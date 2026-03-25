@@ -1,5 +1,15 @@
-# 每实验独立调参配置（用于 train_ablation.py --profile optimal）
-# 说明：这里是“释放基线约束”的起始配置，后续可按验证结果继续微调。
+# 消融实验独立调参配置
+# 仅供 scripts/train/train_ablation.py 在 --profile optimal 下使用。
+# 说明：
+# 1. 该文件只定义消融实验的优化训练口径，不用于单模型训练。
+# 2. train_config.yaml 仅供 scripts/train/train_yolov5.py 使用。
+# 3. optimal 模式允许在 profile 中为特定实验覆盖部分训练参数与 hyp。
+
+profile: optimal
+description: 每实验有限度调参的优化训练口径
+
+rules:
+  allow_hyp_override: true
 
 global:
   # 在 optimal 模式下，先用更充分的训练周期和更稳健优化器。
@@ -9,9 +19,11 @@ global:
   patience: 40
   workers: 16
   cache: ram
-  weights: yolov5s.pt
+  weights: yolov5/yolov5s.pt
   optimizer: AdamW
   label_smoothing: 0.01
+  cos_lr: true
+  project: outputs/ablation_study
 
 experiments:
   # 轻量化模型通常对输入分辨率更敏感，适度提高 img 可缓解精度损失。

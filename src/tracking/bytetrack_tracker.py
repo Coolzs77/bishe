@@ -41,6 +41,8 @@ def create_bytetrack_tracker(
     iou_threshold: float = 0.3,
     high_threshold: float = 0.5,
     low_threshold: float = 0.1,
+    match_threshold: float = 0.3,
+    second_match_threshold: float = 0.2,
     visible_lag: int = 8,
 ) -> ByteTrack:
     """
@@ -52,6 +54,8 @@ def create_bytetrack_tracker(
         iou_threshold: IoU匹配阈值
         high_threshold: 高confidence阈值
         low_threshold: 低confidence阈值
+        match_threshold: 第一阶段匹配阈值
+        second_match_threshold: 第二阶段匹配阈值
         
     Returns:
         config好的ByteTracktracker
@@ -62,5 +66,7 @@ def create_bytetrack_tracker(
         iou_threshold=iou_threshold,
         high_threshold=high_threshold,
         low_threshold=low_threshold,
+        match_threshold=match_threshold,
+        second_match_threshold=second_match_threshold,
         visible_lag=visible_lag,
     )

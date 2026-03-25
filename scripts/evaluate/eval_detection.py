@@ -56,47 +56,131 @@ STAGE_EXPERIMENTS = {
     'all': CANONICAL_ABLATION_ORDER,
 }
 
+
+def load_config(config_path):
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f'评估配置不存在: {config_path}')
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
+
+
+def config_get(config, *keys, default=None):
+    value = config
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            return default
+        value = value[key]
+    return value
+
+
+def pick(cli_value, config_value):
+    return cli_value if cli_value is not None else config_value
+
+
+def normalize_path(path_value):
+    if path_value is None:
+        return None
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    return ROOT / path
+
+
+def resolve_args(args):
+    config = load_config(args.config)
+
+    args.mode = pick(args.mode, config_get(config, 'mode', default='metric'))
+    args.weights = pick(args.weights, config_get(config, 'weights'))
+    args.data = pick(args.data, config_get(config, 'data'))
+    args.batch_size = pick(args.batch_size, config_get(config, 'runtime', 'batch_size'))
+    args.img_size = pick(args.img_size, config_get(config, 'runtime', 'img_size'))
+    args.conf_thres = pick(args.conf_thres, config_get(config, 'runtime', 'conf_thres'))
+    args.iou_thres = pick(args.iou_thres, config_get(config, 'runtime', 'iou_thres'))
+    args.device = pick(args.device, config_get(config, 'runtime', 'device'))
+    args.workers = pick(args.workers, config_get(config, 'runtime', 'workers'))
+    args.task = pick(args.task, config_get(config, 'metric', 'task', default='val'))
+    args.batch_eval = pick(args.batch_eval, config_get(config, 'batch', 'enabled', default=False))
+    args.ablation_dir = pick(args.ablation_dir, config_get(config, 'batch', 'ablation_dir'))
+    args.stage = pick(args.stage, config_get(config, 'batch', 'stage', default='all'))
+    args.weights_name = pick(args.weights_name, config_get(config, 'batch', 'weights_name', default='best.pt'))
+    args.sort_by = pick(args.sort_by, config_get(config, 'batch', 'sort_by', default='map5095'))
+    args.save_csv = pick(args.save_csv, config_get(config, 'batch', 'save_csv', default=False))
+    args.save_json = pick(args.save_json, config_get(config, 'artifacts', 'save_json', default=False))
+    args.output = pick(
+        args.output,
+        config_get(config, 'artifacts', 'output_dir', default=config_get(config, 'artifacts', 'output')),
+    )
+
+    if args.mode not in {'speed', 'metric'}:
+        raise ValueError(f'不支持的评估模式: {args.mode}')
+    if args.task not in {'val', 'test'}:
+        raise ValueError(f'不支持的评估集合: {args.task}')
+    if args.stage not in STAGE_EXPERIMENTS:
+        raise ValueError(f'不支持的批量评估阶段: {args.stage}')
+    if args.sort_by not in {'precision', 'recall', 'map50', 'map5095'}:
+        raise ValueError(f'不支持的排序指标: {args.sort_by}')
+
+    missing = []
+    for name in ['data', 'batch_size', 'img_size', 'conf_thres', 'iou_thres', 'device', 'workers']:
+        if getattr(args, name) is None:
+            missing.append(name)
+
+    if args.mode == 'metric' and args.task is None:
+        missing.append('task')
+
+    if args.batch_eval:
+        for name in ['ablation_dir', 'weights_name', 'stage', 'sort_by']:
+            if getattr(args, name) is None:
+                missing.append(name)
+
+    if missing:
+        raise ValueError(f'评估配置缺少必要字段: {", ".join(sorted(set(missing)))}')
+
+    return args
+
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='评估目标检测模型性能')
 
-    parser.add_argument('--mode', type=str, default='metric', choices=['speed', 'metric'],
+    parser.add_argument('--config', type=str, default='configs/eval_detection.yaml',
+                        help='检测评估配置文件路径')
+    parser.add_argument('--mode', type=str, default=None, choices=['speed', 'metric'],
                         help='评估模式: speed(测速) 或 metric(标准检测指标)')
     parser.add_argument('--weights', type=str, default=None, help='模型权重路径 (.pt)')
-    parser.add_argument('--data', type=str, default='data/processed/flir/dataset.yaml',
+    parser.add_argument('--data', type=str, default=None,
                         help='数据集配置文件路径 (建议显式指定)')
-    parser.add_argument('--batch-size', type=int, default=32, help='批量大小')
-    parser.add_argument('--img-size', type=int, default=640, help='输入图像大小')
-    parser.add_argument('--conf-thres', type=float, default=0.001, help='置信度阈值')
-    parser.add_argument('--iou-thres', type=float, default=0.6, help='NMS IoU阈值')
-    parser.add_argument('--device', type=str, default='0', help='计算设备 (0, 1, cpu)')
-    parser.add_argument('--workers', type=int, default=8, help='dataloader 线程数（metric模式）')
-    parser.add_argument('--project', type=str, default='outputs/val_detection',
-                        help='metric模式的输出目录（对应 val.py --project）')
-    parser.add_argument('--name', type=str, default='eval_detection',
-                        help='metric模式的实验名（对应 val.py --name）')
-    parser.add_argument('--exist-ok', action='store_true', help='metric模式下允许覆盖已有同名目录')
-    parser.add_argument('--task', type=str, default='val', choices=['val', 'test'],
+    parser.add_argument('--batch-size', type=int, default=None, help='批量大小')
+    parser.add_argument('--img-size', type=int, default=None, help='输入图像大小')
+    parser.add_argument('--conf-thres', type=float, default=None, help='置信度阈值')
+    parser.add_argument('--iou-thres', type=float, default=None, help='NMS IoU阈值')
+    parser.add_argument('--device', type=str, default=None, help='计算设备 (0, 1, cpu)')
+    parser.add_argument('--workers', type=int, default=None, help='dataloader 线程数（metric模式）')
+    parser.add_argument('--task', type=str, default=None, choices=['val', 'test'],
                         help='metric模式评估集合（val或test）')
 
     # 批量评估参数
-    parser.add_argument('--batch-eval', action='store_true',
+    parser.add_argument('--batch-eval', action=argparse.BooleanOptionalAction, default=None,
                         help='批量评估消融实验（仅 metric 模式）')
-    parser.add_argument('--ablation-dir', type=str, default='outputs/ablation_study',
+    parser.add_argument('--ablation-dir', type=str, default=None,
                         help='消融实验根目录（默认 outputs/ablation_study）')
-    parser.add_argument('--stage', type=str, default='all', choices=['stage1', 'stage2', 'all'],
+    parser.add_argument('--stage', type=str, default=None, choices=['stage1', 'stage2', 'all'],
                         help='批量评估阶段过滤')
-    parser.add_argument('--weights-name', type=str, default='best.pt',
+    parser.add_argument('--weights-name', type=str, default=None,
                         help='批量评估时使用的权重文件名（best.pt 或 last.pt）')
-    parser.add_argument('--sort-by', type=str, default='map5095',
+    parser.add_argument('--sort-by', type=str, default=None,
                         choices=['precision', 'recall', 'map50', 'map5095'],
                         help='批量汇总时的排序指标')
-    parser.add_argument('--save-csv', action='store_true', help='批量评估后额外保存 CSV 汇总')
+    parser.add_argument('--save-csv', action=argparse.BooleanOptionalAction, default=None,
+                        help='批量评估后额外保存 CSV 汇总')
 
-    parser.add_argument('--save-json', action='store_true', help='保存结果到JSON')
+    parser.add_argument('--save-json', action=argparse.BooleanOptionalAction, default=None,
+                        help='保存结果到JSON')
     parser.add_argument('--output', type=str, default=None, help='指定结果保存路径')
 
-    return parser.parse_args()
+    return resolve_args(parser.parse_args())
 
 
 class DetectionEvaluator:
@@ -105,18 +189,26 @@ class DetectionEvaluator:
     def __init__(self, args):
         self.args = args
         self.weights_path = Path(args.weights) if args.weights else None
+        self.run_dir, self.output_path, self.csv_output_path = self._resolve_output_targets()
+        self.run_dir.mkdir(parents=True, exist_ok=True)
 
-        # 确定输出路径
-        if args.output:
-            self.output_path = Path(args.output)
-        else:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            if self.args.batch_eval:
-                self.output_path = Path('outputs/results') / f'detection_eval_batch_{timestamp}.json'
+    def _resolve_output_targets(self):
+        if self.args.output:
+            target = normalize_path(self.args.output)
+            if target.suffix.lower() == '.json':
+                run_dir = target.parent
+                json_path = target
             else:
-                self.output_path = Path('outputs/results') / f'detection_eval_{timestamp}.json'
+                run_dir = target
+                json_path = run_dir / 'summary.json'
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            run_name = f'detection_eval_batch_{timestamp}' if self.args.batch_eval else f'detection_eval_{timestamp}'
+            run_dir = ROOT / 'outputs' / 'detection' / run_name
+            json_path = run_dir / 'summary.json'
 
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        csv_path = run_dir / 'summary.csv'
+        return run_dir, json_path, csv_path
 
     @staticmethod
     def _stage_range(stage_name):
@@ -281,6 +373,7 @@ class DetectionEvaluator:
 
         # 构建结果字典
         eval_results = {
+            'output_dir': str(self.run_dir),
             'model': str(self.weights_path),
             'dataset': self.args.data,
             'timestamp': datetime.now().isoformat(),
@@ -301,9 +394,9 @@ class DetectionEvaluator:
             print(f'❌ 错误: 模型文件不存在 - {self.weights_path}')
             sys.exit(1)
 
-        return self._evaluate_metric_for_weights(self.weights_path, run_name=self.args.name)
+        return self._evaluate_metric_for_weights(self.weights_path)
 
-    def _evaluate_metric_for_weights(self, weights_path, run_name):
+    def _evaluate_metric_for_weights(self, weights_path):
         """对指定权重执行一次 metric 评估并返回结构化结果。"""
         if not Path(weights_path).exists():
             raise FileNotFoundError(f'模型文件不存在: {weights_path}')
@@ -318,6 +411,8 @@ class DetectionEvaluator:
 
         try:
             yolo_val_run = importlib.import_module('val').run
+            val_project = str(self.run_dir.parent)
+            val_name = self.run_dir.name
 
             results, maps, _ = yolo_val_run(
                 data=str((ROOT / self.args.data).resolve()) if not Path(self.args.data).is_absolute() else self.args.data,
@@ -336,9 +431,9 @@ class DetectionEvaluator:
                 save_hybrid=False,
                 save_conf=False,
                 save_json=False,
-                project=str((ROOT / self.args.project).resolve()) if not Path(self.args.project).is_absolute() else self.args.project,
-                name=run_name,
-                exist_ok=True if self.args.batch_eval else self.args.exist_ok,
+                project=val_project,
+                name=val_name,
+                exist_ok=True,
                 half=True,
                 dnn=False,
                 plots=False,
@@ -356,6 +451,7 @@ class DetectionEvaluator:
 
             eval_results = {
                 'mode': 'metric',
+                'output_dir': str(self.run_dir),
                 'model': str(weights_path),
                 'dataset': self.args.data,
                 'timestamp': datetime.now().isoformat(),
@@ -368,8 +464,7 @@ class DetectionEvaluator:
                     'car_map5095': round(float(maps[1]), 6) if len(maps) > 1 else None,
                 },
                 'val_output': {
-                    'project': self.args.project,
-                    'name': run_name,
+                    'dir': str(self.run_dir),
                 }
             }
             return eval_results
@@ -427,9 +522,8 @@ class DetectionEvaluator:
                 failed_rows.append({'exp_name': exp_name, 'error': msg})
                 continue
 
-            run_name = f"{self.args.name}_{exp_name}"
             try:
-                result = self._evaluate_metric_for_weights(weight_path, run_name=run_name)
+                result = self._evaluate_metric_for_weights(weight_path)
                 metrics = result['metrics']
                 eval_rows.append({
                     'exp_name': exp_name,
@@ -440,8 +534,6 @@ class DetectionEvaluator:
                     'map5095': metrics['map5095'],
                     'person_map5095': metrics.get('person_map5095'),
                     'car_map5095': metrics.get('car_map5095'),
-                    'val_project': self.args.project,
-                    'val_name': run_name,
                 })
             except Exception as e:
                 print(f'❌ 评估失败: {e}')
@@ -473,6 +565,7 @@ class DetectionEvaluator:
 
         batch_result = {
             'mode': 'metric_batch',
+            'output_dir': str(self.run_dir),
             'stage': self.args.stage,
             'weights_name': self.args.weights_name,
             'sort_by': sort_key,
@@ -493,22 +586,24 @@ class DetectionEvaluator:
         if not rows:
             return
 
-        csv_path = self.output_path.with_suffix('.csv')
         fieldnames = [
             'exp_name', 'weights', 'precision', 'recall', 'map50', 'map5095',
-            'person_map5095', 'car_map5095', 'val_project', 'val_name'
+            'person_map5095', 'car_map5095'
         ]
-        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        with open(self.csv_output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        print(f'CSV汇总已保存到: {csv_path}')
+        print(f'CSV汇总已保存到: {self.csv_output_path}')
 
     def save_results(self, results):
         if results and self.args.save_json:
             with open(self.output_path, 'w', encoding='utf-8') as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
             print(f'\n结果已保存到: {self.output_path}')
+
+        if results:
+            print(f'输出目录: {self.run_dir}')
 
         if results and self.args.batch_eval and self.args.save_csv:
             self.save_csv(results)

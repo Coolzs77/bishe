@@ -10,8 +10,9 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
+from matplotlib.patches import Patch, Rectangle
 from matplotlib.ticker import AutoMinorLocator
 
 
@@ -19,13 +20,13 @@ ALIAS_MAP = {
     "ablation_exp01_baseline": "Exp01 Baseline",
     "ablation_exp02_ghost": "Exp02 Ghost",
     "ablation_exp03_shuffle": "Exp03 Shuffle",
-    "ablation_exp04_attention": "Exp04 Attention",
+    "ablation_exp04_attention": "Exp04 SEAttention",
     "ablation_exp05_coordatt": "Exp05 CoordAtt",
     "ablation_exp06_siou": "Exp06 SIoU",
     "ablation_exp07_eiou": "Exp07 EIoU",
-    "ablation_exp08_ghost_attention": "Exp08 Ghost+Attention",
+    "ablation_exp08_ghost_attention": "Exp08 Ghost+SEAttention",
     "ablation_exp09_ghost_eiou": "Exp09 Ghost+EIoU",
-    "ablation_exp10_attention_eiou": "Exp10 Attention+EIoU",
+    "ablation_exp10_attention_eiou": "Exp10 SEAttention+EIoU",
     "ablation_exp11_shuffle_coordatt": "Exp11 Shuffle+CoordAtt",
     "ablation_exp12_shuffle_coordatt_siou": "Exp12 Shuffle+CoordAtt+SIoU",
     "ablation_exp13_shuffle_coordatt_eiou": "Exp13 Shuffle+CoordAtt+EIoU",
@@ -40,39 +41,83 @@ METRIC_LABELS = {
 }
 
 
+def load_config(config_path: str) -> dict:
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Plot config not found: {path}")
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def config_get(config: dict, *keys, default=None):
+    value = config
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            return default
+        value = value[key]
+    return value
+
+
+def pick(cli_value, config_value):
+    return cli_value if cli_value is not None else config_value
+
+
+def resolve_args(args: argparse.Namespace) -> argparse.Namespace:
+    config = load_config(args.config)
+
+    args.input_dir = pick(args.input_dir, config_get(config, "input", "dir"))
+    args.csv = pick(args.csv, config_get(config, "input", "csv"))
+    if args.csv is None and args.input_dir is not None:
+        args.csv = str(Path(args.input_dir) / "summary.csv")
+
+    args.output_dir = pick(args.output_dir, config_get(config, "output", "dir"))
+    args.output_prefix = pick(args.output_prefix, config_get(config, "output", "prefix"))
+    if args.output_dir is None and args.output_prefix is None and args.csv is not None:
+        args.output_dir = str(Path(args.csv).parent)
+
+    args.topk = pick(args.topk, config_get(config, "display", "topk", default=9))
+
+    missing = []
+    for name in ["csv", "topk"]:
+        if getattr(args, name) is None:
+            missing.append(name)
+    if args.output_dir is None and args.output_prefix is None:
+        missing.append("output_dir")
+    if missing:
+        raise ValueError(f"Missing plot config fields: {', '.join(missing)}")
+
+    return args
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render publication-style ablation figures")
-    parser.add_argument("--csv", type=str, required=True, help="Path to summary CSV")
+    parser.add_argument("--config", type=str, default="configs/plot_eval_summary.yaml", help="Plot config path")
+    parser.add_argument("--input-dir", type=str, default=None, help="Batch evaluation directory containing summary.csv")
+    parser.add_argument("--csv", type=str, default=None, help="Path to summary CSV")
+    parser.add_argument("--output-dir", type=str, default=None, help="Directory for generated figures")
     parser.add_argument(
         "--output-prefix",
         type=str,
-        default="outputs/results/detection_eval_batch",
-        help="Output prefix, figures will be saved as *_journal_*.png",
+        default=None,
+        help="Legacy output prefix, figures will be saved as *_journal_*.png",
     )
-    parser.add_argument("--topk", type=int, default=9, help="Show top-k experiments")
-    parser.add_argument(
-        "--sort-by",
-        type=str,
-        default="map50",
-        choices=["map50", "map5095", "precision", "recall"],
-        help="Sorting metric",
-    )
-    return parser.parse_args()
+    parser.add_argument("--topk", type=int, default=None, help="Show first-k experiments in canonical order")
+    return resolve_args(parser.parse_args())
 
 
 def setup_journal_style() -> None:
-    # Chinese-capable serif-like fallback chain.
-    mpl.rcParams["font.sans-serif"] = [
-        "Microsoft YaHei",
-        "Noto Sans CJK SC",
-        "SimHei",
-        "Arial Unicode MS",
-        "DejaVu Sans",
-    ]
+    mpl.rcParams["font.family"] = "serif"
+    mpl.rcParams["font.serif"] = ["Times New Roman", "STSong", "SimSun", "Noto Serif CJK SC", "DejaVu Serif"]
+    mpl.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "DejaVu Sans"]
     mpl.rcParams["axes.unicode_minus"] = False
+    mpl.rcParams["text.color"] = "#273444"
+    mpl.rcParams["axes.labelcolor"] = "#273444"
+    mpl.rcParams["axes.titlecolor"] = "#273444"
+    mpl.rcParams["xtick.color"] = "#273444"
+    mpl.rcParams["ytick.color"] = "#273444"
 
     mpl.rcParams["figure.facecolor"] = "white"
-    mpl.rcParams["axes.facecolor"] = "white"
+    mpl.rcParams["axes.facecolor"] = "#fbfbf8"
     mpl.rcParams["savefig.facecolor"] = "white"
 
     mpl.rcParams["axes.linewidth"] = 1.0
@@ -116,7 +161,7 @@ def finalize_axes(ax, x, labels, y_min=None, y_max=None):
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=20, ha="right", fontsize=9)
     ax.set_axisbelow(True)
-    ax.set_facecolor("#fcfcfd")
+    ax.set_facecolor("#fbfbf8")
     ax.grid(True, axis="x", linestyle=":", linewidth=0.40, alpha=0.14, color="#a8b0ba")
     ax.grid(True, axis="y", linestyle="--", linewidth=0.7, alpha=0.32, color="#a8b0ba")
     ax.yaxis.set_minor_locator(AutoMinorLocator(2))
@@ -140,7 +185,126 @@ def save_fig(fig, path: Path):
     plt.close(fig)
 
 
-def plot_journal_panel4(rows, out_prefix: Path) -> Path:
+def build_output_path(output_dir: Path | None, output_prefix: Path | None, stem: str) -> Path:
+    if output_prefix is not None:
+        return output_prefix.with_name(output_prefix.name + f"_{stem}.png")
+    assert output_dir is not None
+    return output_dir / f"{stem}.png"
+
+
+def _expand_bbox(fig, bbox, *, pad_x: float, pad_y: float):
+    bbox_fig = bbox.transformed(fig.transFigure.inverted())
+    x0 = max(0.015, bbox_fig.x0 - pad_x)
+    y0 = max(0.015, bbox_fig.y0 - pad_y)
+    x1 = min(0.985, bbox_fig.x1 + pad_x)
+    y1 = min(0.985, bbox_fig.y1 + pad_y)
+    return x0, y0, x1, y1
+
+
+def _fit_text_to_width(fig, text_obj, max_width: float, initial_fontsize: float, min_fontsize: float = 6.0):
+    fontsize = initial_fontsize
+    text_obj.set_fontsize(fontsize)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    width = text_obj.get_window_extent(renderer=renderer).transformed(fig.transFigure.inverted()).width
+
+    while width > max_width and fontsize > min_fontsize:
+        fontsize = max(min_fontsize, fontsize - 0.2)
+        text_obj.set_fontsize(fontsize)
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        width = text_obj.get_window_extent(renderer=renderer).transformed(fig.transFigure.inverted()).width
+
+    return fontsize, width
+
+
+def add_split_top_legends(
+    fig,
+    legend_handles,
+    labels,
+    legend_labels,
+    *,
+    legend_y: float = 0.918,
+    experiment_y: float = 0.871,
+    legend_fontsize: float = 8.3,
+    experiment_fontsize: float = 8.3,
+):
+    legend_box_height = 0.030
+    experiment_box_height = 0.040
+
+    color_legend = fig.legend(
+        handles=legend_handles,
+        labels=legend_labels,
+        loc="center",
+        bbox_to_anchor=(0.5, legend_y),
+        ncol=max(1, len(legend_labels)),
+        frameon=False,
+        fontsize=legend_fontsize,
+        handlelength=1.8,
+        handletextpad=0.6,
+        columnspacing=1.2,
+    )
+
+    experiment_line = "  ".join(
+        f"{i + 1}-{legend_meaning_label(labels[i])}" for i in range(len(labels))
+    )
+    exp_text = fig.text(
+        0.5,
+        experiment_y,
+        experiment_line,
+        ha="center",
+        va="center",
+        fontsize=experiment_fontsize,
+        color="#1f2937",
+    )
+
+    fig.canvas.draw()
+
+    _fit_text_to_width(
+        fig,
+        exp_text,
+        max_width=0.88,
+        initial_fontsize=experiment_fontsize,
+        min_fontsize=7.4,
+    )
+
+    renderer = fig.canvas.get_renderer()
+    legend_bbox = color_legend.get_window_extent(renderer=renderer).transformed(fig.transFigure.inverted())
+    text_bbox = exp_text.get_window_extent(renderer=renderer).transformed(fig.transFigure.inverted())
+
+    legend_box_width = min(0.92, legend_bbox.width + 0.030)
+    exp_box_width = min(0.94, text_bbox.width + 0.028)
+    legend_box_left = 0.5 - legend_box_width / 2
+    exp_box_left = 0.5 - exp_box_width / 2
+
+    legend_box_bottom = legend_y - legend_box_height / 2
+    experiment_box_bottom = experiment_y - experiment_box_height / 2
+
+    fig.add_artist(
+        Rectangle(
+            (legend_box_left, legend_box_bottom),
+            legend_box_width,
+            legend_box_height,
+            transform=fig.transFigure,
+            fill=False,
+            linewidth=1.0,
+            edgecolor="#94a3b8",
+        )
+    )
+    fig.add_artist(
+        Rectangle(
+            (exp_box_left, experiment_box_bottom),
+            exp_box_width,
+            experiment_box_height,
+            transform=fig.transFigure,
+            fill=False,
+            linewidth=1.0,
+            edgecolor="#94a3b8",
+        )
+    )
+
+
+def plot_journal_panel4(rows, output_dir: Path | None, output_prefix: Path | None) -> Path:
     labels = [r["label"] for r in rows]
     x = np.arange(len(rows))
 
@@ -188,12 +352,12 @@ def plot_journal_panel4(rows, out_prefix: Path) -> Path:
         ax.legend(loc="lower left", fontsize=8, frameon=True, framealpha=0.78, edgecolor="#94a3b8")
 
     fig.suptitle("Ablation Study Results (Publication Style)", fontsize=14, fontweight="bold", y=0.99)
-    out = out_prefix.with_name(out_prefix.name + "_journal_panel4.png")
+    out = build_output_path(output_dir, output_prefix, "journal_panel4")
     save_fig(fig, out)
     return out
 
 
-def plot_journal_multiline(rows, out_prefix: Path) -> Path:
+def plot_journal_multiline(rows, output_dir: Path | None, output_prefix: Path | None) -> Path:
     labels = [r["label"] for r in rows]
     x = np.arange(len(rows))
 
@@ -240,12 +404,12 @@ def plot_journal_multiline(rows, out_prefix: Path) -> Path:
         edgecolor="#94a3b8",
     )
 
-    out = out_prefix.with_name(out_prefix.name + "_journal_multiline.png")
+    out = build_output_path(output_dir, output_prefix, "journal_multiline")
     save_fig(fig, out)
     return out
 
 
-def plot_journal_barline(rows, out_prefix: Path) -> Path:
+def plot_journal_barline(rows, output_dir: Path | None, output_prefix: Path | None) -> Path:
     labels = [r["label"] for r in rows]
     x = np.arange(len(rows))
     map50 = np.array([r["map50"] for r in rows])
@@ -290,12 +454,12 @@ def plot_journal_barline(rows, out_prefix: Path) -> Path:
     finalize_axes(ax, x, labels, y_min=y_min, y_max=y_max)
     ax.legend(loc="upper right", fontsize=8.2, frameon=True, framealpha=0.82, edgecolor="#94a3b8")
 
-    out = out_prefix.with_name(out_prefix.name + "_journal_barline.png")
+    out = build_output_path(output_dir, output_prefix, "journal_barline")
     save_fig(fig, out)
     return out
 
 
-def plot_improvement_comparison(rows, out_prefix: Path) -> Path:
+def plot_improvement_comparison(rows, output_dir: Path | None, output_prefix: Path | None) -> Path:
     """Show improvement (%) relative to baseline (Exp1) across key metrics."""
     labels = [r["label"] for r in rows]
     x = np.arange(len(rows))
@@ -322,7 +486,7 @@ def plot_improvement_comparison(rows, out_prefix: Path) -> Path:
             improvements[metric].append(improvement_pct)
     
     # Create 2x2 subplot for improvements
-    fig, axes = plt.subplots(2, 2, figsize=(14.2, 8.6), dpi=220)
+    fig, axes = plt.subplots(2, 2, figsize=(15.4, 8.8), dpi=220)
     
     metric_order = ["precision", "recall", "map50", "map5095"]
     cmap_positive = "#22c55e"  # Green (Improved)
@@ -356,15 +520,16 @@ def plot_improvement_comparison(rows, out_prefix: Path) -> Path:
                 va_align = "top"
                 y_pos = height - 0.03
             ax.text(bar.get_x() + bar.get_width() / 2, y_pos, f"{val:.1f}%", 
-                   ha="center", va=va_align, fontsize=7.5, color="#334155")
+                   ha="center", va=va_align, fontsize=9.5, color="#334155")
         
         # Horizontal line at y=0 (baseline reference)
         ax.axhline(y=0, color="#64748b", linewidth=0.8, linestyle="-", alpha=0.5)
         
-        ax.set_ylabel("Improvement (%)", fontsize=10)
+        ax.set_ylabel("Improvement (%)", fontsize=12)
         ax.set_xticks(x)
-        ax.set_xticklabels([str(i) for i in range(1, len(rows) + 1)], rotation=0, fontsize=8.8)
-        ax.set_facecolor("#fcfcfd")
+        ax.set_xticklabels([str(i) for i in range(1, len(rows) + 1)], rotation=0, fontsize=11)
+        ax.tick_params(axis='y', labelsize=11)
+        ax.set_facecolor("#fbfbf8")
         ax.grid(True, axis="y", linestyle="--", linewidth=0.7, alpha=0.32, color="#a8b0ba")
         ax.yaxis.set_minor_locator(AutoMinorLocator(2))
         ax.grid(True, which="minor", axis="y", linestyle=":", linewidth=0.45, alpha=0.22, color="#a8b0ba")
@@ -389,7 +554,7 @@ def plot_improvement_comparison(rows, out_prefix: Path) -> Path:
             transform=ax.transAxes,
             ha="center",
             va="top",
-            fontsize=11,
+            fontsize=13,
             fontweight="bold",
         )
     
@@ -397,45 +562,33 @@ def plot_improvement_comparison(rows, out_prefix: Path) -> Path:
         Patch(facecolor=cmap_positive, edgecolor="#334155", alpha=0.40, label="Improved"),
         Patch(facecolor=cmap_negative, edgecolor="#334155", alpha=0.40, label="Declined"),
     ]
-    fig.legend(
-        handles=legend_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 0.93),
-        ncol=2,
-        frameon=True,
-        framealpha=0.82,
-        edgecolor="#94a3b8",
-        fontsize=9,
+    add_split_top_legends(
+        fig,
+        legend_handles,
+        labels,
+        ["Improved", "Declined"],
+        legend_y=0.924,
+        experiment_y=0.879,
+        legend_fontsize=9.2,
+        experiment_fontsize=9.2,
     )
 
-    idx_handles = [
-        Line2D([0], [0], color="none", label=f"{i + 1}={legend_meaning_label(labels[i])}")
-        for i in range(len(labels))
-    ]
-    fig.legend(
-        handles=idx_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 0.885),
-        ncol=9,
-        frameon=True,
-        framealpha=0.80,
-        edgecolor="#94a3b8",
-        fontsize=7.8,
-        handlelength=0,
-        handletextpad=0.1,
-        columnspacing=0.8,
+    fig.suptitle(
+        "消融实验相对基线改变量对比",
+        fontsize=14,
+        fontweight="bold",
+        y=0.982,
+        fontfamily="sans-serif",
     )
-
-    fig.suptitle("消融实验相对基线改变量对比", fontsize=14, fontweight="bold", y=0.985)
-    fig.subplots_adjust(top=0.82, bottom=0.10, hspace=0.42, wspace=0.20)
+    fig.subplots_adjust(top=0.84, bottom=0.10, hspace=0.38, wspace=0.20)
     
-    out = out_prefix.with_name(out_prefix.name + "_journal_improvement.png")
+    out = build_output_path(output_dir, output_prefix, "journal_improvement")
     fig.savefig(out, dpi=320, bbox_inches="tight")
     plt.close(fig)
     return out
 
 
-def plot_metric_comparison_with_baseline(rows, out_prefix: Path) -> Path:
+def plot_metric_comparison_with_baseline(rows, output_dir: Path | None, output_prefix: Path | None) -> Path:
     """Show all metrics with baseline reference line and up/down highlighting."""
     labels = [r["label"] for r in rows]
     x = np.arange(len(rows))
@@ -452,7 +605,7 @@ def plot_metric_comparison_with_baseline(rows, out_prefix: Path) -> Path:
     global_pad = (global_max - global_min) * 0.15 if global_max != global_min else abs(global_max) * 0.15
     fixed_ymin, fixed_ymax = global_min - global_pad, global_max + global_pad
     
-    fig, axes = plt.subplots(2, 2, figsize=(14.2, 8.6), dpi=220)
+    fig, axes = plt.subplots(2, 2, figsize=(15.4, 8.8), dpi=220)
     
     for idx, metric in enumerate(metric_order):
         ax = axes[idx // 2, idx % 2]
@@ -487,12 +640,13 @@ def plot_metric_comparison_with_baseline(rows, out_prefix: Path) -> Path:
         # Add value labels on all points
         for i, (xi, yi) in enumerate(zip(x, y)):
             ax.text(xi, yi + 0.005, f"{yi:.3f}", ha="center", va="bottom", 
-                   fontsize=7.5, color="#334155")
+                   fontsize=9.5, color="#334155")
         
-        ax.set_ylabel("Value", fontsize=10)
+        ax.set_ylabel("Value", fontsize=12)
         ax.set_xticks(x)
-        ax.set_xticklabels([str(i) for i in range(1, len(rows) + 1)], rotation=0, fontsize=8.8)
-        ax.set_facecolor("#fcfcfd")
+        ax.set_xticklabels([str(i) for i in range(1, len(rows) + 1)], rotation=0, fontsize=11)
+        ax.tick_params(axis='y', labelsize=11)
+        ax.set_facecolor("#fbfbf8")
         ax.grid(True, axis="y", linestyle="--", linewidth=0.7, alpha=0.32, color="#a8b0ba")
         ax.yaxis.set_minor_locator(AutoMinorLocator(2))
         ax.grid(True, which="minor", axis="y", linestyle=":", linewidth=0.45, alpha=0.22, color="#a8b0ba")
@@ -515,7 +669,7 @@ def plot_metric_comparison_with_baseline(rows, out_prefix: Path) -> Path:
             transform=ax.transAxes,
             ha="center",
             va="top",
-            fontsize=11,
+            fontsize=13,
             fontweight="bold",
         )
 
@@ -525,39 +679,27 @@ def plot_metric_comparison_with_baseline(rows, out_prefix: Path) -> Path:
         Line2D([0], [0], color="#8b5cf6", marker="o", markerfacecolor="white", markeredgewidth=1.2, linewidth=0, label="Baseline (Exp1)"),
         Line2D([0], [0], color="#64748b", linestyle="--", linewidth=1.2, label="Baseline Reference"),
     ]
-    fig.legend(
-        handles=legend_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 0.95),
-        ncol=4,
-        frameon=True,
-        framealpha=0.82,
-        edgecolor="#94a3b8",
-        fontsize=9,
+    add_split_top_legends(
+        fig,
+        legend_handles,
+        labels,
+        ["Improved", "Declined", "Baseline (Exp1)", "Baseline Reference"],
+        legend_y=0.924,
+        experiment_y=0.879,
+        legend_fontsize=9.0,
+        experiment_fontsize=9.0,
     )
 
-    idx_handles = [
-        Line2D([0], [0], color="none", label=f"{i + 1}={legend_meaning_label(labels[i])}")
-        for i in range(len(labels))
-    ]
-    fig.legend(
-        handles=idx_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 0.905),
-        ncol=9,
-        frameon=True,
-        framealpha=0.80,
-        edgecolor="#94a3b8",
-        fontsize=7.8,
-        handlelength=0,
-        handletextpad=0.1,
-        columnspacing=0.8,
+    fig.suptitle(
+        "四项指标变化与基线对比",
+        fontsize=14,
+        fontweight="bold",
+        y=0.982,
+        fontfamily="sans-serif",
     )
-
-    fig.suptitle("四项指标变化与基线对比", fontsize=14, fontweight="bold", y=0.988)
-    fig.subplots_adjust(top=0.82, bottom=0.12, hspace=0.42, wspace=0.20)
+    fig.subplots_adjust(top=0.84, bottom=0.12, hspace=0.38, wspace=0.20)
     
-    out = out_prefix.with_name(out_prefix.name + "_journal_metric_change.png")
+    out = build_output_path(output_dir, output_prefix, "journal_metric_change")
     fig.savefig(out, dpi=320, bbox_inches="tight")
     plt.close(fig)
     return out
@@ -568,7 +710,8 @@ def main() -> None:
     setup_journal_style()
 
     csv_path = Path(args.csv)
-    out_prefix = Path(args.output_prefix)
+    output_dir = Path(args.output_dir) if args.output_dir else None
+    output_prefix = Path(args.output_prefix) if args.output_prefix else None
 
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV not found: {csv_path}")
@@ -580,9 +723,9 @@ def main() -> None:
     # 按实验顺序绘图（Exp1-Exp9），不排序
     rows = rows[: max(1, args.topk)]
 
-    p3 = plot_journal_barline(rows, out_prefix)
-    p4 = plot_improvement_comparison(rows, out_prefix)
-    p5 = plot_metric_comparison_with_baseline(rows, out_prefix)
+    p3 = plot_journal_barline(rows, output_dir, output_prefix)
+    p4 = plot_improvement_comparison(rows, output_dir, output_prefix)
+    p5 = plot_metric_comparison_with_baseline(rows, output_dir, output_prefix)
 
     print(f"SAVED: {p3}")
     if p4:

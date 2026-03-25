@@ -33,47 +33,126 @@ np.random.seed(42)
 COLORS = np.random.randint(0, 255, size=(200, 3), dtype="uint8")
 
 
+def load_config(config_path):
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f'跟踪评估配置不存在: {config_path}')
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
+
+
+def config_get(config, *keys, default=None):
+    value = config
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            return default
+        value = value[key]
+    return value
+
+
+def pick(cli_value, config_value):
+    return cli_value if cli_value is not None else config_value
+
+
+def resolve_args(args):
+    config = load_config(args.config)
+
+    args.weights = pick(args.weights, config_get(config, 'detector', 'weights'))
+    args.data = pick(args.data, config_get(config, 'detector', 'data'))
+    args.tracker = pick(args.tracker, config_get(config, 'runtime', 'tracker', default='deepsort'))
+    args.output = pick(args.output, config_get(config, 'runtime', 'output'))
+    args.save_vid = pick(args.save_vid, config_get(config, 'artifacts', 'save_vid', default=True))
+    args.save_txt = pick(args.save_txt, config_get(config, 'artifacts', 'save_txt', default=True))
+    args.show = pick(args.show, config_get(config, 'runtime', 'show', default=False))
+    overlay = pick(args.overlay, config_get(config, 'runtime', 'overlay', default=True))
+    args.no_overlay = not overlay
+    args.conf_thres = pick(args.conf_thres, config_get(config, 'detector', 'conf_thres'))
+    args.nms_thres = pick(args.nms_thres, config_get(config, 'detector', 'nms_thres'))
+    args.img_size = pick(args.img_size, config_get(config, 'detector', 'img_size'))
+    args.half = pick(args.half, config_get(config, 'detector', 'half', default=False))
+    warmup = pick(args.warmup, config_get(config, 'detector', 'warmup', default=True))
+    args.no_warmup = not warmup
+    args.device = pick(args.device, config_get(config, 'runtime', 'device'))
+    args.max_age = pick(args.max_age, config_get(config, 'trackers', 'common', 'max_age'))
+    args.min_hits = pick(args.min_hits, config_get(config, 'trackers', 'common', 'min_hits'))
+    args.fps_alpha = pick(args.fps_alpha, config_get(config, 'runtime', 'fps_alpha', default=0.12))
+    args.debug = pick(args.debug, config_get(config, 'runtime', 'debug', default=False))
+
+    tracker_overrides = config_get(config, 'trackers', args.tracker, default={}) or {}
+    args.track_visible_lag = pick(
+        args.track_visible_lag,
+        config_get(tracker_overrides, 'visible_lag', default=config_get(config, 'trackers', 'common', 'visible_lag')),
+    )
+    args.tracker_iou_thres = config_get(tracker_overrides, 'iou_threshold', default=0.3)
+    args.deepsort_max_cosine_distance = config_get(tracker_overrides, 'max_cosine_distance', default=0.2)
+    args.deepsort_nn_budget = config_get(tracker_overrides, 'nn_budget', default=100)
+    args.bytetrack_high_thres = config_get(tracker_overrides, 'high_threshold', default=0.5)
+    args.bytetrack_low_thres = config_get(tracker_overrides, 'low_threshold', default=0.1)
+    args.bytetrack_match_thres = config_get(tracker_overrides, 'match_threshold', default=0.3)
+    args.bytetrack_second_match_thres = config_get(tracker_overrides, 'second_match_threshold', default=0.2)
+    args.centertrack_center_thres = config_get(tracker_overrides, 'center_threshold', default=50.0)
+    args.centertrack_pre_thres = config_get(tracker_overrides, 'pre_threshold', default=0.3)
+
+    if args.tracker not in {'deepsort', 'bytetrack', 'centertrack'}:
+        raise ValueError(f'不支持的跟踪器: {args.tracker}')
+
+    missing = []
+    for name in ['weights', 'data', 'output', 'conf_thres', 'nms_thres', 'img_size', 'device', 'max_age', 'min_hits', 'track_visible_lag']:
+        if getattr(args, name) is None:
+            missing.append(name)
+    if missing:
+        raise ValueError(f'跟踪评估配置缺少必要字段: {", ".join(sorted(set(missing)))}')
+
+    return args
+
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='多目标跟踪评估与可视化')
 
+    parser.add_argument('--config', type=str, default='configs/tracking_config.yaml',
+                        help='跟踪评估配置文件路径')
+
     # 核心输入
-    parser.add_argument('--weights', type=str, required=True, help='YOLOv5 检测器权重路径 (.pt)')
-    parser.add_argument('--data', type=str, default='data/processed/flir/dataset.yaml',
+    parser.add_argument('--weights', type=str, default=None, help='YOLOv5 检测器权重路径 (.pt)')
+    parser.add_argument('--data', type=str, default=None,
                         help='数据集配置文件 或 视频文件路径 或 视频目录路径')
-    parser.add_argument('--tracker', type=str, default='deepsort', choices=['deepsort', 'bytetrack', 'centertrack'],
+    parser.add_argument('--tracker', type=str, default=None, choices=['deepsort', 'bytetrack', 'centertrack'],
                         help='选择跟踪算法')
 
     # 输出设置
-    parser.add_argument('--output', type=str, default='outputs/tracking', help='结果输出目录')
-    parser.add_argument('--save-vid', action='store_true', default=True, help='是否保存 MP4 视频')
-    parser.add_argument('--save-txt', action='store_true', default=True, help='是否保存 MOT 格式的 txt 指标文件')
-    parser.add_argument('--no-save-vid', action='store_true', help='不保存视频（提速）')
-    parser.add_argument('--no-save-txt', action='store_true', help='不保存txt（提速）')
-    parser.add_argument('--show', action='store_true', help='是否实时弹窗显示')
-    parser.add_argument('--no-overlay', action='store_true', help='不绘制框和HUD（提速）')
+    parser.add_argument('--output', type=str, default=None, help='结果输出目录')
+    parser.add_argument('--save-vid', action=argparse.BooleanOptionalAction, default=None,
+                        help='是否保存 MP4 视频')
+    parser.add_argument('--save-txt', action=argparse.BooleanOptionalAction, default=None,
+                        help='是否保存 MOT 格式的 txt 指标文件')
+    parser.add_argument('--show', action=argparse.BooleanOptionalAction, default=None, help='是否实时弹窗显示')
+    parser.add_argument('--overlay', action=argparse.BooleanOptionalAction, default=None,
+                        help='是否绘制框和HUD')
 
     # 检测参数
-    parser.add_argument('--conf-thres', type=float, default=0.25,
+    parser.add_argument('--conf-thres', type=float, default=None,
                         help='检测置信度阈值 (降低此值可以检测更多目标)')
-    parser.add_argument('--nms-thres', type=float, default=0.45, help='NMS 阈值')
-    parser.add_argument('--img-size', type=int, default=640, help='检测输入尺寸（推荐 512/448 提速）')
-    parser.add_argument('--half', action='store_true', help='开启半精度推理（GPU提速）')
-    parser.add_argument('--no-warmup', action='store_true', help='禁用模型预热（仅影响启动时延）')
-    parser.add_argument('--device', type=str, default='0', help='计算设备')
+    parser.add_argument('--nms-thres', type=float, default=None, help='NMS 阈值')
+    parser.add_argument('--img-size', type=int, default=None, help='检测输入尺寸（推荐 512/448 提速）')
+    parser.add_argument('--half', action=argparse.BooleanOptionalAction, default=None, help='开启半精度推理')
+    parser.add_argument('--warmup', action=argparse.BooleanOptionalAction, default=None,
+                        help='是否执行模型预热（仅影响启动时延）')
+    parser.add_argument('--device', type=str, default=None, help='计算设备')
 
     # 跟踪参数
-    parser.add_argument('--max-age', type=int, default=30,
+    parser.add_argument('--max-age', type=int, default=None,
                         help='目标最大失踪帧数 (越大越容易保持ID)')
-    parser.add_argument('--min-hits', type=int, default=3,
+    parser.add_argument('--min-hits', type=int, default=None,
                         help='目标最少检测次数 (越小越容易出现)')
-    parser.add_argument('--track-visible-lag', type=int, default=8,
+    parser.add_argument('--track-visible-lag', type=int, default=None,
                         help='目标漏检后继续显示的最大帧数，用于减少跟踪框时有时无')
-    parser.add_argument('--fps-alpha', type=float, default=0.12,
+    parser.add_argument('--fps-alpha', type=float, default=None,
                         help='FPS平滑系数(0-1)，越小越稳定')
-    parser.add_argument('--debug', action='store_true', help='是否输出调试信息')
+    parser.add_argument('--debug', action=argparse.BooleanOptionalAction, default=None, help='是否输出调试信息')
 
-    return parser.parse_args()
+    return resolve_args(parser.parse_args())
 
 
 class TrackingRunner:
@@ -125,6 +204,9 @@ class TrackingRunner:
                 return create_deepsort_tracker(
                     max_age=self.args.max_age,
                     min_hits=self.args.min_hits,
+                    iou_threshold=self.args.tracker_iou_thres,
+                    max_cosine_distance=self.args.deepsort_max_cosine_distance,
+                    nn_budget=self.args.deepsort_nn_budget,
                     visible_lag=self.args.track_visible_lag,
                 )
 
@@ -133,6 +215,11 @@ class TrackingRunner:
                 return create_bytetrack_tracker(
                     max_age=self.args.max_age,
                     min_hits=self.args.min_hits,
+                    iou_threshold=self.args.tracker_iou_thres,
+                    high_threshold=self.args.bytetrack_high_thres,
+                    low_threshold=self.args.bytetrack_low_thres,
+                    match_threshold=self.args.bytetrack_match_thres,
+                    second_match_threshold=self.args.bytetrack_second_match_thres,
                     visible_lag=self.args.track_visible_lag,
                 )
 
@@ -141,6 +228,9 @@ class TrackingRunner:
                 return create_centertrack_tracker(
                     max_age=self.args.max_age,
                     min_hits=self.args.min_hits,
+                    iou_threshold=self.args.tracker_iou_thres,
+                    center_threshold=self.args.centertrack_center_thres,
+                    pre_thresh=self.args.centertrack_pre_thres,
                     visible_lag=self.args.track_visible_lag,
                 )
 
@@ -372,9 +462,12 @@ class TrackingRunner:
     def _finalize_video_stats(self, stats, input_fps):
         frames = max(1, stats['frame_count'])
         elapsed = max(stats.get('elapsed_sec', 0.0), 1e-9)
-        avg_fps = stats['frame_count'] / elapsed
+        core_elapsed = max(stats.get('core_elapsed_sec', 0.0), 1e-9)
+        # FPS 仅基于检测+跟踪核心耗时，排除视频I/O、可视化、编码
+        avg_fps = stats['frame_count'] / core_elapsed
 
         stats['avg_fps'] = avg_fps
+        stats['wall_fps'] = stats['frame_count'] / elapsed  # 含I/O的壁钟FPS（仅参考）
         stats['input_fps'] = float(input_fps)
         stats['realtime_factor'] = self._safe_ratio(avg_fps, max(float(input_fps), 1e-9))
         stats['match_rate'] = self._safe_ratio(stats['matched_detections'], stats['total_detections'])
@@ -556,8 +649,8 @@ class TrackingRunner:
         vid_writer = None
         txt_file = None
 
-        save_vid = self.args.save_vid and (not self.args.no_save_vid)
-        save_txt = self.args.save_txt and (not self.args.no_save_txt)
+        save_vid = self.args.save_vid
+        save_txt = self.args.save_txt
 
         if save_vid:
             result_video_path = video_save_dir / 'result.mp4'
@@ -580,6 +673,7 @@ class TrackingRunner:
             'frames_with_tracks': 0,
             'id_switch_proxy': 0,
             'elapsed_sec': 0.0,
+            'core_elapsed_sec': 0.0,
         }
 
         print('\n🚀 开始跟踪处理...')
@@ -589,8 +683,7 @@ class TrackingRunner:
         fps_ema = None
 
         while True:
-            iter_start = time.perf_counter()
-            # 读取下一帧
+            # 读取下一帧（不计入核心FPS）
             if is_video:
                 ret, frame = dataloader.read()
                 if not ret:
@@ -603,6 +696,9 @@ class TrackingRunner:
                     stats['frame_count'] += 1
                     pbar.update(1)
                     continue
+
+            # === 核心计时开始：仅包含 检测 + 跟踪 ===
+            core_start = time.perf_counter()
 
             # 目标检测
             det_result = self.detector.detect(frame)
@@ -654,6 +750,10 @@ class TrackingRunner:
                     if self.args.debug:
                         print(f'\n⚠️  跟踪出错 (Frame {stats["frame_count"]}): {e}')
 
+            # === 核心计时结束：仅包含检测+跟踪，排除I/O、可视化、编码 ===
+            core_dt = time.perf_counter() - core_start
+            stats['core_elapsed_sec'] += core_dt
+
             # 数据记录
             for track in tracks:
                 if hasattr(track, 'bbox'):
@@ -697,8 +797,8 @@ class TrackingRunner:
             stats['id_switch_proxy'] += self._estimate_id_switches(prev_matched_entries, current_matched_entries)
             prev_matched_entries = current_matched_entries
 
-            # 计算并平滑FPS，减少数值抖动便于阅读
-            dt = max(time.perf_counter() - iter_start, 1e-6)
+            # 计算并平滑FPS（仅基于检测+跟踪核心耗时）
+            dt = max(core_dt, 1e-6)
             inst_fps = 1.0 / dt
             alpha = float(np.clip(self.args.fps_alpha, 0.01, 1.0))
             fps_ema = inst_fps if fps_ema is None else (1.0 - alpha) * fps_ema + alpha * inst_fps

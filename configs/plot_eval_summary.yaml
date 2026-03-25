@@ -1,0 +1,10 @@
+input:
+  dir: outputs/detection/detection_eval_batch_xxx
+  csv: null
+
+output:
+  dir: null
+  prefix: null
+
+display:
+  topk: 13

@@ -2,9 +2,13 @@
 # -*- coding: utf-8 -*-
 """检测模型消融训练脚本。
 
-支持两种模式：
-- controlled: 严格控变量，复用统一训练参数。
-- optimal: 每个实验可独立调参，尽量逼近各自最优性能。
+配置边界：
+- 单模型训练使用 configs/train_config.yaml。
+- 消融实验训练使用 configs/ablation/train_profile_*.yaml。
+
+支持两种 profile：
+- controlled: 严格控变量，除实验结构差异外统一训练口径。
+- optimal: 允许每个实验做有限度的独立调参。
 """
 
 import argparse
@@ -17,8 +21,6 @@ import yaml
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
-
-print(f"项目根目录: {PROJECT_ROOT}")
 
 CANONICAL_EXPERIMENTS = [
     {
@@ -139,18 +141,18 @@ def parse_args():
         default="stage1",
         help="stage1: 单变量实验；stage2: 组合实验；all: 全部",
     )
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("--img", type=int, default=640)
+    parser.add_argument("--epochs", type=int, default=None, help="临时覆盖 profile 中的 epochs")
+    parser.add_argument("--batch", type=int, default=None, help="临时覆盖 profile 中的 batch")
+    parser.add_argument("--img", type=int, default=None, help="临时覆盖 profile 中的 img")
     parser.add_argument("--device", type=str, default="0")
-    parser.add_argument("--patience", type=int, default=20)
+    parser.add_argument("--patience", type=int, default=None, help="临时覆盖 profile 中的 patience")
     parser.add_argument("--val-interval", type=int, default=1, help="每隔 N 轮验证一次")
-    parser.add_argument("--workers", type=int, default=16, help="dataloader 线程数")
+    parser.add_argument("--workers", type=int, default=None, help="临时覆盖 profile 中的 dataloader 线程数")
     parser.add_argument(
         "--cache",
         choices=["none", "ram", "disk"],
-        default="ram",
-        help="图像缓存模式：none/ram/disk",
+        default=None,
+        help="临时覆盖 profile 中的图像缓存模式：none/ram/disk",
     )
     parser.add_argument("--noval", action="store_true", help="仅最后一轮验证（提速）")
     parser.add_argument("--noplots", action="store_true", help="不生成图像可视化（提速）")
@@ -170,13 +172,8 @@ def parse_args():
     parser.add_argument(
         "--profile-config",
         type=str,
-        default="configs/ablation/train_profile_optimal.yaml",
-        help="optimal 模式下的每实验训练参数配置文件",
-    )
-    parser.add_argument(
-        "--allow-profile-hyp-override",
-        action="store_true",
-        help="允许 optimal 配置覆盖实验默认 hyp 文件",
+        default=None,
+        help="profile 配置文件路径；默认按 profile 自动选择 train_profile_controlled.yaml 或 train_profile_optimal.yaml",
     )
     return parser.parse_args()
 
@@ -198,38 +195,64 @@ def _match_single_experiment(experiments, keyword):
     return None
 
 
+def resolve_profile_config_path(args) -> Path:
+    if args.profile_config:
+        return PROJECT_ROOT / args.profile_config
+    return PROJECT_ROOT / "configs" / "ablation" / f"train_profile_{args.profile}.yaml"
+
+
 def load_profile_config(args):
-    if args.profile != "optimal":
-        return {}
-    config_path = PROJECT_ROOT / args.profile_config
+    config_path = resolve_profile_config_path(args)
     if not config_path.exists():
         raise FileNotFoundError(f"未找到 profile 配置文件: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
     if not isinstance(cfg, dict):
         raise ValueError(f"profile 配置格式错误: {config_path}")
+    declared_profile = cfg.get("profile")
+    if declared_profile != args.profile:
+        raise ValueError(
+            f"profile 配置与命令行不一致: --profile={args.profile}, config.profile={declared_profile}"
+        )
+    cfg["__path__"] = config_path
     return cfg
 
 
-def merge_train_options(args, exp, profile_cfg):
-    options = {
+def apply_cli_overrides(options, args):
+    overrides = {
         "img": args.img,
         "batch": args.batch,
         "epochs": args.epochs,
         "patience": args.patience,
         "workers": args.workers,
         "cache": args.cache,
-        "weights": "yolov5s.pt",
-        "optimizer": None,
-        "label_smoothing": None,
-        "hyp": exp.get("hyp"),
     }
+    for key, value in overrides.items():
+        if value is not None:
+            options[key] = value
+    return options
 
-    if args.profile != "optimal":
-        return options
 
+def merge_train_options(args, exp, profile_cfg):
     global_cfg = profile_cfg.get("global", {})
     exp_cfg = profile_cfg.get("experiments", {}).get(exp["name"], {})
+    rules = profile_cfg.get("rules", {})
+    allow_hyp_override = bool(rules.get("allow_hyp_override", False))
+
+    options = {
+        "img": global_cfg.get("img", 640),
+        "batch": global_cfg.get("batch", 16),
+        "epochs": global_cfg.get("epochs", 100),
+        "patience": global_cfg.get("patience", 20),
+        "workers": global_cfg.get("workers", 8),
+        "cache": global_cfg.get("cache", "ram"),
+        "weights": global_cfg.get("weights", "yolov5/yolov5s.pt"),
+        "optimizer": global_cfg.get("optimizer", None),
+        "label_smoothing": global_cfg.get("label_smoothing", None),
+        "cos_lr": bool(global_cfg.get("cos_lr", True)),
+        "project": global_cfg.get("project", "outputs/ablation_study"),
+        "hyp": exp.get("hyp"),
+    }
 
     override_keys = [
         "img",
@@ -241,20 +264,19 @@ def merge_train_options(args, exp, profile_cfg):
         "weights",
         "optimizer",
         "label_smoothing",
+        "cos_lr",
+        "project",
     ]
-    for key in override_keys:
-        if key in global_cfg:
-            options[key] = global_cfg[key]
     for key in override_keys:
         if key in exp_cfg:
             options[key] = exp_cfg[key]
 
-    if args.allow_profile_hyp_override and "hyp" in global_cfg:
+    if allow_hyp_override and "hyp" in global_cfg:
         options["hyp"] = global_cfg["hyp"]
-    if args.allow_profile_hyp_override and "hyp" in exp_cfg:
+    if allow_hyp_override and "hyp" in exp_cfg:
         options["hyp"] = exp_cfg["hyp"]
 
-    return options
+    return apply_cli_overrides(options, args)
 
 
 def train_experiment(exp_name, yaml_path, desc, train_options, dataset_yaml_path, args):
@@ -264,7 +286,7 @@ def train_experiment(exp_name, yaml_path, desc, train_options, dataset_yaml_path
     print(f"{'=' * 70}")
 
     cmd = [
-        "python",
+        sys.executable,
         "train.py",
         "--img",
         str(train_options["img"]),
@@ -287,11 +309,13 @@ def train_experiment(exp_name, yaml_path, desc, train_options, dataset_yaml_path
         "--name",
         exp_name,
         "--project",
-        str(PROJECT_ROOT / "outputs/ablation_study"),
+        str(PROJECT_ROOT / str(train_options["project"])),
         "--patience",
         str(train_options["patience"]),
-        "--cos-lr",
     ]
+
+    if train_options.get("cos_lr", False):
+        cmd.append("--cos-lr")
 
     if train_options["cache"] != "none":
         cmd.extend(["--cache", str(train_options["cache"])])
@@ -357,14 +381,20 @@ def main():
     print(f"* 项目路径: {PROJECT_ROOT}")
     print(f"* 运行阶段: {args.stage}")
     print(f"* 训练模式: {args.profile}")
-    if args.profile == "optimal":
-        print(f"* Profile 配置: {PROJECT_ROOT / args.profile_config}")
+    print(f"* Profile 配置: {profile_cfg['__path__']}")
     if args.only:
         print(f"* 单实验模式: {args.only}")
     print("* 类别策略: 仅 person/car")
     print(
-        f"* workers: {args.workers} | cache: {args.cache} | "
-        f"val_interval: {args.val_interval} | noval: {args.noval} | noplots: {args.noplots}"
+        f"* val_interval: {args.val_interval} | noval: {args.noval} | noplots: {args.noplots}"
+    )
+    if any(value is not None for value in [args.epochs, args.batch, args.img, args.patience, args.workers, args.cache]):
+        print(
+            f"* 检测到临时覆盖: epochs={args.epochs} batch={args.batch} img={args.img} "
+            f"patience={args.patience} workers={args.workers} cache={args.cache}"
+        )
+    print(
+        f"* 说明: train_config.yaml 不参与消融训练；消融参数完全由 train_profile_{args.profile}.yaml 系列文件控制"
     )
     print(f"* 实验总数: {len(experiments)}")
     print(f"{'*' * 70}")

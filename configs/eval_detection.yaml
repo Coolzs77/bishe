@@ -1,0 +1,26 @@
+mode: metric
+weights: null
+data: data/processed/flir/dataset.yaml
+
+runtime:
+  batch_size: 32
+  img_size: 640
+  conf_thres: 0.001
+  iou_thres: 0.6
+  device: '0'
+  workers: 8
+
+metric:
+  task: val
+
+batch:
+  enabled: false
+  ablation_dir: outputs/ablation_study
+  stage: all
+  weights_name: best.pt
+  sort_by: map5095
+  save_csv: true
+
+artifacts:
+  save_json: true
+  output_dir: null

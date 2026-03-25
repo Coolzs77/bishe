@@ -51,8 +51,6 @@ outputs/results/
 outputs/visualizations/
 
 # 嵌入式构建
-embedded/build/
-embedded/lib/rknn/
 
 # IDE
 .idea/

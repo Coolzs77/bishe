@@ -1,0 +1,27 @@
+# 消融实验统一训练口径配置
+# 仅供 scripts/train/train_ablation.py 在 --profile controlled 下使用。
+# 说明：
+# 1. 该文件只定义消融实验的统一训练参数，不用于单模型训练。
+# 2. train_config.yaml 仅供 scripts/train/train_yolov5.py 使用。
+# 3. controlled 模式下不允许 profile 覆盖实验自带 hyp，确保变量控制严格。
+
+profile: controlled
+description: 严格控变量训练口径
+
+rules:
+  allow_hyp_override: false
+
+global:
+  epochs: 100
+  batch: 16
+  img: 640
+  patience: 20
+  workers: 16
+  cache: ram
+  weights: yolov5/yolov5s.pt
+  optimizer: null
+  label_smoothing: null
+  cos_lr: true
+  project: outputs/ablation_study
+
+experiments: {}

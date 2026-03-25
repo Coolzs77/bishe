@@ -1,0 +1,20 @@
+input:
+  base_dir: outputs/tracking/rerun_20260324_exp07
+  experiment_label: ablation_exp07_eiou
+  experiments:
+    - ablation_exp01_baseline
+    - ablation_exp02_ghost
+    - ablation_exp03_shuffle
+    - ablation_exp05_coordatt
+    - ablation_exp06_siou
+    - ablation_exp07_eiou
+    - ablation_exp11_shuffle_coordatt
+    - ablation_exp12_shuffle_coordatt_siou
+    - ablation_exp13_shuffle_coordatt_eiou
+  trackers:
+    - bytetrack
+    - deepsort
+    - centertrack
+
+output:
+  dir: null
