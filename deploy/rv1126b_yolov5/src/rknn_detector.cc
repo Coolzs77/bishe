@@ -78,60 +78,23 @@ int infer_output_layout(const rknn_tensor_attr* attr, int* num_proposals, int* o
     return 0;
 }
 
-bool try_fast_letterbox_copy(
-    const image_buffer_t* src_image,
-    image_buffer_t* dst_image,
-    letterbox_t* letterbox) {
-    if (src_image == NULL || dst_image == NULL || letterbox == NULL) {
+bool env_enabled(const char* name) {
+    const char* value = getenv(name);
+    if (value == NULL) return false;
+    if (strcmp(value, "0") == 0 || strcmp(value, "false") == 0 || strcmp(value, "FALSE") == 0) {
         return false;
     }
-    if (src_image->format != IMAGE_FORMAT_RGB888 || dst_image->format != IMAGE_FORMAT_RGB888) {
-        return false;
-    }
-    if (src_image->width != dst_image->width) {
-        return false;
-    }
-    if (src_image->height > dst_image->height) {
-        return false;
-    }
-
-    const int src_stride = src_image->width * 3;
-    const int dst_stride = dst_image->width * 3;
-    const int top_pad = (dst_image->height - src_image->height) / 2;
-    const int bottom_pad = dst_image->height - src_image->height - top_pad;
-
-    memset(dst_image->virt_addr, 114, dst_image->size);
-    unsigned char* dst_ptr = dst_image->virt_addr + top_pad * dst_stride;
-    const unsigned char* src_ptr = src_image->virt_addr;
-    for (int h = 0; h < src_image->height; ++h) {
-        memcpy(dst_ptr + h * dst_stride, src_ptr + h * src_stride, src_stride);
-    }
-
-    memset(letterbox, 0, sizeof(*letterbox));
-    letterbox->scale = 1.0f;
-    letterbox->x_pad = 0;
-    letterbox->y_pad = top_pad;
     return true;
 }
 
-void print_quantization_health(const RknnAppContext* app_ctx) {
-    if (app_ctx == NULL) {
-        return;
-    }
-    bool has_warning = false;
-    for (unsigned int i = 0; i < app_ctx->io_num.n_output; ++i) {
-        const rknn_tensor_attr* attr = &app_ctx->output_attrs[i];
-        if (attr->qnt_type != RKNN_TENSOR_QNT_AFFINE_ASYMMETRIC) {
-            has_warning = true;
-            printf("[WARN] 输出张量 %u 量化类型=%d，建议检查是否为 INT8 仿射量化\n", i, attr->qnt_type);
-        }
-        if (attr->scale > 2.0f || attr->scale < 0.0001f) {
-            has_warning = true;
-            printf("[WARN] 输出张量 %u scale=%f，量化粒度可能异常\n", i, attr->scale);
-        }
-    }
-    if (!has_warning) {
-        printf("[INFO] 量化检查通过: 输出张量量化参数在合理范围内\n");
+void print_debug_detections(const std::vector<Detection>& detections, const char* title, int max_count) {
+    printf("[DEBUG] %s: %d\n", title, static_cast<int>(detections.size()));
+    int n = static_cast<int>(detections.size());
+    if (n > max_count) n = max_count;
+    for (int i = 0; i < n; ++i) {
+        const Detection& det = detections[i];
+        printf("  #%d cls=%d score=%.4f box=(%.1f,%.1f,%.1f,%.1f)\n",
+               i, det.class_id, det.score, det.x1, det.y1, det.x2, det.y2);
     }
 }
 
@@ -392,13 +355,6 @@ int init_rknn_model(const char* model_path, RknnAppContext* app_ctx) {
     }
 
     printf("=== 模型加载完成 ===\n\n");
-    app_ctx->input_buffer_size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
-    app_ctx->input_buffer = (unsigned char*)malloc(app_ctx->input_buffer_size);
-    if (app_ctx->input_buffer == NULL) {
-        printf("[ERROR] malloc app input buffer failed (%d bytes)\n", app_ctx->input_buffer_size);
-        return -1;
-    }
-    print_quantization_health(app_ctx);
     return 0;
 }
 
@@ -417,11 +373,6 @@ int release_rknn_model(RknnAppContext* app_ctx) {
     if (app_ctx->output_attrs != NULL) {
         free(app_ctx->output_attrs);
         app_ctx->output_attrs = NULL;
-    }
-    if (app_ctx->input_buffer != NULL) {
-        free(app_ctx->input_buffer);
-        app_ctx->input_buffer = NULL;
-        app_ctx->input_buffer_size = 0;
     }
     // 销毁 RKNN 会话.
     if (app_ctx->rknn_ctx != 0) {
@@ -459,6 +410,13 @@ int inference_rknn_model(
         return -1;
     }
 
+    if (conf_threshold < 0.01f) conf_threshold = 0.01f;
+    if (conf_threshold > 0.95f) conf_threshold = 0.95f;
+    if (nms_threshold < 0.05f) nms_threshold = 0.05f;
+    if (nms_threshold > 0.95f) nms_threshold = 0.95f;
+
+    const bool debug_box = env_enabled("RKNN_DEBUG_BOX");
+
     detections->clear();
 
     // -------- 红外图像通道转换 --------
@@ -484,10 +442,10 @@ int inference_rknn_model(
     dst_image.width = app_ctx->model_width;    // 640
     dst_image.height = app_ctx->model_height;  // 640
     dst_image.format = IMAGE_FORMAT_RGB888;
-    dst_image.size = app_ctx->input_buffer_size;
-    dst_image.virt_addr = app_ctx->input_buffer;
-    if (dst_image.virt_addr == NULL || dst_image.size <= 0) {
-        printf("[ERROR] input buffer not initialized\n");
+    dst_image.size = get_image_size(&dst_image);
+    dst_image.virt_addr = (unsigned char*)malloc(dst_image.size);
+    if (dst_image.virt_addr == NULL) {
+        printf("[ERROR] malloc input buffer failed\n");
         if (need_free_rgb) free(rgb_buffer.virt_addr);
         return -1;
     }
@@ -496,10 +454,7 @@ int inference_rknn_model(
     // 填充值 114 是 YOLOv5 训练时的默认值, 对红外灰度图像同样适用.
     letterbox_t letterbox;
     memset(&letterbox, 0, sizeof(letterbox));
-    int ret = 0;
-    if (!try_fast_letterbox_copy(rgb_image, &dst_image, &letterbox)) {
-        ret = convert_image_with_letterbox(rgb_image, &dst_image, &letterbox, 114);
-    }
+    int ret = convert_image_with_letterbox(rgb_image, &dst_image, &letterbox, 114);
 
     // rgb_buffer 用完即可释放, 后续只用 dst_image
     if (need_free_rgb) {
@@ -508,6 +463,7 @@ int inference_rknn_model(
     }
     if (ret < 0) {
         printf("[ERROR] convert_image_with_letterbox failed: %d\n", ret);
+        free(dst_image.virt_addr);
         return -1;
     }
 
@@ -526,6 +482,7 @@ int inference_rknn_model(
     ret = rknn_inputs_set(app_ctx->rknn_ctx, 1, &input);
     if (ret != RKNN_SUCC) {
         printf("[ERROR] rknn_inputs_set failed: %d\n", ret);
+        free(dst_image.virt_addr);
         return -1;
     }
 
@@ -533,6 +490,7 @@ int inference_rknn_model(
     ret = rknn_run(app_ctx->rknn_ctx, NULL);
     if (ret != RKNN_SUCC) {
         printf("[ERROR] rknn_run failed: %d\n", ret);
+        free(dst_image.virt_addr);
         return -1;
     }
 
@@ -540,34 +498,32 @@ int inference_rknn_model(
     std::vector<Detection> decoded;
 
     if (app_ctx->is_3branch) {
-        // ---- 3-branch: 获取 3 个 INT8 输出, 完整解码 ----
+        // ---- 3-branch: 获取 3 个输出, 完整解码 ----
         rknn_output outputs[3];
         memset(outputs, 0, sizeof(outputs));
         for (int i = 0; i < 3; ++i) {
             outputs[i].index = i;
-            outputs[i].want_float = 0;  // 取原始 INT8, 减少运行时反量化开销
+            outputs[i].want_float = 1;
         }
         ret = rknn_outputs_get(app_ctx->rknn_ctx, 3, outputs, NULL);
         if (ret != RKNN_SUCC) {
             printf("[ERROR] rknn_outputs_get (3-branch) failed: %d\n", ret);
+            free(dst_image.virt_addr);
             return -1;
         }
 
-        // 构建每个 branch 的描述信息 (INT8 + zp/scale)
-        BranchInfoInt8 branches[3];
+        BranchInfo branches[3];
         for (int b = 0; b < 3; ++b) {
             int idx = app_ctx->branch_index[b];
             const rknn_tensor_attr* attr = &app_ctx->output_attrs[idx];
-            branches[b].data = (const int8_t*)outputs[idx].buf;
+            branches[b].data = (const float*)outputs[idx].buf;
             branches[b].grid_h = MODEL_GRID_SIZES[b];
             branches[b].grid_w = MODEL_GRID_SIZES[b];
             branches[b].stride = MODEL_STRIDES[b];
             branches[b].is_nchw = (attr->fmt == RKNN_TENSOR_NCHW);
-            branches[b].zp = attr->zp;
-            branches[b].scale = attr->scale;
         }
 
-        decoded = decode_yolov5_3branch_output_int8(
+        decoded = decode_yolov5_3branch_output(
             branches, MODEL_NUM_ANCHORS, app_ctx->num_classes, conf_threshold);
 
         rknn_outputs_release(app_ctx->rknn_ctx, 3, outputs);
@@ -581,6 +537,7 @@ int inference_rknn_model(
         ret = rknn_outputs_get(app_ctx->rknn_ctx, 1, &output, NULL);
         if (ret != RKNN_SUCC) {
             printf("[ERROR] rknn_outputs_get failed: %d\n", ret);
+            free(dst_image.virt_addr);
             return -1;
         }
 
@@ -592,9 +549,29 @@ int inference_rknn_model(
     }
 
     // 坐标映射 + NMS (两种输出格式共用)
+    const int decoded_count = static_cast<int>(decoded.size());
     scale_detections(decoded, letterbox, src_image->width, src_image->height);
     *detections = apply_nms(decoded, nms_threshold);
 
+    if (debug_box) {
+        static int debug_frames = 0;
+        if (debug_frames < 20) {
+            printf("[DEBUG] frame=%d conf=%.2f nms=%.2f letterbox(scale=%.6f,x_pad=%d,y_pad=%d) decoded=%d nms_out=%d mode=%s\n",
+                   debug_frames,
+                   conf_threshold,
+                   nms_threshold,
+                   letterbox.scale,
+                   letterbox.x_pad,
+                   letterbox.y_pad,
+                   decoded_count,
+                   static_cast<int>(detections->size()),
+                     "float_decode");
+            print_debug_detections(*detections, "post_nms_top", 8);
+        }
+        ++debug_frames;
+    }
+
     // -------- 清理 --------
+    free(dst_image.virt_addr);
     return 0;
 }
