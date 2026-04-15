@@ -95,7 +95,15 @@ def attempt_load(weights, device=None, inplace=True, fuse=True):
 
     model = Ensemble()
     for w in weights if isinstance(weights, list) else [weights]:
-        ckpt = torch_load(attempt_download(w), map_location="cpu")  # load
+        # Windows 上加载在 Linux 上训练保存的 .pt 时，pickle 里含有 PosixPath 对象，
+        # 需要临时把 PosixPath 映射为 WindowsPath，否则 torch.load 会抛 NotImplementedError.
+        import pathlib
+        _posix_backup = pathlib.PosixPath
+        pathlib.PosixPath = pathlib.WindowsPath
+        try:
+            ckpt = torch_load(attempt_download(w), map_location="cpu")  # load
+        finally:
+            pathlib.PosixPath = _posix_backup
         ckpt = (ckpt.get("ema") or ckpt["model"]).to(device).float()  # FP32 model
 
         # Model compatibility updates

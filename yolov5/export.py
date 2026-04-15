@@ -328,14 +328,17 @@ def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr("ONNX
     LOGGER.info(f"\n{prefix} starting export with onnx {onnx.__version__}...")
     f = str(file.with_suffix(".onnx"))
 
-    output_names = ["output0", "output1"] if isinstance(model, SegmentationModel) else ["output0"]
+    output_names = ["output0", "output1"] if isinstance(model, SegmentationModel) else ["output0", "output1", "output2"]
     if dynamic:
         dynamic = {"images": {0: "batch", 2: "height", 3: "width"}}  # shape(1,3,640,640)
         if isinstance(model, SegmentationModel):
             dynamic["output0"] = {0: "batch", 1: "anchors"}  # shape(1,25200,85)
             dynamic["output1"] = {0: "batch", 2: "mask_height", 3: "mask_width"}  # shape(1,32,160,160)
         elif isinstance(model, DetectionModel):
-            dynamic["output0"] = {0: "batch", 1: "anchors"}  # shape(1,25200,85)
+            # 3-branch raw conv outputs for RKNN
+            dynamic["output0"] = {0: "batch"}
+            dynamic["output1"] = {0: "batch"}
+            dynamic["output2"] = {0: "batch"}
 
     torch.onnx.export(
         model.cpu() if dynamic else model,  # --dynamic only compatible with cpu

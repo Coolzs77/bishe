@@ -97,6 +97,14 @@ class Detect(nn.Module):
         z = []  # inference output
         for i in range(self.nl):
             x[i] = self.m[i](x[i])  # conv
+
+        if self.export:
+            # RKNN 部署: 返回 3 个未解码的原始卷积输出 [bs, na*no, ny, nx]
+            # 每个张量值域更均匀, INT8 量化精度远好于解码后的单输出.
+            # 板端 C++ 代码用 decode_yolov5_3branch_output 完成 grid/anchor/sigmoid 解码.
+            return tuple(x)
+
+        for i in range(self.nl):
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
             x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
 
@@ -116,7 +124,7 @@ class Detect(nn.Module):
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, self.na * nx * ny, self.no))
 
-        return x if self.training else (torch.cat(z, 1),) if self.export else (torch.cat(z, 1), x)
+        return x if self.training else (torch.cat(z, 1), x)
 
     def _make_grid(self, nx=20, ny=20, i=0, torch_1_10=check_version(torch.__version__, "1.10.0")):
         """Generates a mesh grid for anchor boxes with optional compatibility for torch versions < 1.10."""
