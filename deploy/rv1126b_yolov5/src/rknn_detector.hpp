@@ -40,8 +40,14 @@ struct RknnAppContext {
     int num_classes;                    // 类别数 (应为 2)
     bool is_3branch;                    // true = 3 输出 (raw conv), false = 1 输出 (已解码)
     int branch_index[3];                // 3-branch 时: branches[i] 对应的 rknn 输出索引
-    unsigned char* input_buffer;        // 复用的模型输入缓冲区，减少每帧 malloc/free
+    unsigned char* input_buffer;        // 模型输入数据指针，指向 input_mem->virt_addr（零拷贝）或 malloc 缓冲
     int input_buffer_size;              // 输入缓冲区大小（字节）
+    rknn_tensor_mem* input_mem;         // 零拷贝输入共享内存（rknn_create_mem，NPU 直接访问）
+    float*  output_float_bufs[3];       // 3-branch float32 输出缓冲（NEON dequant 目标）
+    int     output_float_buf_sizes[3];  // 各 float 缓冲字节数
+    int8_t* output_int8_bufs[3];        // 3-branch INT8 输出缓冲（rknn_outputs_get want_float=0 prealloc）
+    int     output_int8_buf_sizes[3];   // 各 INT8 缓冲字节数
+    double last_npu_ms;                 // 最近一帧 rknn_run 纯 NPU 时延（毫秒）
 };
 
 // 初始化 RKNN 模型:
@@ -82,6 +88,20 @@ image_buffer_t* ensure_rgb888(
 int inference_rknn_model(
     RknnAppContext* app_ctx,
     image_buffer_t* src_image,
+    float conf_threshold,
+    float nms_threshold,
+    std::vector<Detection>* detections);
+
+// 执行推理 (跳过预处理, 使用已填充的 input_buffer):
+//
+//   调用者负责在调用前将 640×640×3 RGB888 数据写入 app_ctx->input_buffer.
+//   letterbox 和 src 宽高由调用者提供, 用于坐标反映射.
+//   可节省约 7~9ms 的 CPU letterbox 开销.
+int inference_rknn_model_preloaded(
+    RknnAppContext* app_ctx,
+    const letterbox_t* letterbox,
+    int src_width,
+    int src_height,
     float conf_threshold,
     float nms_threshold,
     std::vector<Detection>* detections);

@@ -78,6 +78,7 @@ class Detect(nn.Module):
     stride = None  # strides computed during build
     dynamic = False  # force grid reconstruction
     export = False  # export mode
+    rknn_export = False  # RKNN raw 3-branch output mode (separate from AutoShape's export flag)
 
     def __init__(self, nc=80, anchors=(), ch=(), inplace=True):
         """Initializes YOLOv5 detection layer with specified classes, anchors, channels, and inplace operations."""
@@ -98,10 +99,11 @@ class Detect(nn.Module):
         for i in range(self.nl):
             x[i] = self.m[i](x[i])  # conv
 
-        if self.export:
+        if self.rknn_export:
             # RKNN 部署: 返回 3 个未解码的原始卷积输出 [bs, na*no, ny, nx]
             # 每个张量值域更均匀, INT8 量化精度远好于解码后的单输出.
             # 板端 C++ 代码用 decode_yolov5_3branch_output 完成 grid/anchor/sigmoid 解码.
+            # 注意: 不使用 self.export，因为 AutoShape 也会设置 export=True（不同用途）.
             return tuple(x)
 
         for i in range(self.nl):

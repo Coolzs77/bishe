@@ -128,6 +128,17 @@ std::vector<Detection> apply_nms(
     const std::vector<Detection>& detections,
     float iou_threshold);
 
+// NMS 后跨类别去重.
+// 解决 EIoU 等精确回归 loss 训练出的模型在 INT8 量化后
+// 产生的同位置重复框 (同类近似框 + 跨类误重叠).
+//
+// same_class_iou  — 同类框 IoU 超过此值时保留高分框 (建议 0.50)
+// cross_class_iou — 跨类框 IoU 超过此值时保留高分框 (建议 0.70)
+std::vector<Detection> dedup_detections(
+    const std::vector<Detection>& detections,
+    float same_class_iou,
+    float cross_class_iou);
+
 // 解码 3-branch YOLOv5 输出 (RKNN 模型有 3 个输出张量时使用).
 //
 // 3-branch 输出是三个检测头的原始 conv 输出 (未经 sigmoid/grid 解码),

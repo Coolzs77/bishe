@@ -21,7 +21,7 @@ from rknn.api import RKNN
 #   INT8 量化需要提供校准数据集 (dataset.txt), 里面列出的图片应该是
 #   你自己的红外热成像 JPEG 图片 (来自 FLIR 数据集的训练/验证集).
 #   校准集应覆盖各种场景: 白天/夜间, 近景/远景, 行人/车辆等.
-#   建议选取 100~200 张有代表性的红外图片.
+#   建议选取 50~100 张有代表性的红外图片. (注：为防止内存溢出，不建议超过100张)
 #
 # 关于 mean/std:
 #   训练时 YOLOv5 的预处理是 pixel / 255.0, 这等价于:
@@ -53,6 +53,13 @@ def parse_args():
                         help='目标平台, 默认: rv1126b')
     parser.add_argument('--quant', choices=['i8', 'fp'], default='i8',
                         help='i8=INT8量化, fp=浮点 (默认: i8)')
+    parser.add_argument('--opt-level', type=int, default=3, choices=[0, 1, 2, 3],
+                        help='RKNN 优化等级 0~3 (默认: 3, 最大优化)')
+    
+    # 核心修改点：加入 kl_divergence 并设为默认值，完美适配 EIOU 模型，解决重叠框和内存爆炸问题
+    parser.add_argument('--quant-algo', choices=['normal', 'mmse', 'kl_divergence'], default='kl_divergence',
+                        help='量化算法: normal=默认, mmse=最小均方误差, kl_divergence=KL散度(强烈推荐EIOU使用) (默认: kl_divergence)')
+    
     parser.add_argument('--mean', type=parse_triplet, default=[0.0, 0.0, 0.0],
                         help='均值, 默认: 0,0,0')
     parser.add_argument('--std', type=parse_triplet, default=[255.0, 255.0, 255.0],
@@ -87,12 +94,12 @@ def fix_dataset_paths(dataset_path, val_dir):
 
     if not fixed_lines:
         raise FileNotFoundError(
-            f'--val-dir={val_dir} 下找不到任何 dataset 中列出的图片, '
-            f'请确认目录正确且图片已传输到 Ubuntu.')
+            '--val-dir={} 下找不到任何 dataset 中列出的图片, '
+            '请确认目录正确且图片已传输到 Ubuntu.'.format(val_dir))
 
     if skipped:
-        print(f'[WARN] {skipped} 张图片在 {val_dir} 中不存在, 已跳过')
-    print(f'[INFO] dataset 路径已修正: {len(fixed_lines)} 张图片 → {val_dir}')
+        print('[WARN] {} 张图片在 {} 中不存在, 已跳过'.format(skipped, val_dir))
+    print('[INFO] dataset 路径已修正: {} 张图片 → {}'.format(len(fixed_lines), val_dir))
 
     tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
                                       delete=False, encoding='utf-8')
@@ -114,7 +121,7 @@ def main():
 
     # INT8 量化必须提供红外图片校准集; FP 模式可以不传.
     if not onnx_path.exists():
-        raise FileNotFoundError(f'ONNX 文件不存在: {onnx_path}')
+        raise FileNotFoundError('ONNX 文件不存在: {}'.format(onnx_path))
     if args.quant == 'i8' and (dataset_path is None or not dataset_path.exists()):
         raise FileNotFoundError('INT8 量化需要 --dataset 指定红外校准图片列表文件')
 
@@ -139,6 +146,8 @@ def main():
         mean_values=[args.mean],
         std_values=[args.std],
         target_platform=args.target,
+        optimization_level=args.opt_level,
+        quantized_algorithm=args.quant_algo if args.quant == 'i8' else 'normal',
     )
     print('done')
 
@@ -146,7 +155,7 @@ def main():
     # 读入 ONNX 图结构, 此步仅在 Toolkit2 内存中操作.
     ret = rknn.load_onnx(model=str(onnx_path))
     if ret != 0:
-        raise RuntimeError(f'加载 ONNX 失败: {ret}')
+        raise RuntimeError('加载 ONNX 失败: {}'.format(ret))
     print('done')
 
     print('--> 构建 RKNN 模型 (转换 + 量化)')
@@ -159,14 +168,14 @@ def main():
         dataset=str(dataset_path) if dataset_path else None,
     )
     if ret != 0:
-        raise RuntimeError(f'构建失败: {ret}')
+        raise RuntimeError('构建失败: {}'.format(ret))
     print('done')
 
     print('--> 导出 RKNN 文件')
     # 导出最终的 .rknn 文件, 这就是要上传到 RV1126B 板子上的模型.
     ret = rknn.export_rknn(str(output_path))
     if ret != 0:
-        raise RuntimeError(f'导出失败: {ret}')
+        raise RuntimeError('导出失败: {}'.format(ret))
     print('done')
 
     # 释放 Toolkit2 资源.
@@ -176,7 +185,7 @@ def main():
     if tmp_dataset and Path(tmp_dataset).exists():
         os.unlink(tmp_dataset)
 
-    print(f'RKNN 模型已导出: {output_path}')
+    print('RKNN 模型已导出: {}'.format(output_path))
 
 
 if __name__ == '__main__':

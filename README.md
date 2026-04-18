@@ -60,6 +60,85 @@ python scripts/evaluate/eval_tracking.py --config configs/tracking_config.yaml -
 python scripts/evaluate/plot_tracking_algorithm_comparison.py --config configs/plot_tracking_comparison.yaml
 ```
 
+### 6. RKNN 模型转换（Ubuntu 端）
+
+以下命令在 Ubuntu（已安装 rknn-toolkit2）上执行。
+
+#### 6.1 普通量化（normal）
+
+```bash
+cd ~/bishe/deploy/rv1126b_yolov5/python
+
+# Baseline
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_baseline.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir ~/bishe/val \
+  --output ../model/best_baseline.rknn \
+  --target rv1126b --quant i8 --quant-algo normal
+
+# EIoU
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_eiou.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir ~/bishe/val \
+  --output ../model/best_eiou.rknn \
+  --target rv1126b --quant i8 --quant-algo normal
+
+# Ghost+EIoU
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_ghost_eiou.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir ~/bishe/val \
+  --output ../model/best_ghost_eiou.rknn \
+  --target rv1126b --quant i8 --quant-algo normal
+```
+
+#### 6.2 KL 散度量化（推荐，适配红外小目标）
+
+KL 散度量化通过最小化量化前后激活值分布的 KL 散度来确定量化截断点，相比 min-max（normal）量化能更好地保留尾部激活精度，特别适合红外小目标场景。转换速度快，内存占用合理。
+
+```bash
+cd ~/bishe/deploy/rv1126b_yolov5/python
+
+# EIoU (kl)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_eiou.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir ~/bishe/val \
+  --output ../model/best_eiou_kl.rknn \
+  --target rv1126b --quant i8 --opt-level 3 --quant-algo kl_divergence
+
+# Baseline (kl)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_baseline.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir ~/bishe/val \
+  --output ../model/best_baseline_kl.rknn \
+  --target rv1126b --quant i8 --opt-level 3 --quant-algo kl_divergence
+
+# Ghost+EIoU (kl)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_ghost_eiou.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir ~/bishe/val \
+  --output ../model/best_ghost_eiou_kl.rknn \
+  --target rv1126b --quant i8 --opt-level 3 --quant-algo kl_divergence
+```
+
+#### 6.3 转换参数说明
+
+| 参数 | 含义 |
+|------|------|
+| `--onnx` | 输入 ONNX 模型路径 |
+| `--dataset` | 红外校准图片列表文件（每行一张图片路径） |
+| `--val-dir` | Ubuntu 上校准图片实际所在目录（自动修正 Windows 路径） |
+| `--output` | 输出 RKNN 模型路径 |
+| `--target` | 目标芯片，固定 `rv1126b` |
+| `--quant` | `i8` = INT8 量化（推荐），`fp` = 浮点 |
+| `--opt-level` | RKNN 优化等级 0\~3（默认 3，最大优化） |
+| `--quant-algo` | `normal` = min-max 默认量化，`kl_divergence` = KL 散度量化（推荐） |
+
 ## 当前保留的评估脚本
 
 - scripts/evaluate/eval_detection.py: 检测指标与批量消融评估

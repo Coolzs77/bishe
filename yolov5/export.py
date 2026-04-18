@@ -1385,6 +1385,7 @@ def run(
             m.inplace = inplace
             m.dynamic = dynamic
             m.export = True
+            m.rknn_export = True  # enable RKNN raw 3-branch output
 
     for _ in range(2):
         y = model(im)  # dry runs

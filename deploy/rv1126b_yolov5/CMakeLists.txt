@@ -37,6 +37,25 @@ option(ENABLE_ASAN "Build with address sanitizer" OFF)
 option(DISABLE_RGA "Disable RGA" OFF)
 option(DISABLE_LIBJPEG "Disable libjpeg" OFF)
 
+# ---------- 发布构建优化标志 (仅 Release/无明确 BuildType 时生效) ----------
+# 根据目标架构自动选择合适标志:
+#   AArch64 (aarch64-linux-gnu-*): NEON 始终启用, 无需 -mfpu/-mfloat-abi
+#   ARMv7   (arm-linux-gnueabihf-*): 需要显式指定 NEON + hard-float
+# -O3:          最高 GCC 优化 (循环展开 + 向量化)
+# -ffast-math:  允许 NaN/Inf 放宽 + 关联重排, sigmoid/logit 等大幅提速
+if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+        # AArch64: NEON 内建, 无需额外 -mfpu/-mfloat-abi
+        set(OPT_FLAGS "-O3 -march=armv8-a+simd -ffast-math")
+    else()
+        # ARMv7 (arm-linux-gnueabihf)
+        set(OPT_FLAGS "-O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -ffast-math")
+    endif()
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   ${OPT_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPT_FLAGS}")
+    message(STATUS "Release 优化标志: ${OPT_FLAGS}")
+endif()
+
 # 如果开启 ASAN, 给编译和链接加上对应 flag.
 if(ENABLE_ASAN)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
