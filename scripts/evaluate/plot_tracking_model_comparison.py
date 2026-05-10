@@ -221,12 +221,9 @@ def plot_model_tracker_comparison(
         ax.tick_params(axis="y", labelsize=8.5)
         ax.set_xlim(-0.55, n_exp - 0.45)
 
-        # 给标注留出顶部空间；匹配率面板 y 从 80% 起以突出差异
+        # Y轴统一从0开始，顶部留出空间给标注
         ylo, yhi = ax.get_ylim()
-        if is_pct:
-            ax.set_ylim(80, yhi * 1.01 + 1.0)
-        else:
-            ax.set_ylim(0, yhi * 1.14)
+        ax.set_ylim(0, yhi * 1.14)
 
     # 统一图例（底部居中）
     handles = [

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#34495e" />
+    </marker>
+    <style>
+      .title { font: 700 34px 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #1f2937; }
+      .boxTitle { font: 700 22px 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #1f2937; }
+      .boxText { font: 18px 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #374151; }
+      .small { font: 16px 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #4b5563; }
+      .line { stroke: #34495e; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .boxA { fill: #eef6ff; stroke: #3b82f6; stroke-width: 3; rx: 18; ry: 18; }
+      .boxB { fill: #f2fbf3; stroke: #22c55e; stroke-width: 3; rx: 18; ry: 18; }
+      .boxC { fill: #fff7ed; stroke: #f59e0b; stroke-width: 3; rx: 18; ry: 18; }
+      .boxD { fill: #faf5ff; stroke: #a855f7; stroke-width: 3; rx: 18; ry: 18; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#ffffff" />
+  <text x="70" y="72" class="title">图6-1 综合实验与系统演示流程图</text>
+
+  <rect x="80" y="150" width="300" height="120" class="boxA" />
+  <text x="230" y="195" text-anchor="middle" class="boxTitle">输入数据与场景</text>
+  <text x="230" y="230" text-anchor="middle" class="boxText">FLIR热视频与典型场景</text>
+  <text x="230" y="258" text-anchor="middle" class="small">正常行进 / 交叉遮挡 / 远距小目标</text>
+
+  <rect x="470" y="150" width="300" height="120" class="boxB" />
+  <text x="620" y="195" text-anchor="middle" class="boxTitle">PC端综合实验</text>
+  <text x="620" y="230" text-anchor="middle" class="boxText">浮点检测 + ByteTrack 跟踪</text>
+  <text x="620" y="258" text-anchor="middle" class="small">mAP / ID切换次数 / 平均FPS</text>
+
+  <rect x="860" y="150" width="300" height="120" class="boxC" />
+  <text x="1010" y="195" text-anchor="middle" class="boxTitle">候选方案筛选</text>
+  <text x="1010" y="230" text-anchor="middle" class="boxText">方案A：EIoU（exp07）+ ByteTrack</text>
+  <text x="1010" y="258" text-anchor="middle" class="small">方案B：Ghost+EIoU（exp09）+ ByteTrack</text>
+
+  <rect x="1250" y="150" width="270" height="120" class="boxD" />
+  <text x="1385" y="195" text-anchor="middle" class="boxTitle">RV1126B板端验证</text>
+  <text x="1385" y="230" text-anchor="middle" class="boxText">INT8 KL 量化部署</text>
+  <text x="1385" y="258" text-anchor="middle" class="small">pre_ms / infer_ms / FPS</text>
+
+  <path d="M380 210 L470 210" class="line" />
+  <path d="M770 210 L860 210" class="line" />
+  <path d="M1160 210 L1250 210" class="line" />
+
+  <rect x="330" y="430" width="330" height="140" class="boxC" />
+  <text x="495" y="475" text-anchor="middle" class="boxTitle">系统运行结果</text>
+  <text x="495" y="510" text-anchor="middle" class="boxText">PC端效果图、板端效果图</text>
+  <text x="495" y="540" text-anchor="middle" class="small">对比精度优先与轻量化优先方案</text>
+
+  <rect x="760" y="430" width="330" height="140" class="boxA" />
+  <text x="925" y="475" text-anchor="middle" class="boxTitle">系统典型失效分析</text>
+  <text x="925" y="510" text-anchor="middle" class="boxText">远距漏检 / 遮挡ID切换 / 框抖动</text>
+  <text x="925" y="540" text-anchor="middle" class="small">分析系统局限与适用边界</text>
+
+  <path d="M620 270 L620 430" class="line" />
+  <path d="M1385 270 L1385 430 L1090 430" class="line" />
+  <path d="M1010 270 L1010 430" class="line" />
+
+  <rect x="520" y="690" width="380" height="120" class="boxB" />
+  <text x="710" y="735" text-anchor="middle" class="boxTitle">系统级综合结论</text>
+  <text x="710" y="770" text-anchor="middle" class="boxText">验证完整系统的可运行性、稳定性</text>
+  <text x="710" y="798" text-anchor="middle" class="small">并为第7章总结与展望提供支撑</text>
+
+  <path d="M660 570 L660 690" class="line" />
+  <path d="M925 570 L835 690" class="line" />
+</svg>

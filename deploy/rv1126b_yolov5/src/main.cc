@@ -115,15 +115,6 @@ bool has_image_extension(const std::string& name) {
     return ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "bmp";
 }
 
-// EIoU 在 INT8 板端更容易出现“阈值附近候选偏多”，默认提高 conf 抑制碎框。
-bool is_eiou_model_path(const char* model_path) {
-    if (model_path == NULL) {
-        return false;
-    }
-    const std::string lower = to_lower_ascii(std::string(model_path));
-    return lower.find("best_eiou") != std::string::npos ||
-           lower.find("exp07_eiou") != std::string::npos;
-}
 
 std::string file_name_from_path(const std::string& path) {
     const std::size_t p = path.find_last_of("/\\");
@@ -308,10 +299,8 @@ int main(int argc, char** argv) {
     const bool default_batch_mode = (argc < 3);
     const char* labels_path = argc >= 4 ? argv[3] : "./model/infrared_labels.txt";
     const char* output_path = argc >= 5 ? argv[4] : (batch_mode ? "./outputs" : "out.png");
-    const float default_conf_threshold = is_eiou_model_path(model_path) ? 0.55f : 0.25f;
-    const float default_nms_threshold = is_eiou_model_path(model_path) ? 0.35f : 0.45f;
-    const float conf_threshold = argc >= 6 ? static_cast<float>(atof(argv[5])) : default_conf_threshold;
-    const float nms_threshold = argc >= 7 ? static_cast<float>(atof(argv[6])) : default_nms_threshold;
+    const float conf_threshold = argc >= 6 ? static_cast<float>(atof(argv[5])) : 0.25f;
+    const float nms_threshold = argc >= 7 ? static_cast<float>(atof(argv[6])) : 0.45f;
 
     if (!batch_mode && !is_regular_file_path(image_or_dir)) {
         printf("[ERROR] 输入路径不存在或不是文件: %s\n", image_or_dir);
@@ -334,9 +323,6 @@ int main(int argc, char** argv) {
     printf("  输出:   %s%s\n", output_path, batch_mode ? " (目录)" : "");
     printf("  conf:   %.2f\n", conf_threshold);
     printf("  nms:    %.2f\n", nms_threshold);
-    if (argc < 6 && is_eiou_model_path(model_path)) {
-        printf("  note:   EIoU 自动: conf=0.55, nms=0.35 (可用第5/6参数覆盖)\n");
-    }
     printf("\n");
 
     // 加载类别名, 后面打印日志和画框都依赖这一步.

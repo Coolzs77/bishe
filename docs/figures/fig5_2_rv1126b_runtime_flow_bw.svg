@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920">
+  <defs>
+    <style>
+      .title { font: 700 30px 'Times New Roman', 'SimSun', serif; fill: #000; }
+      .subtitle { font: 700 20px 'Times New Roman', 'SimSun', serif; fill: #000; }
+      .text { font: 16px 'Times New Roman', 'SimSun', serif; fill: #000; }
+      .small { font: 14px 'Times New Roman', 'SimSun', serif; fill: #000; }
+      .box { fill: #fff; stroke: #000; stroke-width: 2.4; }
+      .band { fill: none; stroke: #000; stroke-width: 2.4; }
+      .note { fill: none; stroke: #000; stroke-width: 1.8; stroke-dasharray: 8 6; }
+      .arrow { fill: none; stroke: #000; stroke-width: 2.2; marker-end: url(#arrow); }
+      .module { fill: none; stroke: #000; stroke-width: 2.2; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#000" />
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="920" fill="#fff" />
+  <text x="800" y="56" text-anchor="middle" class="title">图5-2 板端检测与跟踪程序运行流程图</text>
+
+  <rect x="60" y="120" width="1480" height="220" rx="22" class="band" />
+  <text x="800" y="156" text-anchor="middle" class="subtitle">主处理链路</text>
+
+  <rect x="95" y="196" width="190" height="88" rx="14" class="box" />
+  <text x="190" y="246" text-anchor="middle" class="text">原始输入视频帧</text>
+
+  <rect x="345" y="182" width="260" height="116" rx="14" class="box" />
+  <text x="475" y="224" text-anchor="middle" class="text">主程序侧预处理</text>
+  <text x="475" y="252" text-anchor="middle" class="small">BGR→RGB、复用预分配缓冲区</text>
+  <text x="475" y="278" text-anchor="middle" class="small">不单独使用 RGA</text>
+
+  <rect x="665" y="152" width="520" height="176" rx="18" class="module" />
+  <text x="925" y="184" text-anchor="middle" class="subtitle">RKNN检测模块内部</text>
+
+  <rect x="690" y="212" width="140" height="82" rx="12" class="box" />
+  <text x="760" y="246" text-anchor="middle" class="text">letterbox</text>
+  <text x="760" y="270" text-anchor="middle" class="small">内部缩放与填充</text>
+
+  <rect x="855" y="212" width="140" height="82" rx="12" class="box" />
+  <text x="925" y="246" text-anchor="middle" class="text">NPU推理</text>
+  <text x="925" y="270" text-anchor="middle" class="small">RKNN Runtime 执行</text>
+
+  <rect x="1020" y="212" width="140" height="82" rx="12" class="box" />
+  <text x="1090" y="246" text-anchor="middle" class="text">内部后处理</text>
+  <text x="1090" y="270" text-anchor="middle" class="small">阈值过滤、NMS、映射回原图</text>
+
+  <rect x="1245" y="182" width="225" height="116" rx="14" class="box" />
+  <text x="1357" y="224" text-anchor="middle" class="text">ByteTrack轨迹更新</text>
+  <text x="1357" y="252" text-anchor="middle" class="small">目标关联、分配 ID、维护轨迹</text>
+  <text x="1357" y="278" text-anchor="middle" class="small">运行在 CPU 侧</text>
+
+  <path d="M 285 240 L 345 240" class="arrow" />
+  <path d="M 605 240 L 665 240 L 665 253 L 690 253" class="arrow" />
+  <path d="M 830 253 L 855 253" class="arrow" />
+  <path d="M 995 253 L 1020 253" class="arrow" />
+  <path d="M 1160 253 L 1245 253" class="arrow" />
+
+  <rect x="60" y="390" width="1480" height="182" rx="22" class="band" />
+  <text x="800" y="426" text-anchor="middle" class="subtitle">输出与统计</text>
+
+  <rect x="170" y="456" width="280" height="84" rx="14" class="box" />
+  <text x="310" y="490" text-anchor="middle" class="text">绘制框与轨迹</text>
+  <text x="310" y="516" text-anchor="middle" class="small">overlay 开启时输出可视化结果</text>
+
+  <rect x="660" y="456" width="280" height="84" rx="14" class="box" />
+  <text x="800" y="490" text-anchor="middle" class="text">保存视频或图片</text>
+  <text x="800" y="516" text-anchor="middle" class="small">output 指向结果目录时写盘</text>
+
+  <rect x="1150" y="456" width="280" height="84" rx="14" class="box" />
+  <text x="1290" y="490" text-anchor="middle" class="text">输出日志与统计指标</text>
+  <text x="1290" y="516" text-anchor="middle" class="small">pre_ms、npu_ms、infer_ms、track_ms、FPS</text>
+
+  <path d="M 1357 298 L 1357 360 L 310 360 L 310 456" class="arrow" />
+  <path d="M 1357 298 L 1357 400 L 800 400 L 800 456" class="arrow" />
+  <path d="M 1357 298 L 1357 456" class="arrow" />
+
+  <rect x="110" y="640" width="410" height="132" rx="16" class="note" />
+  <text x="315" y="682" text-anchor="middle" class="text">输入侧不单列 RGA</text>
+  <text x="315" y="714" text-anchor="middle" class="small">主程序只做 BGR→RGB 和缓冲复用，视频原始帧直接送入检测器</text>
+
+  <rect x="595" y="640" width="410" height="132" rx="16" class="note" />
+  <text x="800" y="682" text-anchor="middle" class="text">缩放在检测器内部完成</text>
+  <text x="800" y="714" text-anchor="middle" class="small">letterbox 不作为外部模块单独展开，而是包含在 RKNN 检测调用内部</text>
+
+  <rect x="1080" y="640" width="410" height="132" rx="16" class="note" />
+  <text x="1285" y="682" text-anchor="middle" class="text">系统统计口径</text>
+  <text x="1285" y="714" text-anchor="middle" class="small">compute_fps 表示推理+跟踪，e2e_fps 还包含读写与保存开销</text>
+</svg>

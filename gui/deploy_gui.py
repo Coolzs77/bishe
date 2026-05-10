@@ -32,7 +32,7 @@ except ImportError:
     _PARAMIKO = False
 
 from PyQt5.QtCore import (Qt, QThread, pyqtSignal, QTimer, QSize)
-from PyQt5.QtGui import (QFont, QImage, QPixmap, QColor)
+from PyQt5.QtGui import (QFont, QImage, QPixmap, QColor, QIcon)
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QLabel, QPushButton, QComboBox, QLineEdit,
@@ -765,21 +765,26 @@ class DatasetOverviewPanel(QWidget):
                 info.append(f"类别名:  {', '.join(names)}")
             info.append(f"训练集:  {ds.get('train', '?')}")
             info.append(f"验证集:  {ds.get('val', '?')}")
-
+            info.append(f"测试集:  {ds.get('test', '?')}")
             train_dir = yaml_p.parent / "images" / "train"
             val_dir = yaml_p.parent / "images" / "val"
+            test_dir = yaml_p.parent / "images" / "test"
             nt = len(list(train_dir.glob("*"))) \
                 if train_dir.is_dir() else 0
             nv = len(list(val_dir.glob("*"))) \
                 if val_dir.is_dir() else 0
+            ntst = len(list(test_dir.glob("*"))) \
+                if test_dir.is_dir() else 0
             info.append("")
             info.append(f"训练图像:  {nt} 张")
             info.append(f"验证图像:  {nv} 张")
-            info.append(f"总计:      {nt + nv} 张")
+            info.append(f"测试图像:  {ntst} 张")
+            info.append(f"总计:      {nt + nv + ntst} 张")
             info.append(f"划分比例:  "
-                        f"{nt/(nt+nv)*100:.1f}% / "
-                        f"{nv/(nt+nv)*100:.1f}%"
-                        if nt + nv > 0 else "—")
+                        f"{nt/(nt+nv+ntst)*100:.1f}% / "
+                        f"{nv/(nt+nv+ntst)*100:.1f}% / "
+                        f"{ntst/(nt+nv+ntst)*100:.1f}%"
+                        if nt + nv + ntst > 0 else "—")
 
             # 标注统计 (采样前 300 个标签文件)
             label_dir = yaml_p.parent / "labels" / "train"
@@ -1305,10 +1310,12 @@ class DataTab(BaseSplitTab):
         self.mc_imgs = MetricCard("图像数")
         self.mc_train = MetricCard("训练集")
         self.mc_val = MetricCard("验证集")
+        self.mc_test = MetricCard("测试集")
         self.mc_cls = MetricCard("类别数")
         mc.addWidget(self.mc_imgs)
         mc.addWidget(self.mc_train)
         mc.addWidget(self.mc_val)
+        mc.addWidget(self.mc_test)
         mc.addWidget(self.mc_cls)
         mc.addStretch()
         lay.addLayout(mc)
@@ -1370,13 +1377,17 @@ class DataTab(BaseSplitTab):
             self.mc_cls.set_value(str(nc), C_ACCENT)
             train_dir = yaml_p.parent / "images" / "train"
             val_dir = yaml_p.parent / "images" / "val"
+            test_dir = yaml_p.parent / "images" / "test"
             nt = len(list(train_dir.glob("*"))) if train_dir.is_dir() else 0
             nv = len(list(val_dir.glob("*"))) if val_dir.is_dir() else 0
+            ntst = len(list(test_dir.glob("*"))) if test_dir.is_dir() else 0
             self.mc_train.set_value(str(nt), C_ACCENT)
             self.mc_val.set_value(str(nv), C_ACCENT)
-            self.mc_imgs.set_value(str(nt + nv), C_ACCENT)
+            self.mc_test.set_value(str(ntst), C_ACCENT)
+            #补全测试集的内容
+            self.mc_imgs.set_value(str(nt + nv + ntst), C_ACCENT)
             self.log.append_log(
-                f"数据集: {nt} 训练 + {nv} 验证, "
+                f"数据集: {nt} 训练 + {nv} 验证 + {ntst} 测试, "
                 f"{nc} 类别", "ok")
         except Exception as e:
             self.log.append_log(f"扫描失败: {e}", "err")
@@ -1438,8 +1449,6 @@ class TrainTab(BaseSplitTab):
         self.profile = QComboBox()
         self.profile.addItem(
             "controlled — 严格控变量", "controlled")
-        self.profile.addItem(
-            "optimal — 独立最优参数", "optimal")
         gl2.addWidget(self.profile, 0, 1, 1, 2)
         gl2.addWidget(QLabel("仅运行:"), 1, 0)
         self.only = QLineEdit()
@@ -1571,18 +1580,24 @@ class DetectionTab(BaseSplitTab):
         self.mode.addItem("speed — 推理速度", "speed")
         pg.addWidget(self.mode, 0, 1, 1, 2)
 
-        pg.addWidget(QLabel("权重:"), 1, 0)
+        pg.addWidget(QLabel("数据集:"), 1, 0)
+        self.task = QComboBox()
+        self.task.addItem("val — 验证集", "val")
+        self.task.addItem("test — 测试集", "test")
+        pg.addWidget(self.task, 1, 1, 1, 2)
+
+        pg.addWidget(QLabel("权重:"), 2, 0)
         self.weights = QComboBox()
         self.weights.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, path in find_weights():
             self.weights.addItem(name, path)
-        pg.addWidget(self.weights, 1, 1)
+        pg.addWidget(self.weights, 2, 1)
         bw = QPushButton("浏览")
         bw.setObjectName("btnGold")
         bw.setFixedWidth(70)
         bw.clicked.connect(self._browse_w)
-        pg.addWidget(bw, 1, 2)
+        pg.addWidget(bw, 2, 2)
 
         self._params = []
         for i, (lbl, lo, hi, val, dec) in enumerate([
@@ -1591,7 +1606,7 @@ class DetectionTab(BaseSplitTab):
             ("Img:",  320,   1280, 640,  0),
             ("Batch:", 1,    128,  32,   0),
         ]):
-            pg.addWidget(QLabel(lbl), 2 + i, 0)
+            pg.addWidget(QLabel(lbl), 3 + i, 0)
             if dec > 0:
                 s = QDoubleSpinBox()
                 s.setRange(lo, hi)
@@ -1604,11 +1619,11 @@ class DetectionTab(BaseSplitTab):
                 s.setValue(int(val))
                 if lbl == "Img:":
                     s.setSingleStep(32)
-            pg.addWidget(s, 2 + i, 1, 1, 2)
+            pg.addWidget(s, 3 + i, 1, 1, 2)
             self._params.append(s)
 
         self.chk_batch = QCheckBox("批量评估全部消融实验")
-        pg.addWidget(self.chk_batch, 6, 0, 1, 3)
+        pg.addWidget(self.chk_batch, 7, 0, 1, 3)
         g.setLayout(pg)
         lay.addWidget(g)
 
@@ -1665,6 +1680,7 @@ class DetectionTab(BaseSplitTab):
         cmd = (f'python scripts/evaluate/eval_detection.py '
                f'--config configs/eval_detection.yaml '
                f'--mode {self.mode.currentData()} '
+               f'--task {self.task.currentData()} '
                f'--conf-thres {self._params[0].value()} '
                f'--iou-thres {self._params[1].value()} '
                f'--img-size {self._params[2].value()} '
@@ -1728,6 +1744,7 @@ class DetectionTab(BaseSplitTab):
 
     def _on_reset(self):
         self.mode.setCurrentIndex(0)
+        self.task.setCurrentIndex(0)
         self._params[0].setValue(0.001)
         self._params[1].setValue(0.6)
         self._params[2].setValue(640)
@@ -1800,13 +1817,13 @@ class TrackingTab(BaseSplitTab):
         pg.addWidget(self.output, 6, 1, 1, 2)
 
         chk = QHBoxLayout()
-        self.chk_half = QCheckBox("FP16")
-        self.chk_half.setChecked(True)
+        # self.chk_half = QCheckBox("FP16")
+        # self.chk_half.setChecked(True)
         self.chk_vid = QCheckBox("保存视频")
         self.chk_txt = QCheckBox("保存 MOT txt")
         self.chk_overlay = QCheckBox("绘制框")
         self.chk_overlay.setChecked(True)
-        for c in [self.chk_half, self.chk_vid,
+        for c in [self.chk_vid,
                    self.chk_txt, self.chk_overlay]:
             chk.addWidget(c)
         chk.addStretch()
@@ -1827,12 +1844,10 @@ class TrackingTab(BaseSplitTab):
         # ── 指标卡 ──
         mc = QHBoxLayout()
         mc.setSpacing(12)
-        self.mc_mota = MetricCard("MOTA")
-        self.mc_idf1 = MetricCard("IDF1")
+        self.mc_match = MetricCard("匹配率")
         self.mc_fps = MetricCard("Track FPS")
         self.mc_idsw = MetricCard("ID Switch")
-        mc.addWidget(self.mc_mota)
-        mc.addWidget(self.mc_idf1)
+        mc.addWidget(self.mc_match)
         mc.addWidget(self.mc_fps)
         mc.addWidget(self.mc_idsw)
         mc.addStretch()
@@ -1879,8 +1894,7 @@ class TrackingTab(BaseSplitTab):
                f'--nms-thres {self._tparams[1].value()} '
                f'--img-size {self.img_size.value()} '
                f'--output "{self.output.text()}"')
-        if self.chk_half.isChecked():
-            cmd += ' --half'
+
         if not self.chk_vid.isChecked():
             cmd += ' --no-save-vid'
         if not self.chk_txt.isChecked():
@@ -1900,19 +1914,17 @@ class TrackingTab(BaseSplitTab):
         self.worker.start()
 
     def _parse_track(self, text, level):
-        m = re.search(r'MOTA[:\s]+([\d.]+)', text, re.I)
+        # 检测匹配率: 87.3%
+        m = re.search(r'检测匹配率[:\uff1a]\s*([\d.]+)%', text)
         if m:
-            self.mc_mota.set_value(
-                f"{float(m.group(1)):.1f}", C_OK)
-        m = re.search(r'IDF1[:\s]+([\d.]+)', text, re.I)
-        if m:
-            self.mc_idf1.set_value(
-                f"{float(m.group(1)):.1f}", C_ACCENT)
+            v = float(m.group(1))
+            c = C_OK if v >= 80 else (C_WARN if v >= 60 else C_ERR)
+            self.mc_match.set_value(f"{v:.1f}%", c)
         m = re.search(r'FPS[:\s]+([\d.]+)', text, re.I)
         if m:
             self.mc_fps.set_value(
                 f"{float(m.group(1)):.1f}", C_ACCENT)
-        m = re.search(r'ID.?Sw\w*[:\s]+(\d+)', text, re.I)
+        m = re.search(r'ID切换代理数[:\uff1a\s]+(\d+)', text)
         if m:
             self.mc_idsw.set_value(m.group(1), C_WARN)
 
@@ -1922,11 +1934,11 @@ class TrackingTab(BaseSplitTab):
         self._tparams[1].setValue(0.45)
         self.img_size.setValue(640)
         self.output.setText("outputs/tracking/current")
-        self.chk_half.setChecked(True)
+
         self.chk_vid.setChecked(False)
         self.chk_txt.setChecked(False)
         self.chk_overlay.setChecked(True)
-        for mc in [self.mc_mota, self.mc_idf1,
+        for mc in [self.mc_match,
                    self.mc_fps, self.mc_idsw]:
             mc.reset()
 
@@ -2035,15 +2047,17 @@ class DeployTab(QWidget):
         mc = QHBoxLayout()
         mc.setSpacing(12)
         self.mc_npu = MetricCard("NPU 延迟")
-        self.mc_fps = MetricCard("NPU FPS")
+        self.mc_fps = MetricCard("计算 FPS")
         self.mc_e2e = MetricCard("平均推理ms")
         self.mc_det = MetricCard("检测数")
         self.mc_track = MetricCard("轨迹展示")
+        self.mc_ids = MetricCard("唯一ID")
         mc.addWidget(self.mc_npu)
         mc.addWidget(self.mc_fps)
         mc.addWidget(self.mc_e2e)
         mc.addWidget(self.mc_det)
         mc.addWidget(self.mc_track)
+        mc.addWidget(self.mc_ids)
         mc.addStretch()
         ll.addLayout(mc)
 
@@ -2164,6 +2178,19 @@ class DeployTab(QWidget):
         if m:
             self.mc_track.set_value(m.group(1), C_ACCENT)
             self._session_metrics['total_tracks'] = m.group(1)
+        # 唯一轨迹ID数: 107  (ID 切换指标)
+        m = re.search(r'唯一轨迹ID数[:\uff1a]\s*(\d+)', text)
+        if m:
+            self.mc_ids.set_value(m.group(1), C_ACCENT)
+            self._session_metrics['unique_ids'] = m.group(1)
+        # 预处理 (BGR→RGB): 1.3 ms  ← 用 ^ 锚定行首，防止「推理(含预处理+后处理)」中的「预处理」误匹配
+        m = re.search(r'^\s*预处理[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', text)
+        if m:
+            self._session_metrics['pre_ms'] = f"{float(m.group(1)):.1f}"
+        # 跟踪 (ByteTrack): 2.2 ms
+        m = re.search(r'跟踪[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', text)
+        if m:
+            self._session_metrics['track_ms'] = f"{float(m.group(1)):.1f}"
         # 纯 NPU → session
         m = re.search(r'纯\s*NPU[\uff1a:]\s*([\d.]+)\s*ms', text)
         if m:
@@ -2179,8 +2206,15 @@ class DeployTab(QWidget):
     def _run_image(self):
         model = self.model.currentData()
         self._reset_session_metrics("image", self.image.currentText())
+        # C++ 支持 argv[5]=conf argv[6]=nms; 统一默认 0.25/0.45
+        conf = self.conf.text().strip()
+        nms = self.nms.text().strip()
+        extra = ""
+        if conf or nms:
+            # 需要按位置传参：model image_or_dir labels output conf nms
+            extra = f" ./model ./model/infrared_labels.txt ./outputs {conf or '0.25'} {nms or '0.45'}"
         self._ssh_run(self._adb_cmd(
-            f"./bishe_rknn_detect model/{model}"),
+            f"./bishe_rknn_detect model/{model}{extra}"),
             after_cb=self._save_inference_log)
 
     def _run_video(self):
@@ -2447,6 +2481,9 @@ class DeployTab(QWidget):
             'infer_ms': '',
             'compute_fps': '',
             'e2e_fps': '',
+            'unique_ids': '',
+            'pre_ms': '',
+            'track_ms': '',
         }
 
     def _save_inference_log(self, exit_code):
@@ -2472,12 +2509,23 @@ class DeployTab(QWidget):
             if not self._session_metrics.get('compute_fps'):
                 m = re.search(r'计算\s*FPS[^:\uff1a]*[:\uff1a]\s*([\d.]+)', full)
                 if m: self._session_metrics['compute_fps'] = f"{float(m.group(1)):.1f}"
+            if not self._session_metrics.get('unique_ids'):
+                m = re.search(r'唯一轨迹ID数[:\uff1a]\s*(\d+)', full)
+                if m: self._session_metrics['unique_ids'] = m.group(1)
+            if not self._session_metrics.get('pre_ms'):
+                # 用 (?m) 多行模式 + ^ 锚定，避免「含预处理+后处理」误匹配
+                m = re.search(r'(?m)^\s*预处理[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', full)
+                if m: self._session_metrics['pre_ms'] = f"{float(m.group(1)):.1f}"
+            if not self._session_metrics.get('track_ms'):
+                m = re.search(r'跟踪[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', full)
+                if m: self._session_metrics['track_ms'] = f"{float(m.group(1)):.1f}"
         BOARD_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         log_path = BOARD_RESULTS_DIR / 'inference_log.csv'
         fieldnames = [
             'timestamp', 'model', 'input_type', 'input', 'conf', 'nms',
-            'total_frames', 'total_detections', 'total_tracks',
-            'npu_ms', 'npu_fps', 'infer_ms', 'compute_fps', 'e2e_fps'
+            'total_frames', 'total_detections', 'total_tracks', 'unique_ids',
+            'pre_ms', 'npu_ms', 'infer_ms', 'track_ms',
+            'npu_fps', 'compute_fps', 'e2e_fps'
         ]
         file_exists = log_path.exists()
         try:
@@ -2518,7 +2566,8 @@ class DeployTab(QWidget):
         self.nms.clear()
         self._session_metrics = {}
         for mc in [self.mc_npu, self.mc_fps,
-                   self.mc_e2e, self.mc_det, self.mc_track]:
+                   self.mc_e2e, self.mc_det, self.mc_track,
+                   self.mc_ids]:
             mc.reset()
 
 
@@ -2727,6 +2776,10 @@ def main():
         mb.exec_()
 
     win = MainWindow()
+    #设置图标
+    icon_path = str(Path(__file__).parent / "icon.jpg")
+    if os.path.exists(icon_path):
+        win.setWindowIcon(QIcon(icon_path))
     win.show()
     sys.exit(app.exec_())
 

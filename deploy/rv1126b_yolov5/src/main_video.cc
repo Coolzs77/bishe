@@ -154,47 +154,6 @@ int mat_to_image_buffer_inplace(const cv::Mat& frame, image_buffer_t* out, unsig
     return 0;
 }
 
-// ---- OpenCV NEON Letterbox 预处理 (BGR→RGB + resize + pad) ----
-//
-// 将任意尺寸的 BGR 帧一步转换为模型输入格式 (model_w×model_h×3 RGB888).
-// 完全使用 OpenCV NEON 加速，预期耗时 2~3ms（vs. RGA/CPU letterbox 的 8~10ms）.
-//
-// dst_buf: app_ctx->input_buffer (model_w * model_h * 3 字节, 已预分配)
-// tmp_buf: frame_rgb_buf (frame_w * frame_h * 3 字节, 已预分配, 用作 resize 临时缓冲区)
-//
-// 返回 letterbox 参数，用于检测坐标反映射.
-letterbox_t preprocess_to_model_buf(
-    const cv::Mat& frame,
-    unsigned char* dst_buf,
-    unsigned char* tmp_buf,
-    int model_w,
-    int model_h) {
-    const float scale = std::min(static_cast<float>(model_w) / frame.cols,
-                                 static_cast<float>(model_h) / frame.rows);
-    const int new_w = std::max(1, static_cast<int>(roundf(frame.cols * scale)));
-    const int new_h = std::max(1, static_cast<int>(roundf(frame.rows * scale)));
-    const int left  = (model_w - new_w) / 2;
-    const int top   = (model_h - new_h) / 2;
-
-    // 1. 用灰色(114)填充整个模型输入缓冲区
-    memset(dst_buf, 114, model_w * model_h * 3);
-
-    // 2. Resize BGR frame → tmp_buf (NEON 加速, ~1.5ms)
-    cv::Mat resized_bgr(new_h, new_w, CV_8UC3, tmp_buf);
-    cv::resize(frame, resized_bgr, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
-
-    // 3. BGR→RGB 并写入 dst_buf 的 ROI (~0.5ms)
-    cv::Mat model_mat(model_h, model_w, CV_8UC3, dst_buf);
-    cv::Mat roi = model_mat(cv::Rect(left, top, new_w, new_h));
-    cv::cvtColor(resized_bgr, roi, cv::COLOR_BGR2RGB);
-
-    letterbox_t lb;
-    lb.scale = scale;
-    lb.x_pad = left;
-    lb.y_pad = top;
-    return lb;
-}
-
 // ---- 在 cv::Mat 上绘制检测结果 ----
 void draw_detections_on_mat(
     cv::Mat& frame,
@@ -981,19 +940,17 @@ int main(int argc, char** argv) {
     const double fps_alpha = 0.12;
 
     while (cap.read(frame)) {
-        // 预处理: OpenCV NEON letterbox (resize + pad + BGR→RGB), 直接写入 input_buffer
-        // 比 convert_image_with_exact_letterbox (CPU/RGA) 快约 6~7ms
+        // 预处理: BGR→RGB 转换, 复用预分配缓冲区
         double pre_t0 = get_time_ms();
-        letterbox_t letterbox = preprocess_to_model_buf(
-            frame, app_ctx.input_buffer, frame_rgb_buf,
-            app_ctx.model_width, app_ctx.model_height);
+        image_buffer_t frame_buf;
+        mat_to_image_buffer_inplace(frame, &frame_buf, frame_rgb_buf);
         total_preprocess_ms += get_time_ms() - pre_t0;
 
-        // RKNN 推理 (跳过内部 letterbox, input_buffer 已由上一步填充)
+        // RKNN 推理 (内部完成 letterbox + NPU + 后处理)
         double t0 = get_time_ms();
         std::vector<Detection> detections;
-        int ret = inference_rknn_model_preloaded(
-            &app_ctx, &letterbox, frame.cols, frame.rows,
+        int ret = inference_rknn_model(
+            &app_ctx, &frame_buf,
             conf_threshold, nms_threshold, &detections);
         double infer_ms = get_time_ms() - t0;
 

@@ -47,14 +47,19 @@ def process_flir(input_dir, output_dir):
     print(f'类别: {CLASS_NAMES}')
     print('=' * 60 + '\n')
 
-    # 处理训练集和验证集
-    for split in ['train', 'val']:
+    # 处理训练集、验证集和测试集
+    for split in ['train', 'val', 'test']:
         print(f'\n处理 {split} 集...')
 
-        # 路径
-        base_dir = input_path / f'images_thermal_{split}'
-        img_dir = base_dir / 'data'
-        anno_file = base_dir / 'coco.json'
+        # 路径（测试集来自 video_thermal_test，结构略有不同）
+        if split == 'test':
+            base_dir = input_path / 'video_thermal_test'
+            img_dir = base_dir / 'data'
+            anno_file = base_dir / 'coco.json'
+        else:
+            base_dir = input_path / f'images_thermal_{split}'
+            img_dir = base_dir / 'data'
+            anno_file = base_dir / 'coco.json'
 
         out_img_dir = output_path / 'images' / split
         out_lbl_dir = output_path / 'labels' / split
@@ -169,6 +174,7 @@ def process_flir(input_dir, output_dir):
 path: {output_path.absolute()}
 train: images/train
 val: images/val
+test: images/test
 
 # 类别
 nc: {len(CLASS_NAMES)}
