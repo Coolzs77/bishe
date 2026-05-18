@@ -26,9 +26,9 @@ CANONICAL_EXPERIMENTS = [
     {
         "id": "exp1",
         "name": "ablation_exp01_baseline",
-        "yaml": "model/yolov5/configs/yolov5s_base.yaml",
+        "yaml": "model/yolov5/configs/yolov5n_base.yaml",
         "hyp": None,
-        "desc": "[Exp1] 基线模型 - YOLOv5s",
+        "desc": "[Exp1] 基线模型 - YOLOv5n",
         "stage": "stage1",
     },
     {
@@ -74,7 +74,7 @@ CANONICAL_EXPERIMENTS = [
     {
         "id": "exp7",
         "name": "ablation_exp07_eiou",
-        "yaml": "model/yolov5/configs/yolov5s_base.yaml",
+        "yaml": "model/yolov5/configs/yolov5n_base.yaml",
         "hyp": "configs/ablation/hyp_eiou_only.yaml",
         "desc": "[Exp7] 基线 + EIoU",
         "stage": "stage1",
@@ -90,7 +90,7 @@ CANONICAL_EXPERIMENTS = [
     {
         "id": "exp9",
         "name": "ablation_exp09_ghost_eiou",
-        "yaml": "model/yolov5/configs/yolov5s_lightweight.yaml",
+        "yaml": "model/yolov5/configs/yolov5n_lightweight.yaml",
         "hyp": "configs/ablation/hyp_eiou_only.yaml",
         "desc": "[Exp9] Ghost-C3 + EIoU",
         "stage": "stage2",
@@ -168,6 +168,12 @@ def parse_args():
         choices=["controlled", "optimal"],
         default="controlled",
         help="训练配置模式：controlled=统一参数；optimal=每实验独立调参",
+    )
+    parser.add_argument(
+        "--name-suffix",
+        type=str,
+        default=None,
+        help="为每次运行的 name 添加后缀，避免覆盖，例如时间戳",
     )
     parser.add_argument(
         "--profile-config",
@@ -422,8 +428,13 @@ def main():
             f"epochs={train_options['epochs']} patience={train_options['patience']} "
             f"optimizer={train_options['optimizer']} hyp={train_options['hyp']}"
         )
+        # allow optional name suffix to avoid overwriting previous runs
+        run_name = exp["name"]
+        if getattr(args, "name_suffix", None):
+            run_name = f"{run_name}_{args.name_suffix}"
+
         success = train_experiment(
-            exp["name"],
+            run_name,
             exp["yaml"],
             exp["desc"],
             train_options,

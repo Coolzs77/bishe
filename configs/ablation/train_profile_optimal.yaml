@@ -19,7 +19,7 @@ global:
   patience: 40
   workers: 16
   cache: ram
-  weights: yolov5/yolov5s.pt
+  weights: yolov5/yolov5n.pt
   optimizer: AdamW
   label_smoothing: 0.01
   cos_lr: true

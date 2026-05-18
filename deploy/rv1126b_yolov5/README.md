@@ -56,6 +56,8 @@ python scripts/deploy/prepare_deploy.py --exp eiou
 
 # 或导出 ghost+eiou 模型（轻量化候选, 注意用 --imgsz 640）
 python scripts/deploy/prepare_deploy.py --exp ghost_eiou --imgsz 640
+
+
 ```
 
 脚本会自动完成：
