@@ -923,7 +923,7 @@ int main(int argc, char** argv) {
     // max_age=30, min_hits=2, visible_lag=3, reactivate_iou=0.20
     // R2 vs 基线: seq006 唯一ID -14%, 轨迹展示 +18%; seq009 唯一ID -11%, 轨迹展示 +6%
     const float track_high_threshold = 0.50f;
-    const float track_low_threshold = 0.10f;
+    const float track_low_threshold = 0.15f;
     ByteTrackAlignTracker byte_tracker(
         30,              // max_age
         2,               // min_hits              (R2: 3→2, 加速确认)

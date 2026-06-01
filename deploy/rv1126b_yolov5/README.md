@@ -117,6 +117,7 @@ pip install rknn_toolkit2-2.3.2-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x8
 
 ```bash
 cd /home/coolzs77/bishe/deploy/rv1126b_yolov5/python
+# 1.yolov5s
 # 基线
 python convert_yolov5_to_rknn.py \
   --onnx ../model/best_baseline.onnx \
@@ -146,6 +147,113 @@ python convert_yolov5_to_rknn.py \
    --target rv1126b\
    --quant i8\
    --quant-algo kl_divergence
+
+# 2.yolov5n
+# 基线
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_baseline_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_baseline_5n_kl.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo kl_divergence
+
+# 基线+eiou 模型 (主力)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_eiou_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_eiou_5n_kl.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo kl_divergence
+
+# 或 ghost+eiou 模型 (轻量化候选)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_ghost_eiou_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_ghost_eiou_5n_kl.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo kl_divergence
+
+# 2.yolov5n
+# 基线
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_baseline_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_baseline_5n.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo normal
+
+# 基线+eiou 模型 (主力)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_eiou_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_eiou_5n.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo normal
+
+# 或 ghost+eiou 模型 (轻量化候选)
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_ghost_eiou_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_ghost_eiou_5n.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo normal
+
+# ==========================================
+
+# 2.yolov5n MMSE 精细化量化转换
+
+# ==========================================
+
+
+
+# 基线模型 (使用 mmse 算法压制截断噪声)
+
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_baseline_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_baseline_5n_mmse.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo mmse
+
+
+
+# 基线+eiou 模型 (主力模型，利用 mmse 重新校准边界框激活值)
+
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_eiou_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_eiou_5n_mmse.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo mmse
+
+
+
+# 或 ghost+eiou 模型 (轻量化候选，mmse 将使其抗噪性能达到极致)
+
+python convert_yolov5_to_rknn.py \
+  --onnx ../model/best_ghost_eiou_5n.onnx \
+  --dataset ../calibration_dataset.txt \
+  --val-dir /home/coolzs77/bishe/val \
+  --output ../model/best_ghost_eiou_5n_mmse.rknn \
+  --target rv1126b \
+  --quant i8 \
+  --quant-algo mmse
 
 ```
 

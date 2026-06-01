@@ -38,7 +38,8 @@ from PyQt5.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QComboBox, QLineEdit,
     QTextEdit, QGroupBox, QTabWidget, QSplitter, QSlider,
     QCheckBox, QSpinBox, QDoubleSpinBox, QFileDialog,
-    QMessageBox, QSizePolicy, QStatusBar, QFrame, QProgressBar
+    QMessageBox, QSizePolicy, QStatusBar, QFrame, QProgressBar,
+    QDialog
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -67,6 +68,15 @@ BOARD_MODELS = [
     ("EIoU (kl)", "best_eiou_kl.rknn"),
     ("Baseline (kl)", "best_baseline_kl.rknn"),
     ("Ghost+EIoU (kl)", "best_ghost_eiou_kl.rknn"),
+     ("EIoU 5n (mmse)", "best_eiou_5n_mmse.rknn"),
+    ("Baseline 5n (mmse)", "best_baseline_5n_mmse.rknn"),
+    ("Ghost+EIoU 5n (mmse)", "best_ghost_eiou_5n_mmse.rknn"),
+    ("EIoU 5n (normal)", "best_eiou_5n.rknn"),
+    ("Baseline 5n (normal)", "best_baseline_5n.rknn"),
+    ("Ghost+EIoU 5n (normal)", "best_ghost_eiou_5n.rknn"),
+    ("EIoU 5n (kl)", "best_eiou_5n_kl.rknn"),
+    ("Baseline 5n (kl)", "best_baseline_5n_kl.rknn"),
+    ("Ghost+EIoU 5n (kl)", "best_ghost_eiou_5n_kl.rknn"),
 ]
 
 BOARD_VIDEOS = [
@@ -82,7 +92,7 @@ BOARD_IMAGES = [
     ("test_04", "test_04.jpg"),
 ]
 
-# ── 配色方案 (Art Deco 亮色) ──
+# ── 配色方案 ──
 C_BG        = "#f4f5f7"
 C_PANEL     = "#ffffff"
 C_PANEL_ALT = "#f8f9fb"
@@ -106,14 +116,20 @@ C_HEADER_R  = "#2563eb"
 # 工具函数
 # ═══════════════════════════════════════════════════════════════
 def find_weights():
-    """扫描消融目录中的 best.pt 权重"""
     results = []
+    ablation_5n = ROOT / "outputs" / "ablation_study_5n"
+    if ablation_5n.is_dir():
+        for exp in sorted(ablation_5n.iterdir()):
+            pt = exp / "weights" / "best.pt"
+            if pt.exists():
+                results.append((f"{exp.name} (5n)", str(pt)))
+
     if ABLATION_DIR.is_dir():
         for exp in sorted(ABLATION_DIR.iterdir()):
             pt = exp / "weights" / "best.pt"
             if pt.exists():
                 results.append((exp.name, str(pt)))
-    # 也扫描 ablation_old
+
     old = ROOT / "outputs" / "ablation_old"
     if old.is_dir():
         for exp in sorted(old.iterdir()):
@@ -124,7 +140,6 @@ def find_weights():
 
 
 def find_files(dirs, pattern):
-    """在多个目录中递归搜索匹配的文件"""
     items = []
     for d in dirs:
         if d.is_dir():
@@ -138,7 +153,6 @@ def find_files(dirs, pattern):
 
 
 def path_valid(p, kind="file"):
-    """检查路径是否存在"""
     pp = Path(p) if Path(p).is_absolute() else ROOT / p
     return pp.is_file() if kind == "file" else pp.is_dir()
 
@@ -154,23 +168,24 @@ class LocalCmdWorker(QThread):
         super().__init__(parent)
         self.cmd = cmd
         self.cwd = cwd or str(ROOT)
+        self.proc = None
 
     def run(self):
         try:
             self.log_line.emit(f"❯ {self.cmd}", "cmd")
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
-            proc = subprocess.Popen(
+            self.proc = subprocess.Popen(
                 self.cmd, shell=True, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True,
                 cwd=self.cwd, encoding="utf-8", errors="replace",
                 env=env)
-            for line in iter(proc.stdout.readline, ""):
+            for line in iter(self.proc.stdout.readline, ""):
                 line = line.rstrip("\n\r")
                 if line:
                     self.log_line.emit(line, "info")
-            proc.wait()
-            code = proc.returncode
+            self.proc.wait()
+            code = self.proc.returncode
             if code == 0:
                 self.log_line.emit("━━ 完成 (exit 0) ━━", "ok")
             else:
@@ -182,10 +197,9 @@ class LocalCmdWorker(QThread):
 
 
 class SSHWorker(QThread):
-    """通过 SSH 在 Ubuntu 上执行命令"""
     log_line = pyqtSignal(str, str)
     finished = pyqtSignal(int)
-    stdout_text = pyqtSignal(str)   # 完整输出
+    stdout_text = pyqtSignal(str)
 
     def __init__(self, cmd, parent=None):
         super().__init__(parent)
@@ -221,18 +235,15 @@ class SSHWorker(QThread):
                     self.log_line.emit(el, "err")
             ssh.close()
             full = "\n".join(self._all_out)
-            # 检查是否有 adb error
             if "error" in full.lower() and "No such file" in full:
-                self.log_line.emit(
-                    "━━ 操作失败: 远程文件不存在 ━━", "err")
+                self.log_line.emit("━━ 操作失败: 远程文件不存在 ━━", "err")
                 self.finished.emit(1)
             else:
                 self.log_line.emit("━━ SSH 会话结束 ━━", "ok")
                 self.finished.emit(0)
             self.stdout_text.emit(full)
         except paramiko.AuthenticationException:
-            self.log_line.emit(
-                "━━ SSH 认证失败: 检查用户名/密码 ━━", "err")
+            self.log_line.emit("━━ SSH 认证失败: 检查用户名/密码 ━━", "err")
             self.finished.emit(-1)
         except paramiko.SSHException as e:
             self.log_line.emit(f"━━ SSH 连接异常: {e} ━━", "err")
@@ -246,9 +257,8 @@ class SSHWorker(QThread):
 
 
 class SFTPWorker(QThread):
-    """从 Ubuntu SFTP 下载文件到 Windows 本地"""
     log_line = pyqtSignal(str, str)
-    finished = pyqtSignal(int, str)  # (code, local_path)
+    finished = pyqtSignal(int, str)
 
     def __init__(self, remote_path, local_path, parent=None):
         super().__init__(parent)
@@ -262,19 +272,16 @@ class SFTPWorker(QThread):
             ssh.connect(UBUNTU_HOST, username=UBUNTU_USER,
                         password=UBUNTU_PASS, timeout=10)
             sftp = ssh.open_sftp()
-            # 验证远程文件存在
             try:
                 sftp.stat(self.remote)
             except FileNotFoundError:
-                self.log_line.emit(
-                    f"━━ Ubuntu 上不存在: {self.remote} ━━", "err")
+                self.log_line.emit(f"━━ Ubuntu 上不存在: {self.remote} ━━", "err")
                 sftp.close()
                 ssh.close()
                 self.finished.emit(1, "")
                 return
             os.makedirs(os.path.dirname(self.local), exist_ok=True)
-            self.log_line.emit(
-                f"⬇ 下载: {self.remote} → {self.local}", "info")
+            self.log_line.emit(f"⬇ 下载: {self.remote} → {self.local}", "info")
             sftp.get(self.remote, self.local)
             sftp.close()
             ssh.close()
@@ -286,9 +293,8 @@ class SFTPWorker(QThread):
 
 
 class SFTPUploadWorker(QThread):
-    """从 Windows 本地 SFTP 上传文件到 Ubuntu"""
     log_line = pyqtSignal(str, str)
-    finished = pyqtSignal(int, str)  # (code, remote_path)
+    finished = pyqtSignal(int, str)
 
     def __init__(self, local_path, remote_path, parent=None):
         super().__init__(parent)
@@ -302,14 +308,12 @@ class SFTPUploadWorker(QThread):
             ssh.connect(UBUNTU_HOST, username=UBUNTU_USER,
                         password=UBUNTU_PASS, timeout=15)
             sftp = ssh.open_sftp()
-            # 确保远端目录存在
             remote_dir = self.remote.rsplit("/", 1)[0]
             try:
                 ssh.exec_command(f"mkdir -p {remote_dir}")
             except Exception:
                 pass
-            self.log_line.emit(
-                f"⬆ 上传: {self.local} → {self.remote}", "info")
+            self.log_line.emit(f"⬆ 上传: {self.local} → {self.remote}", "info")
             sftp.put(self.local, self.remote)
             sftp.close()
             ssh.close()
@@ -342,17 +346,18 @@ class LogPanel(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
-        self.setFont(QFont("Consolas", 12))
-        self.setMinimumHeight(120)
+        self.setFont(QFont("Consolas", 18))
+        self.setMinimumHeight(180)
         self.setStyleSheet(f"""
             QTextEdit {{
                 background: {C_PANEL_ALT};
                 border: 2px solid {C_BORDER};
                 border-top: 3px solid {C_GOLD};
-                border-radius: 4px; padding: 8px;
+                border-radius: 4px;
+                padding: 10px;
                 color: {C_TEXT};
                 font-family: 'Cascadia Code','Consolas',monospace;
-                font-size: 13px;
+                font-size: 20px;
             }}""")
 
     def append_log(self, text, level="info"):
@@ -368,7 +373,7 @@ class LogPanel(QTextEdit):
 class MetricCard(QFrame):
     def __init__(self, title, parent=None):
         super().__init__(parent)
-        self.setFixedSize(155, 85)
+        self.setFixedSize(145, 82)
         self.setStyleSheet(f"""
             QFrame {{
                 background: {C_PANEL};
@@ -377,31 +382,108 @@ class MetricCard(QFrame):
                 border-radius: 6px;
             }}""")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setContentsMargins(6, 6, 6, 6)
         lay.setSpacing(2)
+
         self.lbl_title = QLabel(title)
-        self.lbl_title.setFont(QFont("Microsoft YaHei UI", 10))
-        self.lbl_title.setStyleSheet(
-            f"color: {C_TEXT_S}; border: none;")
+        self.lbl_title.setFont(QFont("Microsoft YaHei UI", 16))
+        self.lbl_title.setStyleSheet(f"color: {C_TEXT_S}; border: none;")
         self.lbl_title.setAlignment(Qt.AlignCenter)
+
         self.lbl_value = QLabel("—")
-        self.lbl_value.setFont(QFont("Consolas", 19, QFont.Bold))
-        self.lbl_value.setStyleSheet(
-            f"color: {C_ACCENT}; border: none;")
+        self.lbl_value.setFont(QFont("Consolas", 20, QFont.Bold))
+        self.lbl_value.setStyleSheet(f"color: {C_ACCENT}; border: none;")
         self.lbl_value.setAlignment(Qt.AlignCenter)
+
         lay.addWidget(self.lbl_title)
         lay.addWidget(self.lbl_value)
 
     def set_value(self, text, color=None):
         self.lbl_value.setText(text)
         if color:
-            self.lbl_value.setStyleSheet(
-                f"color: {color}; border: none;")
+            self.lbl_value.setStyleSheet(f"color: {color}; border: none;")
 
     def reset(self):
         self.lbl_value.setText("—")
-        self.lbl_value.setStyleSheet(
-            f"color: {C_ACCENT}; border: none;")
+        self.lbl_value.setStyleSheet(f"color: {C_ACCENT}; border: none;")
+
+
+class InAppFullscreenPlayer(QDialog):
+    """
+    应用内全屏预览窗口：
+    - 不是整个电脑屏幕全屏
+    - 而是在当前 GUI 应用内部弹出一个尽可能大的预览窗口
+    """
+    def __init__(self, title="媒体全屏预览", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(False)
+        self.resize(1400, 800)
+
+        self._pixmap = None
+        self._is_image = False
+
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: #111827;
+            }}
+            QLabel {{
+                background: #000000;
+                color: #cccccc;
+                border: 2px solid {C_BORDER};
+                border-radius: 8px;
+            }}
+        """)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 14, 14, 14)
+        lay.setSpacing(10)
+
+        self.display = QLabel("暂无预览内容")
+        self.display.setAlignment(Qt.AlignCenter)
+        self.display.setMinimumSize(800, 500)
+        self.display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        lay.addWidget(self.display, stretch=1)
+
+        bottom = QHBoxLayout()
+        self.info_label = QLabel(" ")
+        self.info_label.setStyleSheet("color: white; border: none; background: transparent;")
+        self.info_label.setFont(QFont("Microsoft YaHei UI", 18))
+        bottom.addWidget(self.info_label)
+
+        bottom.addStretch()
+
+        self.btn_close = QPushButton("退出全屏")
+        self.btn_close.setObjectName("btnGold")
+        self.btn_close.clicked.connect(self.close)
+        bottom.addWidget(self.btn_close)
+
+        lay.addLayout(bottom)
+
+    def set_pixmap(self, pixmap, info_text=""):
+        self._pixmap = pixmap
+        self._is_image = True
+        self.info_label.setText(info_text)
+        self._refresh_pixmap()
+
+    def set_frame_pixmap(self, pixmap, info_text=""):
+        self._pixmap = pixmap
+        self._is_image = False
+        self.info_label.setText(info_text)
+        self._refresh_pixmap()
+
+    def _refresh_pixmap(self):
+        if self._pixmap and not self._pixmap.isNull():
+            scaled = self._pixmap.scaled(
+                self.display.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            self.display.setPixmap(scaled)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._refresh_pixmap()
 
 
 class VideoPlayer(QWidget):
@@ -413,46 +495,66 @@ class VideoPlayer(QWidget):
         self.playing = False
         self.total_frames = 0
         self.current_frame = 0
+        self.interval = 33
+        self.current_pixmap = None
+        self.current_media_path = ""
+        self.current_media_type = ""
+        self.fullscreen_dialog = None
         self._build()
 
     def _build(self):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
+        lay.setSpacing(8)
+
         self.display = QLabel()
         self.display.setAlignment(Qt.AlignCenter)
-        self.display.setMinimumSize(360, 260)
-        self.display.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.display.setMinimumSize(520, 360)
+        self.display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.display.setStyleSheet(f"""
-            background: #1a1a2e; border: 2px solid {C_BORDER};
-            border-radius: 6px; color: #888; font-size: 14px;
+            background: #1a1a2e;
+            border: 2px solid {C_BORDER};
+            border-radius: 6px;
+            color: #d1d5db;
+            font-size: 22px;
+            padding: 10px;
         """)
         self.display.setText("暂无媒体\n执行任务后可在此预览结果")
         lay.addWidget(self.display, stretch=1)
 
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setMinimum(0)
+        self.slider.setMinimumHeight(28)
         self.slider.sliderMoved.connect(self._seek)
         lay.addWidget(self.slider)
 
         ctrl = QHBoxLayout()
-        ctrl.setSpacing(8)
+        ctrl.setSpacing(10)
+
         self.btn_open = QPushButton("📂 打开")
         self.btn_open.setObjectName("btnGold")
         self.btn_open.clicked.connect(self._open_file)
+
         self.btn_play = QPushButton("▶ 播放")
         self.btn_play.setObjectName("btnGold")
         self.btn_play.clicked.connect(self._toggle_play)
+
         self.btn_stop = QPushButton("⏹ 停止")
         self.btn_stop.setObjectName("btnGold")
         self.btn_stop.clicked.connect(self._stop)
+
+        self.btn_full = QPushButton("⛶ 全屏")
+        self.btn_full.setObjectName("btnPrimary")
+        self.btn_full.clicked.connect(self._open_fullscreen)
+
         self.lbl_info = QLabel("0 / 0")
-        self.lbl_info.setFont(QFont("Consolas", 12))
+        self.lbl_info.setFont(QFont("Consolas", 18, QFont.Bold))
         self.lbl_info.setStyleSheet(f"color: {C_TEXT_S};")
+
         ctrl.addWidget(self.btn_open)
         ctrl.addWidget(self.btn_play)
         ctrl.addWidget(self.btn_stop)
+        ctrl.addWidget(self.btn_full)
         ctrl.addStretch()
         ctrl.addWidget(self.lbl_info)
         lay.addLayout(ctrl)
@@ -471,15 +573,17 @@ class VideoPlayer(QWidget):
         if not self.cap.isOpened():
             self.display.setText(f"无法打开:\n{path}")
             return
-        self.total_frames = int(
-            self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        self.current_media_path = path
+        self.current_media_type = "video"
+
+        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = self.cap.get(cv2.CAP_PROP_FPS) or 30
-        self.interval = int(1000 / fps)
+        self.interval = max(1, int(1000 / fps))
         self.slider.setMaximum(max(0, self.total_frames - 1))
         self.current_frame = 0
         self._show_frame(0)
-        self.lbl_info.setText(
-            f"0 / {self.total_frames}  ({fps:.0f}fps)")
+        self.lbl_info.setText(f"0 / {self.total_frames}  ({fps:.0f}fps)")
 
     def load_image(self, path):
         self._stop()
@@ -493,6 +597,11 @@ class VideoPlayer(QWidget):
         if pixmap.isNull():
             self.display.setText(f"无法打开:\n{path}")
             return
+
+        self.current_media_path = path
+        self.current_media_type = "image"
+        self.current_pixmap = pixmap
+
         scaled = pixmap.scaled(
             self.display.size(), Qt.KeepAspectRatio,
             Qt.SmoothTransformation)
@@ -503,7 +612,7 @@ class VideoPlayer(QWidget):
     def _open_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "打开媒体文件", str(BOARD_RESULTS_DIR),
-            "媒体 (*.mp4 *.avi *.png *.jpg);;所有文件 (*)")
+            "媒体 (*.mp4 *.avi *.mkv *.png *.jpg *.jpeg);;所有文件 (*)")
         if path:
             if path.lower().endswith(('.mp4', '.avi', '.mkv')):
                 self.load_video(path)
@@ -549,6 +658,7 @@ class VideoPlayer(QWidget):
     def _show_frame(self, idx):
         if self.cap:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            self.current_frame = idx
             self._read_and_show()
 
     def _read_and_show(self):
@@ -556,22 +666,59 @@ class VideoPlayer(QWidget):
         if not ret:
             self._stop()
             return
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
-        qimg = QImage(rgb.data, w, h, ch * w,
-                       QImage.Format_RGB888)
+        qimg = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
         pixmap = QPixmap.fromImage(qimg)
+        self.current_pixmap = pixmap
+
         scaled = pixmap.scaled(
             self.display.size(), Qt.KeepAspectRatio,
             Qt.SmoothTransformation)
         self.display.setPixmap(scaled)
         self.slider.setValue(self.current_frame)
-        self.lbl_info.setText(
-            f"{self.current_frame} / {self.total_frames}")
+        self.lbl_info.setText(f"{self.current_frame} / {self.total_frames}")
+
+        if self.fullscreen_dialog and self.fullscreen_dialog.isVisible():
+            self.fullscreen_dialog.set_frame_pixmap(
+                pixmap,
+                self.lbl_info.text()
+            )
+
+    def _open_fullscreen(self):
+        if self.current_pixmap is None or self.current_pixmap.isNull():
+            QMessageBox.information(self, "提示", "当前没有可全屏显示的图片或视频")
+            return
+
+        if self.fullscreen_dialog is None:
+            self.fullscreen_dialog = InAppFullscreenPlayer("媒体全屏预览", self)
+
+        self.fullscreen_dialog.showMaximized()
+
+        if self.current_media_type == "image":
+            self.fullscreen_dialog.set_pixmap(
+                self.current_pixmap,
+                self.lbl_info.text()
+            )
+        else:
+            self.fullscreen_dialog.set_frame_pixmap(
+                self.current_pixmap,
+                self.lbl_info.text()
+            )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.current_pixmap and not self.current_pixmap.isNull():
+            scaled = self.current_pixmap.scaled(
+                self.display.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            self.display.setPixmap(scaled)
 
 
 class ResultBrowser(QWidget):
-    """通用结果文件浏览面板 (仅部署页使用)"""
     def __init__(self, scan_dirs, patterns=("*.png", "*.mp4"),
                  title="◈  结果预览  ◈", parent=None):
         super().__init__(parent)
@@ -584,7 +731,7 @@ class ResultBrowser(QWidget):
         lay.setContentsMargins(8, 16, 20, 16)
 
         lbl = QLabel(title)
-        lbl.setFont(QFont("Microsoft YaHei UI", 15, QFont.Bold))
+        lbl.setFont(QFont("Microsoft YaHei UI", 21, QFont.Bold))
         lbl.setStyleSheet(f"color: {C_ACCENT};")
         lbl.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl)
@@ -593,7 +740,6 @@ class ResultBrowser(QWidget):
         self.player = VideoPlayer()
         lay.addWidget(self.player, stretch=1)
 
-        # ── 本次拉取历史 (当前 UI 运行期间累积) ──
         hg = QGroupBox("◈  本次拉取历史  ◈")
         hl = QVBoxLayout()
         self.history_combo = QComboBox()
@@ -608,7 +754,6 @@ class ResultBrowser(QWidget):
         hg.setLayout(hl)
         lay.addWidget(hg)
 
-        # ── 已有结果文件 (outputs/rv1126b_board_results/ 扫描) ──
         fg = QGroupBox("◈  已有结果文件  ◈")
         fl = QVBoxLayout()
         self.combo = QComboBox()
@@ -628,32 +773,26 @@ class ResultBrowser(QWidget):
         self.refresh()
 
     def add_pulled(self, path):
-        """拉取完成后调用，追加到本次拉取历史"""
         if not path or not os.path.isfile(path):
             return
-        icon = "🎬" if path.lower().endswith(
-            ('.mp4', '.avi')) else "🖼"
+        icon = "🎬" if path.lower().endswith(('.mp4', '.avi')) else "🖼"
         label = f"{icon}  {os.path.basename(path)}"
-        # 避免重复添加同名路径
         for i in range(self.history_combo.count()):
             if self.history_combo.itemData(i) == path:
                 self.history_combo.setCurrentIndex(i)
                 return
         self.history_combo.addItem(label, path)
-        self.history_combo.setCurrentIndex(
-            self.history_combo.count() - 1)
+        self.history_combo.setCurrentIndex(self.history_combo.count() - 1)
 
     def _view_history(self):
         p = self.history_combo.currentData()
         if not p:
-            QMessageBox.information(
-                self, "提示", "本次会话尚未拉取任何文件")
+            QMessageBox.information(self, "提示", "本次会话尚未拉取任何文件")
             return
         if not os.path.isfile(p):
-            QMessageBox.warning(
-                self, "错误", f"文件不存在:\n{p}")
+            QMessageBox.warning(self, "错误", f"文件不存在:\n{p}")
             return
-        if p.lower().endswith(('.mp4', '.avi')):
+        if p.lower().endswith(('.mp4', '.avi', '.mkv')):
             self.player.load_video(p)
         else:
             self.player.load_image(p)
@@ -662,21 +801,18 @@ class ResultBrowser(QWidget):
         self.combo.clear()
         for pat in self.patterns:
             for label, path in find_files(self.scan_dirs, pat):
-                icon = "🎬" if path.endswith(('.mp4', '.avi')) \
-                    else "🖼"
+                icon = "🎬" if path.endswith(('.mp4', '.avi', '.mkv')) else "🖼"
                 self.combo.addItem(f"{icon}  {label}", path)
 
     def _view(self):
         p = self.combo.currentData()
         if not p:
-            QMessageBox.information(
-                self, "提示", "没有可查看的文件，先运行任务")
+            QMessageBox.information(self, "提示", "没有可查看的文件，先运行任务")
             return
         if not os.path.isfile(p):
-            QMessageBox.warning(
-                self, "错误", f"文件不存在:\n{p}")
+            QMessageBox.warning(self, "错误", f"文件不存在:\n{p}")
             return
-        if p.lower().endswith(('.mp4', '.avi')):
+        if p.lower().endswith(('.mp4', '.avi', '.mkv')):
             self.player.load_video(p)
         else:
             self.player.load_image(p)
@@ -686,7 +822,6 @@ class ResultBrowser(QWidget):
 # 数据处理 — 右侧: 数据集概览面板
 # ═══════════════════════════════════════════════════════════════
 class DatasetOverviewPanel(QWidget):
-    """样本图网格 + dataset.yaml 信息 + 类别/标注统计"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build()
@@ -696,22 +831,21 @@ class DatasetOverviewPanel(QWidget):
         lay.setContentsMargins(8, 16, 20, 16)
 
         lbl = QLabel("◈  数据集概览  ◈")
-        lbl.setFont(QFont("Microsoft YaHei UI", 15, QFont.Bold))
+        lbl.setFont(QFont("Microsoft YaHei UI", 21, QFont.Bold))
         lbl.setStyleSheet(f"color: {C_ACCENT};")
         lbl.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl)
         lay.addWidget(DecoLine())
 
-        # ── 样本图网格 (2行×3列) ──
         sg = QGroupBox("◈  样本图预览  ◈")
         self.grid = QGridLayout()
-        self.grid.setSpacing(6)
+        self.grid.setSpacing(8)
         self.sample_labels = []
         for r in range(2):
             for c in range(3):
                 cell = QLabel()
                 cell.setAlignment(Qt.AlignCenter)
-                cell.setFixedSize(155, 110)
+                cell.setFixedSize(165, 118)
                 cell.setStyleSheet(
                     f"background: {C_PANEL_ALT}; "
                     f"border: 1px solid {C_BORDER}; "
@@ -722,12 +856,11 @@ class DatasetOverviewPanel(QWidget):
         sg.setLayout(self.grid)
         lay.addWidget(sg)
 
-        # ── 数据集信息 ──
         ig = QGroupBox("◈  数据集信息  ◈")
         il = QVBoxLayout()
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
-        self.info_text.setFont(QFont("Consolas", 12))
+        self.info_text.setFont(QFont("Consolas", 108))
         self.info_text.setStyleSheet(
             f"background: {C_PANEL_ALT}; "
             f"border: 1px solid {C_BORDER}; "
@@ -748,8 +881,7 @@ class DatasetOverviewPanel(QWidget):
     def refresh(self):
         yaml_p = ROOT / "data" / "processed" / "flir" / "dataset.yaml"
         if not yaml_p.exists():
-            self.info_text.setPlainText(
-                "未找到 dataset.yaml\n请先运行 FLIR 数据处理")
+            self.info_text.setPlainText("未找到 dataset.yaml\n请先运行 FLIR 数据处理")
             return
         try:
             import yaml
@@ -769,24 +901,22 @@ class DatasetOverviewPanel(QWidget):
             train_dir = yaml_p.parent / "images" / "train"
             val_dir = yaml_p.parent / "images" / "val"
             test_dir = yaml_p.parent / "images" / "test"
-            nt = len(list(train_dir.glob("*"))) \
-                if train_dir.is_dir() else 0
-            nv = len(list(val_dir.glob("*"))) \
-                if val_dir.is_dir() else 0
-            ntst = len(list(test_dir.glob("*"))) \
-                if test_dir.is_dir() else 0
+            nt = len(list(train_dir.glob("*"))) if train_dir.is_dir() else 0
+            nv = len(list(val_dir.glob("*"))) if val_dir.is_dir() else 0
+            ntst = len(list(test_dir.glob("*"))) if test_dir.is_dir() else 0
             info.append("")
             info.append(f"训练图像:  {nt} 张")
             info.append(f"验证图像:  {nv} 张")
             info.append(f"测试图像:  {ntst} 张")
             info.append(f"总计:      {nt + nv + ntst} 张")
-            info.append(f"划分比例:  "
-                        f"{nt/(nt+nv+ntst)*100:.1f}% / "
-                        f"{nv/(nt+nv+ntst)*100:.1f}% / "
-                        f"{ntst/(nt+nv+ntst)*100:.1f}%"
-                        if nt + nv + ntst > 0 else "—")
+            info.append(
+                f"划分比例:  "
+                f"{nt/(nt+nv+ntst)*100:.1f}% / "
+                f"{nv/(nt+nv+ntst)*100:.1f}% / "
+                f"{ntst/(nt+nv+ntst)*100:.1f}%"
+                if nt + nv + ntst > 0 else "—"
+            )
 
-            # 标注统计 (采样前 300 个标签文件)
             label_dir = yaml_p.parent / "labels" / "train"
             if label_dir.is_dir():
                 cls_cnt = {}
@@ -813,13 +943,11 @@ class DatasetOverviewPanel(QWidget):
                         except (IndexError, ValueError):
                             pass
                     pct = n / total_boxes * 100 if total_boxes else 0
-                    info.append(
-                        f"  {cname}: {n} ({pct:.1f}%)")
+                    info.append(f"  {cname}: {n} ({pct:.1f}%)")
             self.info_text.setPlainText("\n".join(info))
         except Exception as e:
             self.info_text.setPlainText(f"读取失败: {e}")
 
-        # 加载样本图 (训练集随机3 + 验证集随机3)
         imgs = []
         for sub in ["train", "val"]:
             d = yaml_p.parent / "images" / sub
@@ -846,7 +974,6 @@ class DatasetOverviewPanel(QWidget):
 # 模型训练 — 右侧: 训练曲线仪表盘
 # ═══════════════════════════════════════════════════════════════
 class TrainingDashboardPanel(QWidget):
-    """实验选择 + 12 种曲线/图片切换 + 末轮 CSV 指标"""
     CURVES = [
         ("📈  训练曲线 (results.png)",   "results.png"),
         ("🎯  混淆矩阵",                "confusion_matrix.png"),
@@ -858,8 +985,13 @@ class TrainingDashboardPanel(QWidget):
         ("📋  标签相关性",              "labels_correlogram.jpg"),
         ("🖼  验证预测 batch0",         "val_batch0_pred.jpg"),
         ("🖼  验证预测 batch1",         "val_batch1_pred.jpg"),
+        ("🖼  验证预测 batch2",         "val_batch2_pred.jpg"),
         ("🖼  验证真值 batch0",         "val_batch0_labels.jpg"),
+        ("🖼  验证真值 batch1",         "val_batch1_labels.jpg"),
+        ("🖼  验证真值 batch2",         "val_batch2_labels.jpg"),
         ("🖼  训练样本 batch0",         "train_batch0.jpg"),
+        ("🖼  训练样本 batch1",         "train_batch1.jpg"),
+        ("🖼  训练样本 batch2",         "train_batch2.jpg"),
     ]
 
     def __init__(self, parent=None):
@@ -871,13 +1003,12 @@ class TrainingDashboardPanel(QWidget):
         lay.setContentsMargins(8, 16, 20, 16)
 
         lbl = QLabel("◈  训练曲线仪表盘  ◈")
-        lbl.setFont(QFont("Microsoft YaHei UI", 15, QFont.Bold))
+        lbl.setFont(QFont("Microsoft YaHei UI", 21, QFont.Bold))
         lbl.setStyleSheet(f"color: {C_ACCENT};")
         lbl.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl)
         lay.addWidget(DecoLine())
 
-        # ── 实验 + 曲线选择 ──
         sg = QGroupBox("◈  实验 / 曲线选择  ◈")
         sl = QVBoxLayout()
         self.exp_combo = QComboBox()
@@ -899,22 +1030,19 @@ class TrainingDashboardPanel(QWidget):
         sg.setLayout(sl)
         lay.addWidget(sg)
 
-        # ── 图像显示 ──
         self.display = QLabel()
         self.display.setAlignment(Qt.AlignCenter)
-        self.display.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.display.setMinimumSize(360, 260)
         self.display.setStyleSheet(
             f"background: {C_PANEL_ALT}; "
             f"border: 2px solid {C_BORDER}; "
-            f"border-radius: 6px; color: #888; font-size: 14px;")
+            f"border-radius: 6px; color: #888; font-size: 20px;")
         self.display.setText("选择实验和曲线类型后点击查看")
         lay.addWidget(self.display, stretch=1)
 
-        # ── 末轮指标 ──
         self.epoch_lbl = QLabel()
-        self.epoch_lbl.setFont(QFont("Consolas", 11))
+        self.epoch_lbl.setFont(QFont("Consolas", 16))
         self.epoch_lbl.setStyleSheet(f"color: {C_TEXT_S};")
         self.epoch_lbl.setWordWrap(True)
         lay.addWidget(self.epoch_lbl)
@@ -926,12 +1054,12 @@ class TrainingDashboardPanel(QWidget):
         for src_label, src in [
             ("", ABLATION_DIR),
             ("(old) ", ROOT / "outputs" / "ablation_old"),
+            ("(5n) ", ROOT / "outputs" / "ablation_study_5n"),
         ]:
             if src.is_dir():
                 for d in sorted(src.iterdir()):
                     if d.is_dir() and (d / "results.png").exists():
-                        self.exp_combo.addItem(
-                            f"{src_label}{d.name}", str(d))
+                        self.exp_combo.addItem(f"{src_label}{d.name}", str(d))
 
     def _view(self):
         exp_dir = self.exp_combo.currentData()
@@ -947,31 +1075,24 @@ class TrainingDashboardPanel(QWidget):
             self.display.setPixmap(pix.scaled(
                 self.display.size(), Qt.KeepAspectRatio,
                 Qt.SmoothTransformation))
-        # 读 results.csv 末行指标
         csv_p = Path(exp_dir) / "results.csv"
         if csv_p.exists():
             try:
-                lines = csv_p.read_text(
-                    encoding="utf-8").strip().splitlines()
+                lines = csv_p.read_text(encoding="utf-8").strip().splitlines()
                 if len(lines) >= 2:
-                    cols = [c.strip() for c in
-                            lines[0].split(",")]
-                    vals = [v.strip() for v in
-                            lines[-1].split(",")]
+                    cols = [c.strip() for c in lines[0].split(",")]
+                    vals = [v.strip() for v in lines[-1].split(",")]
                     parts = []
                     for i, c in enumerate(cols):
                         cl = c.lower()
-                        if i < len(vals) and any(
-                            k in cl for k in [
-                                "epoch", "map", "precision",
-                                "recall", "loss"]):
+                        if i < len(vals) and any(k in cl for k in [
+                            "epoch", "map", "precision", "recall", "loss"
+                        ]):
                             try:
-                                parts.append(
-                                    f"{c}={float(vals[i]):.4f}")
+                                parts.append(f"{c}={float(vals[i]):.4f}")
                             except ValueError:
                                 parts.append(f"{c}={vals[i]}")
-                    self.epoch_lbl.setText(
-                        "最终 epoch │ " + " │ ".join(parts[:8]))
+                    self.epoch_lbl.setText("最终 epoch │ " + " │ ".join(parts[:8]))
             except Exception:
                 pass
 
@@ -980,7 +1101,6 @@ class TrainingDashboardPanel(QWidget):
 # 检测评估 — 右侧: 检测评估看板
 # ═══════════════════════════════════════════════════════════════
 class DetectionDashboardPanel(QWidget):
-    """批次选择 + 对比图表 + summary.csv 表格 + 全局结果图"""
     CHART_TYPES = [
         ("📊  指标柱状图 (barline)",    "journal_barline.png"),
         ("📈  改进分析 (improvement)",   "journal_improvement.png"),
@@ -997,13 +1117,12 @@ class DetectionDashboardPanel(QWidget):
         lay.setContentsMargins(8, 16, 20, 16)
 
         lbl = QLabel("◈  检测评估看板  ◈")
-        lbl.setFont(QFont("Microsoft YaHei UI", 15, QFont.Bold))
+        lbl.setFont(QFont("Microsoft YaHei UI", 21, QFont.Bold))
         lbl.setStyleSheet(f"color: {C_ACCENT};")
         lbl.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl)
         lay.addWidget(DecoLine())
 
-        # ── 批次 + 图表类型 ──
         sg = QGroupBox("◈  评估批次 / 图表  ◈")
         sl = QVBoxLayout()
         self.batch_combo = QComboBox()
@@ -1025,18 +1144,15 @@ class DetectionDashboardPanel(QWidget):
         sg.setLayout(sl)
         lay.addWidget(sg)
 
-        # ── 图表显示 ──
         self.display = QLabel()
         self.display.setAlignment(Qt.AlignCenter)
-        self.display.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.display.setMinimumSize(360, 240)
         self.display.setStyleSheet(
             f"background: {C_PANEL_ALT}; "
             f"border: 2px solid {C_BORDER}; "
-            f"border-radius: 6px; color: #888; font-size: 14px;")
-        self.display.setText(
-            "运行批量检测评估后可查看对比图表")
+            f"border-radius: 6px; color: #888; font-size: 20px;")
+        self.display.setText("运行批量检测评估后可查看对比图表")
         lay.addWidget(self.display, stretch=1)
 
         self._refresh()
@@ -1044,8 +1160,7 @@ class DetectionDashboardPanel(QWidget):
     def _refresh(self):
         self.batch_combo.clear()
         if DETECTION_RESULTS_DIR.is_dir():
-            for d in sorted(
-                    DETECTION_RESULTS_DIR.iterdir(), reverse=True):
+            for d in sorted(DETECTION_RESULTS_DIR.iterdir(), reverse=True):
                 if d.is_dir():
                     self.batch_combo.addItem(d.name, str(d))
 
@@ -1056,8 +1171,7 @@ class DetectionDashboardPanel(QWidget):
             return
         p = Path(bd) / fname
         if not p.exists():
-            self.display.setText(
-                f"图表不存在: {fname}\n请先运行 '生成图表'")
+            self.display.setText(f"图表不存在: {fname}\n请先运行 '生成图表'")
             return
         pix = QPixmap(str(p))
         if not pix.isNull():
@@ -1070,7 +1184,6 @@ class DetectionDashboardPanel(QWidget):
 # 跟踪评估 — 右侧: 跟踪分析仪表盘
 # ═══════════════════════════════════════════════════════════════
 class TrackingDashboardPanel(QWidget):
-    """实验→跟踪器→序列 三级选择 + 视频播放 + 逐序列 metrics"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build()
@@ -1080,13 +1193,12 @@ class TrackingDashboardPanel(QWidget):
         lay.setContentsMargins(8, 16, 20, 16)
 
         lbl = QLabel("◈  跟踪分析仪表盘  ◈")
-        lbl.setFont(QFont("Microsoft YaHei UI", 15, QFont.Bold))
+        lbl.setFont(QFont("Microsoft YaHei UI", 21, QFont.Bold))
         lbl.setStyleSheet(f"color: {C_ACCENT};")
         lbl.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl)
         lay.addWidget(DecoLine())
 
-        # ── 三级选择 ──
         sg = QGroupBox("◈  结果浏览 (实验→跟踪器→序列)  ◈")
         sl = QVBoxLayout()
         sl.setSpacing(8)
@@ -1124,7 +1236,6 @@ class TrackingDashboardPanel(QWidget):
         sg.setLayout(sl)
         lay.addWidget(sg)
 
-        # ── 视频播放 ──
         self.player = VideoPlayer()
         lay.addWidget(self.player, stretch=1)
 
@@ -1133,16 +1244,19 @@ class TrackingDashboardPanel(QWidget):
     def _refresh(self):
         self.exp_combo.clear()
         base = TRACKING_RESULTS_DIR
+
+        def scan_dir(path):
+            for d in sorted(path.iterdir()):
+                if d.is_dir():
+                    is_exp = any(t in sub.name for t in TRACKERS for sub in d.iterdir())
+                    if is_exp:
+                        parent_name = d.parent.name if d.parent != base else "root"
+                        self.exp_combo.addItem(f"{parent_name} / {d.name}", str(d))
+                    else:
+                        scan_dir(d)
+
         if base.is_dir():
-            for batch in sorted(base.iterdir()):
-                if not batch.is_dir():
-                    continue
-                for exp in sorted(batch.iterdir()):
-                    if exp.is_dir() and \
-                            exp.name.startswith("ablation_"):
-                        self.exp_combo.addItem(
-                            f"{batch.name} / {exp.name}",
-                            str(exp))
+            scan_dir(base)
 
     def _on_exp_changed(self):
         self.tracker_combo.clear()
@@ -1152,10 +1266,8 @@ class TrackingDashboardPanel(QWidget):
         p = Path(exp_dir)
         if p.is_dir():
             for d in sorted(p.iterdir()):
-                if d.is_dir() and any(
-                        t in d.name for t in TRACKERS):
-                    self.tracker_combo.addItem(
-                        d.name, str(d))
+                if d.is_dir() and any(t in d.name for t in TRACKERS):
+                    self.tracker_combo.addItem(d.name, str(d))
 
     def _on_tracker_changed(self):
         self.seq_combo.clear()
@@ -1169,8 +1281,7 @@ class TrackingDashboardPanel(QWidget):
                     vid = d / "result.mp4"
                     mj = d / "metrics.json"
                     if vid.exists() or mj.exists():
-                        self.seq_combo.addItem(
-                            d.name, str(d))
+                        self.seq_combo.addItem(d.name, str(d))
 
     def _play_seq(self):
         seq_dir = self.seq_combo.currentData()
@@ -1183,10 +1294,9 @@ class TrackingDashboardPanel(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════
-# 标签页基类 (统一 Splitter 布局)
+# 标签页基类
 # ═══════════════════════════════════════════════════════════════
 class BaseSplitTab(QWidget):
-    """左面板 (参数+操作+日志) + 右面板 (结果预览)"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.worker = None
@@ -1217,18 +1327,16 @@ class BaseSplitTab(QWidget):
 
         splitter.addWidget(self._left)
         splitter.addWidget(self._right)
-        splitter.setSizes([520, 480])
+        splitter.setSizes([580, 620])
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(splitter)
 
     def _build_left(self, layout):
-        """子类覆盖: 向 layout 添加参数面板"""
         pass
 
     def _build_right(self):
-        """子类覆盖: 返回右侧预览 Widget"""
         return QWidget()
 
     def _exec(self, cmd, btn):
@@ -1239,13 +1347,20 @@ class BaseSplitTab(QWidget):
         btn.setEnabled(False)
         self.worker = LocalCmdWorker(cmd)
         self.worker.log_line.connect(self.log.append_log)
-        self.worker.finished.connect(
-            lambda _: btn.setEnabled(True))
+        self.worker.finished.connect(lambda _: btn.setEnabled(True))
         self.worker.start()
 
     def _reset(self):
+        if self.worker and self.worker.isRunning():
+            self.log.append_log("⚠ 正在强制中断任务...", "warn")
+            if isinstance(self.worker, LocalCmdWorker):
+                if hasattr(self.worker, 'proc') and self.worker.proc:
+                    self.worker.proc.terminate()
+            self.worker.terminate()
+            self.worker.wait()
+            self.log.append_log("━━ 任务已中断 ━━", "err")
+            self._on_reset()
         self.log.clear_log()
-        self._on_reset()
 
     def _on_reset(self):
         pass
@@ -1256,7 +1371,6 @@ class BaseSplitTab(QWidget):
 # ═══════════════════════════════════════════════════════════════
 class DataTab(BaseSplitTab):
     def _build_left(self, lay):
-        # ── FLIR ──
         g1 = QGroupBox("◈  FLIR 数据集预处理  ◈")
         gl = QGridLayout()
         gl.setSpacing(10)
@@ -1265,7 +1379,7 @@ class DataTab(BaseSplitTab):
         gl.addWidget(self.flir_input, 0, 1)
         b = QPushButton("浏览")
         b.setObjectName("btnGold")
-        b.setFixedWidth(70)
+        b.setFixedWidth(84)
         b.clicked.connect(lambda: self._browse(self.flir_input))
         gl.addWidget(b, 0, 2)
         self.btn_flir = QPushButton("▶  处理 FLIR 数据集")
@@ -1276,7 +1390,6 @@ class DataTab(BaseSplitTab):
         lay.addWidget(g1)
         lay.addWidget(DecoLine())
 
-        # ── 图像→视频 ──
         g2 = QGroupBox("◈  图像序列转视频  ◈")
         gl2 = QGridLayout()
         gl2.setSpacing(10)
@@ -1285,7 +1398,7 @@ class DataTab(BaseSplitTab):
         gl2.addWidget(self.img_dir, 0, 1)
         b2 = QPushButton("浏览")
         b2.setObjectName("btnGold")
-        b2.setFixedWidth(70)
+        b2.setFixedWidth(84)
         b2.clicked.connect(lambda: self._browse(self.img_dir))
         gl2.addWidget(b2, 0, 2)
         gl2.addWidget(QLabel("输出目录:"), 1, 0)
@@ -1304,7 +1417,6 @@ class DataTab(BaseSplitTab):
         lay.addWidget(g2)
         lay.addWidget(DecoLine())
 
-        # ── 信息卡 ──
         mc = QHBoxLayout()
         mc.setSpacing(12)
         self.mc_imgs = MetricCard("图像数")
@@ -1320,7 +1432,6 @@ class DataTab(BaseSplitTab):
         mc.addStretch()
         lay.addLayout(mc)
 
-        # ── 扫描按钮 ──
         self.btn_scan = QPushButton("🔍  扫描已处理数据集")
         self.btn_scan.setObjectName("btnGold")
         self.btn_scan.clicked.connect(self._scan_dataset)
@@ -1330,8 +1441,7 @@ class DataTab(BaseSplitTab):
         return DatasetOverviewPanel()
 
     def _browse(self, le):
-        d = QFileDialog.getExistingDirectory(
-            self, "选择目录", str(ROOT))
+        d = QFileDialog.getExistingDirectory(self, "选择目录", str(ROOT))
         if d:
             le.setText(d)
 
@@ -1341,12 +1451,9 @@ class DataTab(BaseSplitTab):
             QMessageBox.warning(self, "提示", "请填写原始数据目录")
             return
         if not path_valid(p, "dir"):
-            QMessageBox.warning(
-                self, "错误", f"目录不存在: {p}")
+            QMessageBox.warning(self, "错误", f"目录不存在: {p}")
             return
-        self._exec(
-            f'python scripts/data/prepare_flir.py '
-            f'--input "{p}"', self.btn_flir)
+        self._exec(f'python scripts/data/prepare_flir.py --input "{p}"', self.btn_flir)
 
     def _run_vid(self):
         p = self.img_dir.text().strip()
@@ -1354,20 +1461,20 @@ class DataTab(BaseSplitTab):
             QMessageBox.warning(self, "提示", "请填写图像目录")
             return
         if not path_valid(p, "dir"):
-            QMessageBox.warning(
-                self, "错误", f"目录不存在: {p}")
+            QMessageBox.warning(self, "错误", f"目录不存在: {p}")
             return
         self._exec(
             f'python scripts/data/images_to_video.py '
             f'--input "{p}" '
             f'--output "{self.vid_out.text()}" '
-            f'--fps {self.fps.value()}', self.btn_vid)
+            f'--fps {self.fps.value()}',
+            self.btn_vid
+        )
 
     def _scan_dataset(self):
         yaml_p = ROOT / "data" / "processed" / "flir" / "dataset.yaml"
         if not yaml_p.exists():
-            self.log.append_log(
-                "未找到 dataset.yaml，请先处理 FLIR 数据集", "warn")
+            self.log.append_log("未找到 dataset.yaml，请先处理 FLIR 数据集", "warn")
             return
         try:
             import yaml
@@ -1384,11 +1491,8 @@ class DataTab(BaseSplitTab):
             self.mc_train.set_value(str(nt), C_ACCENT)
             self.mc_val.set_value(str(nv), C_ACCENT)
             self.mc_test.set_value(str(ntst), C_ACCENT)
-            #补全测试集的内容
             self.mc_imgs.set_value(str(nt + nv + ntst), C_ACCENT)
-            self.log.append_log(
-                f"数据集: {nt} 训练 + {nv} 验证 + {ntst} 测试, "
-                f"{nc} 类别", "ok")
+            self.log.append_log(f"数据集: {nt} 训练 + {nv} 验证 + {ntst} 测试, {nc} 类别", "ok")
         except Exception as e:
             self.log.append_log(f"扫描失败: {e}", "err")
 
@@ -1397,8 +1501,7 @@ class DataTab(BaseSplitTab):
         self.img_dir.clear()
         self.vid_out.setText("data/videos/thermal_test")
         self.fps.setValue(30)
-        for mc in [self.mc_imgs, self.mc_train,
-                   self.mc_val, self.mc_cls]:
+        for mc in [self.mc_imgs, self.mc_train, self.mc_val, self.mc_test, self.mc_cls]:
             mc.reset()
 
 
@@ -1407,7 +1510,6 @@ class DataTab(BaseSplitTab):
 # ═══════════════════════════════════════════════════════════════
 class TrainTab(BaseSplitTab):
     def _build_left(self, lay):
-        # ── 单模型 ──
         g1 = QGroupBox("◈  单模型训练  ◈")
         gl = QGridLayout()
         gl.setSpacing(10)
@@ -1416,7 +1518,7 @@ class TrainTab(BaseSplitTab):
         gl.addWidget(self.cfg, 0, 1)
         bc = QPushButton("浏览")
         bc.setObjectName("btnGold")
-        bc.setFixedWidth(70)
+        bc.setFixedWidth(84)
         bc.clicked.connect(self._browse_cfg)
         gl.addWidget(bc, 0, 2)
         self._spins = []
@@ -1441,19 +1543,16 @@ class TrainTab(BaseSplitTab):
         lay.addWidget(g1)
         lay.addWidget(DecoLine())
 
-        # ── 消融 ──
         g2 = QGroupBox("◈  消融实验  ◈")
         gl2 = QGridLayout()
         gl2.setSpacing(10)
         gl2.addWidget(QLabel("Profile:"), 0, 0)
         self.profile = QComboBox()
-        self.profile.addItem(
-            "controlled — 严格控变量", "controlled")
+        self.profile.addItem("controlled — 严格控变量", "controlled")
         gl2.addWidget(self.profile, 0, 1, 1, 2)
         gl2.addWidget(QLabel("仅运行:"), 1, 0)
         self.only = QLineEdit()
-        self.only.setPlaceholderText(
-            "留空=全部 | exp7=仅 EIoU")
+        self.only.setPlaceholderText("留空=全部 | exp7=仅 EIoU")
         gl2.addWidget(self.only, 1, 1, 1, 2)
         self.btn_abl = QPushButton("▶  开始消融训练")
         self.btn_abl.setObjectName("btnPrimary")
@@ -1463,7 +1562,6 @@ class TrainTab(BaseSplitTab):
         lay.addWidget(g2)
         lay.addWidget(DecoLine())
 
-        # ── 指标 ──
         mc = QHBoxLayout()
         mc.setSpacing(12)
         self.mc_exp = MetricCard("实验数")
@@ -1475,9 +1573,7 @@ class TrainTab(BaseSplitTab):
         mc.addStretch()
         lay.addLayout(mc)
 
-        # ── 扫描 ──
-        self.btn_scan = QPushButton(
-            "🔍  扫描消融实验结果")
+        self.btn_scan = QPushButton("🔍  扫描消融实验结果")
         self.btn_scan.setObjectName("btnGold")
         self.btn_scan.clicked.connect(self._scan_ablation)
         lay.addWidget(self.btn_scan)
@@ -1486,8 +1582,7 @@ class TrainTab(BaseSplitTab):
         return TrainingDashboardPanel()
 
     def _browse_cfg(self):
-        p, _ = QFileDialog.getOpenFileName(
-            self, "选择配置", str(ROOT / "configs"), "*.yaml")
+        p, _ = QFileDialog.getOpenFileName(self, "选择配置", str(ROOT / "configs"), "*.yaml")
         if p:
             self.cfg.setText(p)
 
@@ -1497,8 +1592,7 @@ class TrainTab(BaseSplitTab):
             QMessageBox.warning(self, "提示", "请填写配置文件路径")
             return
         if not path_valid(cfg):
-            QMessageBox.warning(
-                self, "错误", f"配置文件不存在: {cfg}")
+            QMessageBox.warning(self, "错误", f"配置文件不存在: {cfg}")
             return
         self._exec(
             f'python scripts/train/train_yolov5.py '
@@ -1506,11 +1600,11 @@ class TrainTab(BaseSplitTab):
             f'--epochs {self._spins[0].value()} '
             f'--batch-size {self._spins[1].value()} '
             f'--img-size {self._spins[2].value()}',
-            self.btn_train)
+            self.btn_train
+        )
 
     def _run_abl(self):
-        cmd = (f'python scripts/train/train_ablation.py '
-               f'--profile {self.profile.currentData()}')
+        cmd = f'python scripts/train/train_ablation.py --profile {self.profile.currentData()}'
         o = self.only.text().strip()
         if o:
             cmd += f' --only {o}'
@@ -1518,8 +1612,7 @@ class TrainTab(BaseSplitTab):
 
     def _scan_ablation(self):
         if not ABLATION_DIR.is_dir():
-            self.log.append_log(
-                "消融目录不存在，请先运行训练", "warn")
+            self.log.append_log("消融目录不存在，请先运行训练", "warn")
             return
         exps = sorted([
             d for d in ABLATION_DIR.iterdir()
@@ -1531,11 +1624,9 @@ class TrainTab(BaseSplitTab):
             csv = exp / "results.csv"
             if csv.exists():
                 try:
-                    lines = csv.read_text(
-                        encoding="utf-8").strip().splitlines()
+                    lines = csv.read_text(encoding="utf-8").strip().splitlines()
                     if len(lines) > 1:
                         last = lines[-1].split(",")
-                        # mAP@0.5 is typically column index 6
                         for idx in [6, 7, 8]:
                             try:
                                 v = float(last[idx].strip())
@@ -1547,13 +1638,10 @@ class TrainTab(BaseSplitTab):
                 except Exception:
                     pass
         if best_map > 0:
-            self.mc_best.set_value(
-                f"{best_map:.3f}", C_OK)
-            short = best_name.replace(
-                "ablation_", "").replace("exp", "E")
+            self.mc_best.set_value(f"{best_map:.3f}", C_OK)
+            short = best_name.replace("ablation_", "").replace("exp", "E")
             self.mc_name.set_value(short[:8], C_ACCENT)
-        self.log.append_log(
-            f"共 {len(exps)} 个完成的实验", "ok")
+        self.log.append_log(f"共 {len(exps)} 个完成的实验", "ok")
 
     def _on_reset(self):
         self.cfg.setText("configs/train_config.yaml")
@@ -1588,14 +1676,13 @@ class DetectionTab(BaseSplitTab):
 
         pg.addWidget(QLabel("权重:"), 2, 0)
         self.weights = QComboBox()
-        self.weights.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.weights.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, path in find_weights():
             self.weights.addItem(name, path)
         pg.addWidget(self.weights, 2, 1)
         bw = QPushButton("浏览")
         bw.setObjectName("btnGold")
-        bw.setFixedWidth(70)
+        bw.setFixedWidth(84)
         bw.clicked.connect(self._browse_w)
         pg.addWidget(bw, 2, 2)
 
@@ -1641,7 +1728,6 @@ class DetectionTab(BaseSplitTab):
         lay.addLayout(row)
         lay.addWidget(DecoLine())
 
-        # ── 指标卡 ──
         mc = QHBoxLayout()
         mc.setSpacing(12)
         self.mc_map50 = MetricCard("mAP@50")
@@ -1660,12 +1746,10 @@ class DetectionTab(BaseSplitTab):
         return self._det_dashboard
 
     def _browse_w(self):
-        p, _ = QFileDialog.getOpenFileName(
-            self, "选择权重", str(ROOT / "outputs"), "*.pt")
+        p, _ = QFileDialog.getOpenFileName(self, "选择权重", str(ROOT / "outputs"), "*.pt")
         if p:
             self.weights.addItem(Path(p).stem, p)
-            self.weights.setCurrentIndex(
-                self.weights.count() - 1)
+            self.weights.setCurrentIndex(self.weights.count() - 1)
 
     def _run_eval(self):
         w = self.weights.currentData()
@@ -1674,22 +1758,22 @@ class DetectionTab(BaseSplitTab):
             return
         if w and not self.chk_batch.isChecked():
             if not os.path.isfile(w):
-                QMessageBox.warning(
-                    self, "错误", f"权重文件不存在:\n{w}")
+                QMessageBox.warning(self, "错误", f"权重文件不存在:\n{w}")
                 return
-        cmd = (f'python scripts/evaluate/eval_detection.py '
-               f'--config configs/eval_detection.yaml '
-               f'--mode {self.mode.currentData()} '
-               f'--task {self.task.currentData()} '
-               f'--conf-thres {self._params[0].value()} '
-               f'--iou-thres {self._params[1].value()} '
-               f'--img-size {self._params[2].value()} '
-               f'--batch-size {self._params[3].value()}')
+        cmd = (
+            f'python scripts/evaluate/eval_detection.py '
+            f'--config configs/eval_detection.yaml '
+            f'--mode {self.mode.currentData()} '
+            f'--task {self.task.currentData()} '
+            f'--conf-thres {self._params[0].value()} '
+            f'--iou-thres {self._params[1].value()} '
+            f'--img-size {self._params[2].value()} '
+            f'--batch-size {self._params[3].value()}'
+        )
         if w and not self.chk_batch.isChecked():
             cmd += f' --weights "{w}"'
         if self.chk_batch.isChecked():
             cmd += ' --batch-eval'
-        # 监听输出解析指标
         self.log.clear_log()
         self.btn_eval.setEnabled(False)
         self.worker = LocalCmdWorker(cmd)
@@ -1703,11 +1787,10 @@ class DetectionTab(BaseSplitTab):
         self.worker.start()
 
     def _parse_det(self, text, level):
-        # YOLOv5 val 输出格式: all  images  labels  P  R  mAP50  mAP50-95
         m = re.search(
-            r'all\s+\d+\s+\d+\s+'
-            r'([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
-            text)
+            r'all\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
+            text
+        )
         if m:
             p, r, m50, m5095 = [float(x) for x in m.groups()]
             self.mc_prec.set_value(f"{p:.3f}", C_ACCENT)
@@ -1717,30 +1800,28 @@ class DetectionTab(BaseSplitTab):
 
     def _run_plot(self):
         if not DETECTION_RESULTS_DIR.is_dir():
-            QMessageBox.warning(
-                self, "提示",
-                "请先运行检测评估生成结果数据")
+            QMessageBox.warning(self, "提示", "请先运行检测评估生成结果数据")
             return
         dirs = sorted(
-            [d for d in DETECTION_RESULTS_DIR.iterdir()
-             if d.is_dir()], reverse=True)
+            [d for d in DETECTION_RESULTS_DIR.iterdir() if d.is_dir()],
+            reverse=True
+        )
         if not dirs:
-            QMessageBox.warning(
-                self, "提示",
-                "outputs/detection 下无批次目录\n请先运行检测评估")
+            QMessageBox.warning(self, "提示", "outputs/detection 下无批次目录\n请先运行检测评估")
             return
         latest = dirs[0]
         if not (latest / "summary.csv").exists():
             QMessageBox.warning(
                 self, "提示",
-                f"最新批次 {latest.name} 中无 summary.csv\n"
-                f"请先运行批量检测评估（勾选 '批量评估全部消融实验'）")
+                f"最新批次 {latest.name} 中无 summary.csv\n请先运行批量检测评估（勾选 '批量评估全部消融实验'）"
+            )
             return
         self._exec(
             f'python scripts/evaluate/plot_eval_summary.py '
             f'--config configs/plot_eval_summary.yaml '
             f'--input-dir "{latest}"',
-            self.btn_plot)
+            self.btn_plot
+        )
 
     def _on_reset(self):
         self.mode.setCurrentIndex(0)
@@ -1750,8 +1831,7 @@ class DetectionTab(BaseSplitTab):
         self._params[2].setValue(640)
         self._params[3].setValue(32)
         self.chk_batch.setChecked(False)
-        for mc in [self.mc_map50, self.mc_map5095,
-                   self.mc_prec, self.mc_recall]:
+        for mc in [self.mc_map50, self.mc_map5095, self.mc_prec, self.mc_recall]:
             mc.reset()
 
 
@@ -1766,14 +1846,13 @@ class TrackingTab(BaseSplitTab):
 
         pg.addWidget(QLabel("权重:"), 0, 0)
         self.weights = QComboBox()
-        self.weights.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.weights.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, path in find_weights():
             self.weights.addItem(name, path)
         pg.addWidget(self.weights, 0, 1)
         bw = QPushButton("浏览")
         bw.setObjectName("btnGold")
-        bw.setFixedWidth(70)
+        bw.setFixedWidth(84)
         bw.clicked.connect(self._browse_w)
         pg.addWidget(bw, 0, 2)
 
@@ -1788,9 +1867,8 @@ class TrackingTab(BaseSplitTab):
         pg.addWidget(self.data, 2, 1)
         bd = QPushButton("浏览")
         bd.setObjectName("btnGold")
-        bd.setFixedWidth(70)
-        bd.clicked.connect(
-            lambda: self._browse_dir(self.data))
+        bd.setFixedWidth(84)
+        bd.clicked.connect(lambda: self._browse_dir(self.data))
         pg.addWidget(bd, 2, 2)
 
         self._tparams = []
@@ -1805,6 +1883,7 @@ class TrackingTab(BaseSplitTab):
             s.setSingleStep(0.05)
             pg.addWidget(s, 3 + i, 1, 1, 2)
             self._tparams.append(s)
+
         pg.addWidget(QLabel("Img:"), 5, 0)
         self.img_size = QSpinBox()
         self.img_size.setRange(320, 1280)
@@ -1817,14 +1896,11 @@ class TrackingTab(BaseSplitTab):
         pg.addWidget(self.output, 6, 1, 1, 2)
 
         chk = QHBoxLayout()
-        # self.chk_half = QCheckBox("FP16")
-        # self.chk_half.setChecked(True)
         self.chk_vid = QCheckBox("保存视频")
         self.chk_txt = QCheckBox("保存 MOT txt")
         self.chk_overlay = QCheckBox("绘制框")
         self.chk_overlay.setChecked(True)
-        for c in [self.chk_vid,
-                   self.chk_txt, self.chk_overlay]:
+        for c in [self.chk_vid, self.chk_txt, self.chk_overlay]:
             chk.addWidget(c)
         chk.addStretch()
         pg.addLayout(chk, 7, 0, 1, 3)
@@ -1841,7 +1917,6 @@ class TrackingTab(BaseSplitTab):
         lay.addLayout(row)
         lay.addWidget(DecoLine())
 
-        # ── 指标卡 ──
         mc = QHBoxLayout()
         mc.setSpacing(12)
         self.mc_match = MetricCard("匹配率")
@@ -1858,16 +1933,13 @@ class TrackingTab(BaseSplitTab):
         return self._trk_dashboard
 
     def _browse_w(self):
-        p, _ = QFileDialog.getOpenFileName(
-            self, "选择权重", str(ROOT / "outputs"), "*.pt")
+        p, _ = QFileDialog.getOpenFileName(self, "选择权重", str(ROOT / "outputs"), "*.pt")
         if p:
             self.weights.addItem(Path(p).stem, p)
-            self.weights.setCurrentIndex(
-                self.weights.count() - 1)
+            self.weights.setCurrentIndex(self.weights.count() - 1)
 
     def _browse_dir(self, le):
-        d = QFileDialog.getExistingDirectory(
-            self, "选择目录", str(ROOT))
+        d = QFileDialog.getExistingDirectory(self, "选择目录", str(ROOT))
         if d:
             le.setText(d)
 
@@ -1877,23 +1949,23 @@ class TrackingTab(BaseSplitTab):
             QMessageBox.warning(self, "提示", "请选择权重")
             return
         if not os.path.isfile(w):
-            QMessageBox.warning(
-                self, "错误", f"权重不存在:\n{w}")
+            QMessageBox.warning(self, "错误", f"权重不存在:\n{w}")
             return
         data = self.data.text().strip()
         if not data or not path_valid(data, "dir"):
-            QMessageBox.warning(
-                self, "错误", f"数据源目录不存在: {data}")
+            QMessageBox.warning(self, "错误", f"数据源目录不存在: {data}")
             return
-        cmd = (f'python scripts/evaluate/eval_tracking.py '
-               f'--config configs/tracking_config.yaml '
-               f'--weights "{w}" '
-               f'--tracker {self.tracker.currentText()} '
-               f'--data "{data}" '
-               f'--conf-thres {self._tparams[0].value()} '
-               f'--nms-thres {self._tparams[1].value()} '
-               f'--img-size {self.img_size.value()} '
-               f'--output "{self.output.text()}"')
+        cmd = (
+            f'python scripts/evaluate/eval_tracking.py '
+            f'--config configs/tracking_config.yaml '
+            f'--weights "{w}" '
+            f'--tracker {self.tracker.currentText()} '
+            f'--data "{data}" '
+            f'--conf-thres {self._tparams[0].value()} '
+            f'--nms-thres {self._tparams[1].value()} '
+            f'--img-size {self.img_size.value()} '
+            f'--output "{self.output.text()}"'
+        )
 
         if not self.chk_vid.isChecked():
             cmd += ' --no-save-vid'
@@ -1901,20 +1973,22 @@ class TrackingTab(BaseSplitTab):
             cmd += ' --no-save-txt'
         if not self.chk_overlay.isChecked():
             cmd += ' --no-overlay'
+
         self.log.clear_log()
         self.btn_run.setEnabled(False)
         self.worker = LocalCmdWorker(cmd)
         self.worker.log_line.connect(self.log.append_log)
         self.worker.log_line.connect(self._parse_track)
+
         def _after(code):
             self.btn_run.setEnabled(True)
             if hasattr(self, '_trk_dashboard'):
                 self._trk_dashboard._refresh()
+
         self.worker.finished.connect(_after)
         self.worker.start()
 
     def _parse_track(self, text, level):
-        # 检测匹配率: 87.3%
         m = re.search(r'检测匹配率[:\uff1a]\s*([\d.]+)%', text)
         if m:
             v = float(m.group(1))
@@ -1922,8 +1996,7 @@ class TrackingTab(BaseSplitTab):
             self.mc_match.set_value(f"{v:.1f}%", c)
         m = re.search(r'FPS[:\s]+([\d.]+)', text, re.I)
         if m:
-            self.mc_fps.set_value(
-                f"{float(m.group(1)):.1f}", C_ACCENT)
+            self.mc_fps.set_value(f"{float(m.group(1)):.1f}", C_ACCENT)
         m = re.search(r'ID切换代理数[:\uff1a\s]+(\d+)', text)
         if m:
             self.mc_idsw.set_value(m.group(1), C_WARN)
@@ -1934,12 +2007,10 @@ class TrackingTab(BaseSplitTab):
         self._tparams[1].setValue(0.45)
         self.img_size.setValue(640)
         self.output.setText("outputs/tracking/current")
-
         self.chk_vid.setChecked(False)
         self.chk_txt.setChecked(False)
         self.chk_overlay.setChecked(True)
-        for mc in [self.mc_match,
-                   self.mc_fps, self.mc_idsw]:
+        for mc in [self.mc_match, self.mc_fps, self.mc_idsw]:
             mc.reset()
 
 
@@ -1951,28 +2022,25 @@ class DeployTab(QWidget):
         super().__init__(parent)
         self.worker = None
         self.sftp_worker = None
-        self._session_metrics = {}   # 当前一次推理会话的指标缓存
-        self._infer_type = ""        # "video" / "image"
+        self._session_metrics = {}
+        self._infer_type = ""
         self._build()
 
     def _build(self):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
 
-        # ════════ 左面板 ════════
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.setContentsMargins(20, 16, 8, 16)
         ll.setSpacing(10)
 
-        # 连接状态
         sg = QGroupBox("◈  板端连接  ◈")
         sr = QHBoxLayout()
         self.lbl_board = QLabel("Board  ●  —")
-        self.lbl_board.setFont(
-            QFont("Microsoft YaHei UI", 13, QFont.Bold))
+        self.lbl_board.setFont(QFont("Microsoft YaHei UI", 18, QFont.Bold))
         self.lbl_npu = QLabel("NPU  —")
-        self.lbl_npu.setFont(QFont("Microsoft YaHei UI", 13))
+        self.lbl_npu.setFont(QFont("Microsoft YaHei UI", 18))
         btn_status = QPushButton("🔄 检测连接")
         btn_status.setObjectName("btnGold")
         btn_status.clicked.connect(self._check_status)
@@ -1983,7 +2051,6 @@ class DeployTab(QWidget):
         sg.setLayout(sr)
         ll.addWidget(sg)
 
-        # 参数
         pg = QGroupBox("◈  板端检测参数  ◈")
         gl = QGridLayout()
         gl.setSpacing(10)
@@ -1992,29 +2059,33 @@ class DeployTab(QWidget):
         for name, key in BOARD_MODELS:
             self.model.addItem(f"{name}  ({key})", key)
         gl.addWidget(self.model, 0, 1, 1, 2)
+
         gl.addWidget(QLabel("测试视频:"), 1, 0)
         self.video = QComboBox()
         for label, val in BOARD_VIDEOS:
             self.video.addItem(label, val)
         gl.addWidget(self.video, 1, 1, 1, 2)
+
         gl.addWidget(QLabel("测试图片:"), 2, 0)
         self.image = QComboBox()
         self.image.addItem("全部 testdata/", "ALL")
         for label, val in BOARD_IMAGES:
             self.image.addItem(label, val)
         gl.addWidget(self.image, 2, 1, 1, 2)
+
         gl.addWidget(QLabel("Conf:"), 3, 0)
         self.conf = QLineEdit()
-        self.conf.setPlaceholderText("auto (0.25)")
+        self.conf.setPlaceholderText("0.25")
         gl.addWidget(self.conf, 3, 1, 1, 2)
+
         gl.addWidget(QLabel("NMS:"), 4, 0)
         self.nms = QLineEdit()
-        self.nms.setPlaceholderText("auto (0.45)")
+        self.nms.setPlaceholderText("0.45")
         gl.addWidget(self.nms, 4, 1, 1, 2)
+
         pg.setLayout(gl)
         ll.addWidget(pg)
 
-        # 操作
         og = QGroupBox("◈  操作  ◈")
         ol = QVBoxLayout()
         r1 = QHBoxLayout()
@@ -2029,20 +2100,19 @@ class DeployTab(QWidget):
         ol.addLayout(r1)
 
         r2 = QHBoxLayout()
-        self.btn_pull_vid = QPushButton("⬇  拉取结果视频")
-        self.btn_pull_vid.setObjectName("btnGold")
-        self.btn_pull_vid.clicked.connect(self._pull_video)
         self.btn_pull_img = QPushButton("⬇  拉取结果图片")
         self.btn_pull_img.setObjectName("btnGold")
         self.btn_pull_img.clicked.connect(self._pull_images)
-        r2.addWidget(self.btn_pull_vid)
+        self.btn_pull_vid = QPushButton("⬇  拉取结果视频")
+        self.btn_pull_vid.setObjectName("btnGold")
+        self.btn_pull_vid.clicked.connect(self._pull_video)
         r2.addWidget(self.btn_pull_img)
+        r2.addWidget(self.btn_pull_vid)
         ol.addLayout(r2)
 
         og.setLayout(ol)
         ll.addWidget(og)
 
-        # 指标卡
         ll.addWidget(DecoLine())
         mc = QHBoxLayout()
         mc.setSpacing(12)
@@ -2076,30 +2146,30 @@ class DeployTab(QWidget):
         self.log = LogPanel()
         ll.addWidget(self.log, stretch=1)
 
-        # ════════ 右面板 ════════
         self.browser = ResultBrowser(
             [BOARD_RESULTS_DIR],
             ("*.mp4", "*.png", "*.jpg"),
-            "◈  板端结果预览  ◈")
+            "◈  板端结果预览  ◈"
+        )
 
         splitter.addWidget(left)
         splitter.addWidget(self.browser)
-        splitter.setSizes([520, 480])
+        splitter.setSizes([620, 780])
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(splitter)
 
-    # ── 公共 ──
     def _adb_cmd(self, board_cmd):
-        return (f'adb -s {ADB_SERIAL} shell '
-                f'"cd {BOARD_DEPLOY} && '
-                f'export LD_LIBRARY_PATH=./lib && '
-                f'{board_cmd}"')
+        return (
+            f'adb -s {ADB_SERIAL} shell '
+            f'"cd {BOARD_DEPLOY} && '
+            f'export LD_LIBRARY_PATH=./lib && '
+            f'{board_cmd}"'
+        )
 
     def _all_btns(self):
-        return [self.btn_img, self.btn_vid,
-                self.btn_pull_vid, self.btn_pull_img]
+        return [self.btn_img, self.btn_vid, self.btn_pull_vid, self.btn_pull_img]
 
     def _btns_enabled(self, v):
         for b in self._all_btns():
@@ -2116,32 +2186,27 @@ class DeployTab(QWidget):
         if after_cb:
             self.worker.finished.connect(after_cb)
         else:
-            self.worker.finished.connect(
-                lambda _: self._btns_enabled(True))
+            self.worker.finished.connect(lambda _: self._btns_enabled(True))
         self.worker.start()
 
     def _on_log(self, text, level):
-        # 过滤板端 C++ 程序的 fill dst image 咨骚日志
         if "fill dst image" in text:
             return
         self.log.append_log(text, level)
         self._parse_metrics(text)
 
     def _parse_metrics(self, text):
-        # ── 格式 A: 进度行（每 100 帧实时打印）──
-        # 进度: 400/565 帧 (71%) pre=0.6ms npu=30.6ms infer=40.8ms track=1.0ms 计算FPS=23.9
         m = re.search(r'npu=([\d.]+)ms.*?infer=([\d.]+)ms.*?计算FPS=([\d.]+)', text)
         if m:
-            npu_v   = float(m.group(1))
+            npu_v = float(m.group(1))
             infer_v = float(m.group(2))
-            fps_v   = float(m.group(3))
-            c_npu   = C_OK if npu_v <= 25 else (C_WARN if npu_v <= 35 else C_ERR)
+            fps_v = float(m.group(3))
+            c_npu = C_OK if npu_v <= 25 else (C_WARN if npu_v <= 35 else C_ERR)
             c_infer = C_OK if infer_v <= 30 else (C_WARN if infer_v <= 40 else C_ERR)
             self.mc_npu.set_value(f"{npu_v:.1f} ms", c_npu)
             self.mc_fps.set_value(f"{fps_v:.1f}", C_ACCENT)
             self.mc_e2e.set_value(f"{infer_v:.1f} ms", c_infer)
 
-        # ── 格式 B: 汇总行（推理完成后打印）──
         m = re.search(r'纯\s*NPU[\uff1a:]\s*([\d.]+)\s*ms', text)
         if m:
             v = float(m.group(1))
@@ -2155,43 +2220,34 @@ class DeployTab(QWidget):
             v2 = float(m.group(1))
             c2 = C_OK if v2 <= 30 else (C_WARN if v2 <= 40 else C_ERR)
             self.mc_e2e.set_value(f"{v2:.1f} ms", c2)
-        # 计算 FPS (推理+跟踪): 23.9
         m = re.search(r'计算\s*FPS\s*[\(（][^)）]*[\)）]\s*[\uff1a:]\s*([\d.]+)', text)
         if m:
             self.mc_fps.set_value(f"{float(m.group(1)):.1f}", C_ACCENT)
             self._session_metrics['compute_fps'] = f"{float(m.group(1)):.1f}"
-        # 端到端 FPS (含读写): 20.1
         m = re.search(r'端到端\s*FPS[^:\uff1a]*[:\uff1a]\s*([\d.]+)', text)
         if m:
             self._session_metrics['e2e_fps'] = f"{float(m.group(1)):.1f}"
-        # 总帧数: 565
         m = re.search(r'总帧数[\uff1a:]\s*(\d+)', text)
         if m:
             self._session_metrics['total_frames'] = m.group(1)
-        # 总检测数 (NPU): 4889  或旧格式 总检测数: 4889
         m = re.search(r'总检测数[^:\uff1a\d]*[:\uff1a]\s*(\d+)', text)
         if m:
             self.mc_det.set_value(m.group(1), C_ACCENT)
             self._session_metrics['total_detections'] = m.group(1)
-        # 轨迹展示总数: 3201
         m = re.search(r'轨迹展示总数[:\uff1a]\s*(\d+)', text)
         if m:
             self.mc_track.set_value(m.group(1), C_ACCENT)
             self._session_metrics['total_tracks'] = m.group(1)
-        # 唯一轨迹ID数: 107  (ID 切换指标)
         m = re.search(r'唯一轨迹ID数[:\uff1a]\s*(\d+)', text)
         if m:
             self.mc_ids.set_value(m.group(1), C_ACCENT)
             self._session_metrics['unique_ids'] = m.group(1)
-        # 预处理 (BGR→RGB): 1.3 ms  ← 用 ^ 锚定行首，防止「推理(含预处理+后处理)」中的「预处理」误匹配
         m = re.search(r'^\s*预处理[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', text)
         if m:
             self._session_metrics['pre_ms'] = f"{float(m.group(1)):.1f}"
-        # 跟踪 (ByteTrack): 2.2 ms
         m = re.search(r'跟踪[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', text)
         if m:
             self._session_metrics['track_ms'] = f"{float(m.group(1)):.1f}"
-        # 纯 NPU → session
         m = re.search(r'纯\s*NPU[\uff1a:]\s*([\d.]+)\s*ms', text)
         if m:
             self._session_metrics['npu_ms'] = f"{float(m.group(1)):.1f}"
@@ -2202,20 +2258,18 @@ class DeployTab(QWidget):
         if m:
             self._session_metrics['infer_ms'] = f"{float(m.group(1)):.1f}"
 
-    # ── 板端操作 ──
     def _run_image(self):
         model = self.model.currentData()
         self._reset_session_metrics("image", self.image.currentText())
-        # C++ 支持 argv[5]=conf argv[6]=nms; 统一默认 0.25/0.45
         conf = self.conf.text().strip()
         nms = self.nms.text().strip()
         extra = ""
         if conf or nms:
-            # 需要按位置传参：model image_or_dir labels output conf nms
             extra = f" ./model ./model/infrared_labels.txt ./outputs {conf or '0.25'} {nms or '0.45'}"
-        self._ssh_run(self._adb_cmd(
-            f"./bishe_rknn_detect model/{model}{extra}"),
-            after_cb=self._save_inference_log)
+        self._ssh_run(
+            self._adb_cmd(f"./bishe_rknn_detect model/{model}{extra}"),
+            after_cb=self._save_inference_log
+        )
 
     def _run_video(self):
         model = self.model.currentData()
@@ -2226,39 +2280,29 @@ class DeployTab(QWidget):
         self._reset_session_metrics("video", self.video.currentText())
         self._session_metrics['conf'] = conf
         self._session_metrics['nms'] = nms
-        self._ssh_run(self._adb_cmd(
-            f"./bishe_rknn_video model/{model} "
-            f"model/{video} "
-            f"model/infrared_labels.txt "
-            f"outputs/{out_name} "
-            f"{conf} {nms} 1"),
-            after_cb=self._save_inference_log)
+        self._ssh_run(
+            self._adb_cmd(
+                f"./bishe_rknn_video model/{model} "
+                f"model/{video} "
+                f"model/infrared_labels.txt "
+                f"outputs/{out_name} "
+                f"{conf} {nms} 1"
+            ),
+            after_cb=self._save_inference_log
+        )
 
     def _list_board_files(self):
-        """列出板端 outputs/ 目录下的文件 (已移除，保留占位符)"""
         pass
 
     def _push_model(self):
-        """已移除，保留占位符"""
         pass
 
-    # ── 拉取 (Board → Ubuntu → Windows) ──
     def _pull_video(self):
-        """
-        完整流程:
-        1. SSH → adb pull 从板端到 Ubuntu /tmp/
-        2. 验证 adb pull 是否成功
-        3. SFTP 从 Ubuntu /tmp/ → Windows 本地
-        4. 自动播放
-        """
         model_stem = Path(self.model.currentData()).stem
         video_stem = Path(self.video.currentData()).stem
         ubuntu_tmp = "/tmp/board_pull_video.mp4"
         local_name = f"out_{model_stem}_{video_stem}.mp4"
         local_path = str(BOARD_RESULTS_DIR / local_name)
-
-        # 先列出板端 outputs 看看有什么文件
-        # 然后尝试拉取 out_video.mp4 (我们 run_video 写死的名称)
         board_file = f"{BOARD_DEPLOY}/outputs/out_video.mp4"
 
         cmd = (
@@ -2270,7 +2314,8 @@ class DeployTab(QWidget):
             f'{board_file} {ubuntu_tmp} 2>&1; '
             f'if [ -f {ubuntu_tmp} ]; then '
             f'echo "PULL_OK"; '
-            f'else echo "PULL_FAIL: 板端文件不存在"; fi')
+            f'else echo "PULL_FAIL: 板端文件不存在"; fi'
+        )
 
         if self.worker and self.worker.isRunning():
             QMessageBox.warning(self, "忙", "上一个任务仍在运行")
@@ -2281,25 +2326,18 @@ class DeployTab(QWidget):
         self.worker.log_line.connect(self._on_log)
 
         def _after_pull(code):
-            # 检查 SSH 输出是否包含 PULL_OK
             full = "\n".join(self.worker._all_out)
             if "PULL_OK" in full:
-                self.log.append_log(
-                    "━━ 板端→Ubuntu 完成, 正在下载到 "
-                    "Windows… ━━", "ok")
+                self.log.append_log("━━ 板端→Ubuntu 完成, 正在下载到 Windows… ━━", "ok")
                 self._sftp_download(ubuntu_tmp, local_path)
             else:
-                self.log.append_log(
-                    "━━ 板端拉取失败: 文件不存在. "
-                    "请先运行视频检测, 或用 "
-                    "'列板端文件' 查看 ━━", "err")
+                self.log.append_log("━━ 板端拉取失败: 文件不存在. 请先运行视频检测 ━━", "err")
                 self._btns_enabled(True)
 
         self.worker.finished.connect(_after_pull)
         self.worker.start()
 
     def _sftp_download(self, remote, local):
-        """SFTP 从 Ubuntu 下载到 Windows 本地"""
         self.sftp_worker = SFTPWorker(remote, local)
         self.sftp_worker.log_line.connect(self._on_log)
 
@@ -2308,8 +2346,7 @@ class DeployTab(QWidget):
             self.browser.refresh()
             if code == 0 and path:
                 self.browser.add_pulled(path)
-                if path.lower().endswith(
-                        ('.mp4', '.avi')):
+                if path.lower().endswith(('.mp4', '.avi', '.mkv')):
                     self.browser.player.load_video(path)
                 else:
                     self.browser.player.load_image(path)
@@ -2318,7 +2355,6 @@ class DeployTab(QWidget):
         self.sftp_worker.start()
 
     def _pull_images(self):
-        """拉取板端图片结果: Board→Ubuntu→Windows"""
         ubuntu_tmp_dir = "/tmp/board_images_pull"
         local_dest = str(BOARD_RESULTS_DIR)
         cmd = (
@@ -2330,7 +2366,8 @@ class DeployTab(QWidget):
             f'count=$(find {ubuntu_tmp_dir} -maxdepth 2 '
             f'-name "*.png" -o -name "*.jpg" 2>/dev/null | wc -l); '
             f'echo "PULLED_COUNT=$count"; '
-            f'echo "PULL_SRC={ubuntu_tmp_dir}"')
+            f'echo "PULL_SRC={ubuntu_tmp_dir}"'
+        )
 
         if self.worker and self.worker.isRunning():
             QMessageBox.warning(self, "忙", "上一个任务仍在运行")
@@ -2347,31 +2384,23 @@ class DeployTab(QWidget):
             m2 = re.search(r'PULL_SRC=(.+)', full)
             src = m2.group(1).strip() if m2 else ubuntu_tmp_dir
             if count > 0:
-                self.log.append_log(
-                    f"━━ 找到 {count} 个图片，"
-                    f"正在下载到 {local_dest} … ━━", "ok")
-                self._sftp_download_dir(
-                    src, local_dest)
+                self.log.append_log(f"━━ 找到 {count} 个图片，正在下载到 {local_dest} … ━━", "ok")
+                self._sftp_download_dir(src, local_dest)
             else:
-                self.log.append_log(
-                    "━━ 板端 outputs/ 中没有图片文件 ━━",
-                    "warn")
+                self.log.append_log("━━ 板端 outputs/ 中没有图片文件 ━━", "warn")
                 self._btns_enabled(True)
 
         self.worker.finished.connect(_after)
         self.worker.start()
 
     def _sftp_download_dir(self, remote_dir, local_dir):
-        """递归下载远程目录中的所有图片文件，完成后自动展示到右侧预览"""
         def _do():
             downloaded = []
             try:
                 ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(
-                    paramiko.AutoAddPolicy())
-                ssh.connect(
-                    UBUNTU_HOST, username=UBUNTU_USER,
-                    password=UBUNTU_PASS, timeout=10)
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh.connect(UBUNTU_HOST, username=UBUNTU_USER,
+                            password=UBUNTU_PASS, timeout=10)
                 sftp = ssh.open_sftp()
                 os.makedirs(local_dir, exist_ok=True)
 
@@ -2389,8 +2418,7 @@ class DeployTab(QWidget):
                         lf = os.path.join(ldir, entry.filename)
                         if stat.S_ISDIR(entry.st_mode):
                             _walk(rf, lf)
-                        elif entry.filename.lower().endswith(
-                                ('.png', '.jpg', '.jpeg')):
+                        elif entry.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
                             try:
                                 sftp.get(rf, lf)
                                 downloaded.append(lf)
@@ -2400,55 +2428,40 @@ class DeployTab(QWidget):
                 _walk(remote_dir, local_dir)
                 sftp.close()
                 ssh.close()
-                self.log.append_log(
-                    f"━━ 已下载 {len(downloaded)} 个图片到 "
-                    f"{local_dir} ━━", "ok")
+                self.log.append_log(f"━━ 已下载 {len(downloaded)} 个图片到 {local_dir} ━━", "ok")
                 self.browser.refresh()
-                # 自动展示最新一张到右侧预览，并追加全部到历史
                 if downloaded:
                     for f in downloaded:
                         self.browser.add_pulled(f)
                     latest_img = sorted(downloaded)[-1]
                     self.browser.player.load_image(latest_img)
-                    self.log.append_log(
-                        f"━━ 预览: {os.path.basename(latest_img)} ━━",
-                        "ok")
+                    self.log.append_log(f"━━ 预览: {os.path.basename(latest_img)} ━━", "ok")
             except Exception as e:
-                self.log.append_log(
-                    f"━━ SFTP 下载失败: {e} ━━", "err")
+                self.log.append_log(f"━━ SFTP 下载失败: {e} ━━", "err")
             finally:
                 self._btns_enabled(True)
         threading.Thread(target=_do, daemon=True).start()
 
-    # ── 完整部署流程 ──
-    # ── 连接检测 ──
     def _check_status(self):
         def _do():
             try:
                 ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(
-                    paramiko.AutoAddPolicy())
-                ssh.connect(
-                    UBUNTU_HOST, username=UBUNTU_USER,
-                    password=UBUNTU_PASS, timeout=5)
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh.connect(UBUNTU_HOST, username=UBUNTU_USER,
+                            password=UBUNTU_PASS, timeout=5)
                 _, out, _ = ssh.exec_command(
                     f"adb -s {ADB_SERIAL} shell "
-                    f"cat /sys/class/devfreq/"
-                    f"22000000.npu/cur_freq 2>/dev/null",
-                    timeout=8)
+                    f"cat /sys/class/devfreq/22000000.npu/cur_freq 2>/dev/null",
+                    timeout=8
+                )
                 freq = out.read().decode().strip()
                 ssh.close()
                 if freq and freq.isdigit():
                     mhz = int(freq) // 1_000_000
-                    self.lbl_board.setText(
-                        "Board  ●  在线")
-                    self.lbl_board.setStyleSheet(
-                        f"color: {C_OK}; "
-                        f"font-weight: bold;")
-                    self.lbl_npu.setText(
-                        f"NPU  {mhz} MHz")
-                    self.lbl_npu.setStyleSheet(
-                        f"color: {C_OK};")
+                    self.lbl_board.setText("Board  ●  在线")
+                    self.lbl_board.setStyleSheet(f"color: {C_OK}; font-weight: bold;")
+                    self.lbl_npu.setText(f"NPU  {mhz} MHz")
+                    self.lbl_npu.setStyleSheet(f"color: {C_OK};")
                 else:
                     self._offline()
             except Exception:
@@ -2457,14 +2470,11 @@ class DeployTab(QWidget):
 
     def _offline(self):
         self.lbl_board.setText("Board  ●  离线")
-        self.lbl_board.setStyleSheet(
-            f"color: {C_ERR}; font-weight: bold;")
+        self.lbl_board.setStyleSheet(f"color: {C_ERR}; font-weight: bold;")
         self.lbl_npu.setText("NPU  —")
         self.lbl_npu.setStyleSheet(f"color: {C_TEXT_S};")
 
-    # ── 指标日志 ──
     def _reset_session_metrics(self, infer_type, input_label):
-        """每次推理开始前调用，重置本次会话指标缓存"""
         self._infer_type = infer_type
         self._session_metrics = {
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -2487,38 +2497,44 @@ class DeployTab(QWidget):
         }
 
     def _save_inference_log(self, exit_code):
-        """推理任务完成后自动解析汇总指标并追加到 CSV"""
         self._btns_enabled(True)
         if exit_code != 0:
             return
-        # 补充从完整输出中未能实时匹配的字段（主要是 e2e_fps / total_frames）
         if self.worker and hasattr(self.worker, '_all_out'):
             full = '\n'.join(self.worker._all_out)
             if not self._session_metrics.get('total_frames'):
                 m = re.search(r'总帧数[:\uff1a]\s*(\d+)', full)
-                if m: self._session_metrics['total_frames'] = m.group(1)
+                if m:
+                    self._session_metrics['total_frames'] = m.group(1)
             if not self._session_metrics.get('total_detections'):
                 m = re.search(r'总检测数[^:\uff1a\d]*[:\uff1a]\s*(\d+)', full)
-                if m: self._session_metrics['total_detections'] = m.group(1)
+                if m:
+                    self._session_metrics['total_detections'] = m.group(1)
             if not self._session_metrics.get('e2e_fps'):
                 m = re.search(r'端到端\s*FPS[^:\uff1a]*[:\uff1a]\s*([\d.]+)', full)
-                if m: self._session_metrics['e2e_fps'] = f"{float(m.group(1)):.1f}"
+                if m:
+                    self._session_metrics['e2e_fps'] = f"{float(m.group(1)):.1f}"
             if not self._session_metrics.get('npu_ms'):
                 m = re.search(r'纯\s*NPU[:\uff1a]\s*([\d.]+)\s*ms', full)
-                if m: self._session_metrics['npu_ms'] = f"{float(m.group(1)):.1f}"
+                if m:
+                    self._session_metrics['npu_ms'] = f"{float(m.group(1)):.1f}"
             if not self._session_metrics.get('compute_fps'):
                 m = re.search(r'计算\s*FPS[^:\uff1a]*[:\uff1a]\s*([\d.]+)', full)
-                if m: self._session_metrics['compute_fps'] = f"{float(m.group(1)):.1f}"
+                if m:
+                    self._session_metrics['compute_fps'] = f"{float(m.group(1)):.1f}"
             if not self._session_metrics.get('unique_ids'):
                 m = re.search(r'唯一轨迹ID数[:\uff1a]\s*(\d+)', full)
-                if m: self._session_metrics['unique_ids'] = m.group(1)
+                if m:
+                    self._session_metrics['unique_ids'] = m.group(1)
             if not self._session_metrics.get('pre_ms'):
-                # 用 (?m) 多行模式 + ^ 锚定，避免「含预处理+后处理」误匹配
                 m = re.search(r'(?m)^\s*预处理[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', full)
-                if m: self._session_metrics['pre_ms'] = f"{float(m.group(1)):.1f}"
+                if m:
+                    self._session_metrics['pre_ms'] = f"{float(m.group(1)):.1f}"
             if not self._session_metrics.get('track_ms'):
                 m = re.search(r'跟踪[^:\uff1a]*[:\uff1a]\s*([\d.]+)\s*ms', full)
-                if m: self._session_metrics['track_ms'] = f"{float(m.group(1)):.1f}"
+                if m:
+                    self._session_metrics['track_ms'] = f"{float(m.group(1)):.1f}"
+
         BOARD_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         log_path = BOARD_RESULTS_DIR / 'inference_log.csv'
         fieldnames = [
@@ -2530,24 +2546,21 @@ class DeployTab(QWidget):
         file_exists = log_path.exists()
         try:
             with open(log_path, 'a', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames,
-                                       extrasaction='ignore')
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
                 if not file_exists:
                     writer.writeheader()
                 writer.writerow(self._session_metrics)
-            self.log.append_log(
-                f"━━ 指标已自动保存至 {log_path.name} ━━", "ok")
+            self.log.append_log(f"━━ 指标已自动保存至 {log_path.name} ━━", "ok")
         except Exception as e:
             self.log.append_log(f"━━ 日志写入失败: {e} ━━", "err")
 
     def _open_inference_log(self):
-        """用系统默认程序打开 CSV 日志（Windows 下通常是 Excel）"""
         log_path = BOARD_RESULTS_DIR / 'inference_log.csv'
         if not log_path.exists():
             QMessageBox.information(
                 self, "日志不存在",
-                f"尚无推理日志，请先执行一次检测或视频推理。\n"
-                f"预期路径: {log_path}")
+                f"尚无推理日志，请先执行一次检测或视频推理。\n预期路径: {log_path}"
+            )
             return
         try:
             os.startfile(str(log_path))
@@ -2565,9 +2578,7 @@ class DeployTab(QWidget):
         self.conf.clear()
         self.nms.clear()
         self._session_metrics = {}
-        for mc in [self.mc_npu, self.mc_fps,
-                   self.mc_e2e, self.mc_det, self.mc_track,
-                   self.mc_ids]:
+        for mc in [self.mc_npu, self.mc_fps, self.mc_e2e, self.mc_det, self.mc_track, self.mc_ids]:
             mc.reset()
 
 
@@ -2577,7 +2588,7 @@ class DeployTab(QWidget):
 STYLE = f"""
 * {{
     font-family: "Microsoft YaHei UI","Segoe UI",sans-serif;
-    font-size: 15px;
+    font-size: 20px;
 }}
 QMainWindow {{ background: {C_BG}; }}
 
@@ -2587,122 +2598,204 @@ QMainWindow {{ background: {C_BG}; }}
     border-bottom: 3px solid {C_GOLD};
 }}
 #headerTitle {{
-    color: #fff; font-size: 22px;
-    font-weight: 700; letter-spacing: 3px;
+    color: #fff;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: 2px;
 }}
 #headerSub {{
-    color: rgba(255,255,255,0.65); font-size: 13px;
+    color: rgba(255,255,255,0.65);
+    font-size: 20px;
 }}
 
-#mainTabs::pane {{ border:none; background:{C_BG}; }}
+#mainTabs::pane {{
+    border:none;
+    background:{C_BG};
+}}
 #mainTabs > QTabBar::tab {{
-    background:{C_TAB_BG}; border:1px solid {C_BORDER};
-    border-bottom:none; padding:10px 28px;
-    font-size:15px; font-weight:600; color:{C_TEXT_S};
+    background:{C_TAB_BG};
+    border:1px solid {C_BORDER};
+    border-bottom:none;
+    padding:10px 24px;
+    font-size:20px;
+    font-weight:600;
+    color:{C_TEXT_S};
     margin-right:2px;
     border-top-left-radius:6px;
     border-top-right-radius:6px;
 }}
 #mainTabs > QTabBar::tab:selected {{
-    background:{C_PANEL}; color:{C_ACCENT};
+    background:{C_PANEL};
+    color:{C_ACCENT};
     border-bottom:3px solid {C_GOLD};
 }}
 #mainTabs > QTabBar::tab:hover:!selected {{
-    background:#dce0e8; color:{C_TEXT};
+    background:#dce0e8;
+    color:{C_TEXT};
 }}
 
 QGroupBox {{
-    font-size:15px; font-weight:700; color:{C_ACCENT};
+    font-size:20px;
+    font-weight:700;
+    color:{C_ACCENT};
     border:2px solid {C_BORDER};
     border-top:3px solid {C_GOLD};
-    border-radius:6px; margin-top:14px;
-    padding:22px 14px 14px 14px;
+    border-radius:6px;
+    margin-top:14px;
+    padding:20px 14px 14px 14px;
     background:{C_PANEL};
 }}
 QGroupBox::title {{
-    subcontrol-origin:margin; left:16px;
-    padding:0 8px; background:{C_PANEL};
+    subcontrol-origin:margin;
+    left:16px;
+    padding:0 8px;
+    background:{C_PANEL};
 }}
 
 QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {{
-    background:{C_PANEL}; border:2px solid {C_BORDER};
-    border-radius:4px; padding:6px 10px;
-    font-size:14px; color:{C_TEXT}; min-height:28px;
+    background:{C_PANEL};
+    border:2px solid {C_BORDER};
+    border-radius:4px;
+    padding:5px 10px;
+    font-size:20px;
+    color:{C_TEXT};
+    min-height:28px;
 }}
 QComboBox:focus, QLineEdit:focus,
 QSpinBox:focus, QDoubleSpinBox:focus {{
     border-color:{C_GOLD};
 }}
-QComboBox::drop-down {{ border:none; width:24px; }}
+QComboBox::drop-down {{
+    border:none;
+    width:24px;
+}}
 QComboBox QAbstractItemView {{
-    background:{C_PANEL}; border:2px solid {C_BORDER};
+    background:{C_PANEL};
+    border:2px solid {C_BORDER};
     selection-background-color:#fef3c7;
-    selection-color:{C_ACCENT}; font-size:14px;
+    selection-color:{C_ACCENT};
+    font-size:20px;
 }}
 
-QLabel {{ font-size:14px; color:{C_TEXT}; }}
-QCheckBox {{
-    font-size:14px; color:{C_TEXT}; spacing:8px;
+QLabel {{
+    font-size:20px;
+    color:{C_TEXT};
 }}
-QCheckBox::indicator {{ width:18px; height:18px; }}
+
+QTextEdit {{
+    font-size:23px;
+}}
+
+QCheckBox {{
+    font-size:20px;
+    color:{C_TEXT};
+    spacing:8px;
+}}
+QCheckBox::indicator {{
+    width:18px;
+    height:18px;
+}}
 
 QPushButton {{
-    background:{C_TAB_BG}; border:2px solid {C_BORDER};
-    border-radius:5px; padding:8px 18px;
-    font-size:14px; font-weight:600; color:{C_TEXT};
+    background:{C_TAB_BG};
+    border:2px solid {C_BORDER};
+    border-radius:5px;
+    padding:7px 16px;
+    font-size:20px;
+    font-weight:600;
+    color:{C_TEXT};
+    min-height:30px;
 }}
-QPushButton:hover {{ background:#d5d9e2; }}
-QPushButton:pressed {{ background:#c8cdd6; }}
-QPushButton:disabled {{ color:#aaa; background:#f0f0f0; }}
+QPushButton:hover {{
+    background:#d5d9e2;
+}}
+QPushButton:pressed {{
+    background:#c8cdd6;
+}}
+QPushButton:disabled {{
+    color:#aaa;
+    background:#f0f0f0;
+}}
 
 #btnPrimary {{
-    background:{C_ACCENT}; border:2px solid {C_ACCENT};
-    color:#fff; font-weight:700;
-    padding:9px 22px; font-size:15px;
+    background:{C_ACCENT};
+    border:2px solid {C_ACCENT};
+    color:#fff;
+    font-weight:700;
+    padding:8px 18px;
+    font-size:20px;
+    min-height:32px;
 }}
-#btnPrimary:hover {{ background:#254d7a; }}
+#btnPrimary:hover {{
+    background:#254d7a;
+}}
 #btnPrimary:disabled {{
-    background:#8fabc4; border-color:#8fabc4;
+    background:#8fabc4;
+    border-color:#8fabc4;
 }}
 
 #btnGold {{
-    background:#fef3c7; border:2px solid {C_GOLD_L};
-    color:#92400e; font-weight:600;
+    background:#fef3c7;
+    border:2px solid {C_GOLD_L};
+    color:#92400e;
+    font-weight:600;
+    font-size:20px;
+    min-height:30px;
 }}
-#btnGold:hover {{ background:#fde68a; }}
+#btnGold:hover {{
+    background:#fde68a;
+}}
 
 QStatusBar {{
-    background:{C_TAB_BG}; font-size:13px;
-    color:{C_TEXT_S}; border-top:2px solid {C_GOLD};
+    background:{C_TAB_BG};
+    font-size:18px;
+    color:{C_TEXT_S};
+    border-top:2px solid {C_GOLD};
     padding:4px 12px;
 }}
 
 QScrollBar:vertical {{
-    background:{C_BG}; width:10px; border:none;
+    background:{C_BG};
+    width:10px;
+    border:none;
 }}
 QScrollBar::handle:vertical {{
-    background:{C_BORDER}; border-radius:5px;
+    background:{C_BORDER};
+    border-radius:5px;
     min-height:30px;
 }}
-QScrollBar::handle:vertical:hover {{ background:#9ca3af; }}
+QScrollBar::handle:vertical:hover {{
+    background:#9ca3af;
+}}
 QScrollBar::add-line:vertical,
-QScrollBar::sub-line:vertical {{ height:0; }}
+QScrollBar::sub-line:vertical {{
+    height:0;
+}}
 
 QSlider::groove:horizontal {{
-    background:{C_BORDER}; height:6px; border-radius:3px;
+    background:{C_BORDER};
+    height:6px;
+    border-radius:3px;
 }}
 QSlider::handle:horizontal {{
-    background:{C_GOLD}; width:16px; height:16px;
-    margin:-5px 0; border-radius:8px;
+    background:{C_GOLD};
+    width:16px;
+    height:16px;
+    margin:-5px 0;
+    border-radius:8px;
 }}
 QSlider::sub-page:horizontal {{
-    background:{C_GOLD_L}; border-radius:3px;
+    background:{C_GOLD_L};
+    border-radius:3px;
 }}
 
 QSplitter::handle {{
-    background:{C_BORDER}; border-radius:2px;
+    background:{C_BORDER};
+    border-radius:2px;
 }}
-QSplitter::handle:hover {{ background:{C_GOLD}; }}
+QSplitter::handle:hover {{
+    background:{C_GOLD};
+}}
 """
 
 
@@ -2713,7 +2806,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("红外多目标检测与跟踪系统")
-        self.resize(1200, 820)
+        self.resize(1680, 980)
         self._build()
 
     def _build(self):
@@ -2724,7 +2817,7 @@ class MainWindow(QMainWindow):
 
         header = QFrame()
         header.setObjectName("header")
-        header.setFixedHeight(60)
+        header.setFixedHeight(72)
         hl = QHBoxLayout(header)
         hl.setContentsMargins(24, 0, 24, 0)
         title = QLabel("◈  红外多目标检测与跟踪系统  ◈")
@@ -2757,7 +2850,6 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    # 检查可选依赖
     missing = []
     if not _CV2:
         missing.append("opencv-python (视频播放功能不可用)")
@@ -2772,15 +2864,15 @@ def main():
             "\n".join("  - " + m for m in missing) +
             "\n\n建议激活 conda bishe 环境后再运行:\n"
             "  conda activate bishe\n"
-            "  python gui/deploy_gui.py")
+            "  python gui/deploy_gui.py"
+        )
         mb.exec_()
 
     win = MainWindow()
-    #设置图标
     icon_path = str(Path(__file__).parent / "icon.jpg")
     if os.path.exists(icon_path):
         win.setWindowIcon(QIcon(icon_path))
-    win.show()
+    win.showMaximized()
     sys.exit(app.exec_())
 
 

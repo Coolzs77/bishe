@@ -39,7 +39,7 @@ EXPERIMENT_MAP = {
     "ghost_eiou": {
         "dir": "ablation_exp09_ghost_eiou",
         "desc": "Ghost + EIoU (轻量化候选)",
-        "train_imgsz": 704,  # 注意: 训练时使用 704, 导出时选择 640 或 704
+        "train_imgsz": 640, 
     },
     "attention_eiou": {
         "dir": "ablation_exp10_attention_eiou",
@@ -50,6 +50,25 @@ EXPERIMENT_MAP = {
         "dir": "ablation_exp01_baseline",
         "desc": "YOLOv5s 基线",
         "train_imgsz": 640,
+    },
+    # 原有实验配置保持原封不动，在字典大括号结束前直接追加以下内容：
+    "baseline_5n": {
+        "dir": "ablation_exp01_baseline",
+        "desc": "YOLOv5n 基线 (5n全新模型)",
+        "train_imgsz": 640,
+        "is_5n": True,
+    },
+    "eiou_5n": {
+        "dir": "ablation_exp07_eiou",
+        "desc": "基线 + EIoU (5n全新主力)",
+        "train_imgsz": 640,
+        "is_5n": True,
+    },
+    "ghost_eiou_5n": {
+        "dir": "ablation_exp09_ghost_eiou",
+        "desc": "Ghost + EIoU (5n全新轻量化)",
+        "train_imgsz": 640,
+        "is_5n": True,
     },
 }
 
@@ -93,7 +112,10 @@ def parse_args():
 def export_onnx(exp_name, imgsz, simplify):
     """导出 ONNX 模型."""
     exp_info = EXPERIMENT_MAP[exp_name]
-    weights_path = ABLATION_DIR / exp_info["dir"] / "weights" / "best.pt"
+    
+    # 动态选择消融路径：如果配置中带有 is_5n 标志则重定向到新目录，否则继续沿用原有的 ABLATION_DIR
+    current_ablation_dir = PROJECT_ROOT / "outputs" / "ablation_study_5n" if exp_info.get("is_5n") else ABLATION_DIR
+    weights_path = current_ablation_dir / exp_info["dir"] / "weights" / "best.pt"
 
     if not weights_path.exists():
         print(f"[ERROR] 权重文件不存在: {weights_path}")
